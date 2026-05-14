@@ -6,6 +6,7 @@ let blocoAtualIndex = 0;  // qual frase o usuário está no momento
 
 async function iniciarSessao(youtubeLink) {
     try {
+        
         // tela carregamento na legenda
         const legendaDiv = document.getElementById('legenda');
         if (legendaDiv) legendaDiv.innerText = "Extraindo legendas do vídeo... Isso pode levar alguns segundos.";
@@ -28,8 +29,19 @@ async function iniciarSessao(youtubeLink) {
         loadVideo(currentVideoId);
 
     } catch (erro) {
-        const legendaDiv = document.getElementById('legenda');
-        if (legendaDiv) legendaDiv.innerText = erro.message;
+        //modal do Erro
+        const erroModal=document.getElementById('erroModal');
+        const erroText=document.getElementById('erro');
+        
+        if(erroModal) {
+            
+           erroText.innerText=erro.message;
+
+            
+            
+
+            erroModal.style.display="block";
+        }
         console.error("Falha na integração:", erro);
     }
 }
@@ -42,6 +54,7 @@ function carregarFraseAtual() {
     // Pega o bloco
     const bloco = blocosDeEstudo[blocoAtualIndex];
 
+    
     // Atualiza o texto legenda
     const legendaDiv = document.getElementById('legenda');
     if (legendaDiv) legendaDiv.innerText = bloco.texto_limpo;
@@ -71,6 +84,10 @@ document.addEventListener('click', function(event) {
         document.getElementById('protecaoPlayer').style.display = "none";
         blocoAtualIndex++;
         carregarFraseAtual();
+    }
+    //botão de erro
+    if(event.target.id==='botaoErro'){
+        document.getElementById('erroModal').style.display = "none";
     }
     
     // Próxima Frase

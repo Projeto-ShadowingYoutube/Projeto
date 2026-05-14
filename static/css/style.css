@@ -221,6 +221,13 @@ img, iframe {
     box-shadow: 0 4px 6px var(--border);
 }
 
+
+/* ERROS */
+
+ #erro{
+    color: red;
+} 
+
 /* vertical */
 @media (orientation: portrait) {    
     main{

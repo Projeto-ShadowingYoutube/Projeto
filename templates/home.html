@@ -2,6 +2,8 @@
 <html lang="pt-br">
     <head>
          <meta charset="UTF-8">
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
+
         <link rel="stylesheet" href="/static/css/style.css">
         
         <script src="https://www.youtube.com/iframe_api"></script>
@@ -28,7 +30,15 @@
               hx-target="main"
               hx-trigger="load">
         </main>
-
+        <div class="w3-modal w3-animate-opacity" id="erroModal">
+            <div class="w3-modal-content" id="erroDiv">
+                <p id="erro"></p>
+                <button id="botaoErro"
+                        hx-get="/"
+                        hx-target="main"
+                        hx-push-url="true">inicio</button>
+            </div>
+        </div>
         <script>
             document.body.addEventListener('htmx:afterSettle', function(evt) {
                 if (document.getElementById('player')) {
