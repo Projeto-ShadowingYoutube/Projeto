@@ -8,11 +8,16 @@ async function iniciarSessao(youtubeLink) {
     try {
         
         // tela carregamento na legenda
-        const legendaDiv = document.getElementById('legenda');
-        if (legendaDiv) legendaDiv.innerText = "Extraindo legendas do vídeo... Isso pode levar alguns segundos.";
+        let carregamento=document.getElementById('carregamento')
+        carregamento.style.display="flex";
+        // if (legendaDiv) legendaDiv.innerText = "Extraindo legendas do vídeo... Isso pode levar alguns segundos.";
 
         // Chama a API que pega a legenda
+        const legendaDiv = document.getElementById('legenda');
+
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(youtubeLink)}`);
+        
+        carregamento.style.display = "none";
         
         if (!resposta.ok) { //aqui podemos colocar mensagem de erro diferente (MEMBRO 1)
             const erroData = await resposta.json();
@@ -32,14 +37,8 @@ async function iniciarSessao(youtubeLink) {
         //modal do Erro
         const erroModal=document.getElementById('erroModal');
         const erroText=document.getElementById('erro');
-        
         if(erroModal) {
-            
-           erroText.innerText=erro.message;
-
-            
-            
-
+            erroText.innerText=erro.message;
             erroModal.style.display="block";
         }
         console.error("Falha na integração:", erro);
@@ -85,6 +84,7 @@ document.addEventListener('click', function(event) {
         blocoAtualIndex++;
         carregarFraseAtual();
     }
+
     //botão de erro
     if(event.target.id==='botaoErro'){
         document.getElementById('erroModal').style.display = "none";

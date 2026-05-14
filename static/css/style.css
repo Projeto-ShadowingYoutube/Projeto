@@ -139,7 +139,7 @@ img, iframe {
     gap: 10px;
 }
 
-/*  MICROFONE E ANIMAÇÕES */
+/*  LEGENDA MICROFONE E ANIMAÇÕES */
 #painelLateral{
     margin-top: 2vh;
 }
@@ -221,9 +221,24 @@ img, iframe {
     box-shadow: 0 4px 6px var(--border);
 }
 
+/* Carregamento */
+#carregamento{
+    display: block;
+    flex-direction: column; 
+    background: var(--bg);
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    align-content: center;
+    color:var(--titulo)
+}
+/* 
+#carregamento p{
+    margin-top: 3vh;
+    margin: auto;
+} */
 
 /* ERROS */
-
  #erro{
     color: red;
 } 
