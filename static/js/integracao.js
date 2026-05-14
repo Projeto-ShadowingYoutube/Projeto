@@ -66,6 +66,12 @@ function carregarFraseAtual() {
 
 // BOTÕES
 document.addEventListener('click', function(event) {
+    //protecaoPlayer
+    if (event.target.id === 'protecaoButton') {
+        document.getElementById('protecaoPlayer').style.display = "none";
+        blocoAtualIndex++;
+        carregarFraseAtual();
+    }
     
     // Próxima Frase
     if (event.target.id === 'proximo') {
