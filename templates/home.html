@@ -5,6 +5,8 @@
         <link rel="stylesheet" href="/static/css/style.css">
         
         <script src="https://www.youtube.com/iframe_api"></script>
+        <script src="/static/js/blur.js" defer></script>
+        <script src="/static/js/darkmode.js" defer></script>
         <script src="/static/js/player.js" defer></script>
         <script src="/static/js/voice.js" defer></script>
         <script src="/static/js/integracao.js" defer></script>
@@ -15,8 +17,11 @@
     </head>
     <body>
         <header>
-            <h1>Shadow</h1>
+            <h1><a href="/">Shadow</a></h1>
             <button hx-get="/revisao" hx-target="main">pagina 3</button>
+            <button id="mode">
+                <img id="modeSVG" src="/static/img/lightMode.svg" alt="">
+            </button>
         </header>
 
        <main hx-get="{{pagina}}"

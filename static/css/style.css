@@ -1,23 +1,36 @@
 /* ESTRUTURA */
+:root{
+    --bg:#f4f4f4;
+    --bg-button:#333;
+    --button-hover:#555;
+    --wave:#ffffff;
+    --button:white;
+    --legenda:white;
+    --titulo:black;
+    --transcript:#333;
+    --border: rgba(0,0,0,0.2); 
+}
+
 body {
     font-family: Arial, sans-serif;
     text-align: center;
     margin: 0;
     padding: 20px;
-    background: #f4f4f4; 
+    /* background: #f4f4f4; */
+    background: var(--bg);
 }
 
 main {
     display: flex;
-    flex-direction: column;
+    /* flex-direction: column; */
     margin: auto;
 }
 
 header {
-display: flex;
+    display: flex;
     width: 100%; 
     max-width: 1200px;
-    margin: 0 auto;
+    margin:  auto;
     padding: 0 20px;
     justify-content: space-between;
     align-items: center;
@@ -27,11 +40,17 @@ h1 {
     margin-top: 2vh;
 }
 
+a {
+    color:var(--titulo);
+    text-decoration: none;
+}
+
 /* BOTOES E FORM */
 form {
     margin: auto;
     display: flex;
     flex-direction: column;
+    width: 50%;
 }
 
 input {
@@ -47,25 +66,36 @@ button {
     border-radius: 8px;
     font-size: large;
     padding: 10px 15px;
-    margin: 5px auto;
+    /* margin: 5px auto; */
     cursor: pointer;
     border: none;
-    background: #333;
-    color: white;
+    /* background: #333;
+    color: white; */
+    background: var(--bg-button);
+    color: var(--button);
     transition: background 0.3s ease;
 }
 
 button:hover {
-    background: #555;
+    /* background: #555; */
+    background: var(--button-hover);
 }
 
 form button {
+    margin: auto;
     margin-top: 2vh;
-    height: 8vh;
-    width: 20vw;
+    width: 50%;
+    max-width: 200px;
 }
 
-/* VÍDEO E LEGENDA */
+/* Modo Claro/Escuro */
+#mode{
+    max-width: fit-content;
+    max-height: fit-content;
+    border-radius: 999px; 
+}
+
+/* VÍDEO E BOTÕES */
 #video, #player {
     display: flex;
     margin: 20px auto;
@@ -85,18 +115,6 @@ img, iframe {
     border-radius: 10px;
 }
 
-#legenda {
-    margin-top: 20px;
-    font-size: 22px;
-    font-weight: bold;
-    background: white;
-    padding: 20px;
-    max-width: 700px;
-    margin: auto;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-}
-
 #botoes {
     margin-top: 2vh;
     display: flex;
@@ -106,13 +124,36 @@ img, iframe {
 }
 
 /*  MICROFONE E ANIMAÇÕES */
-#gravar {
+#painelLateral{
+    margin-top: 2vh;
+}
+
+#legendaPai{
+    display: flex;
+}
+
+#legenda {
+    margin-top: 20px;
+    font-size: 22px;
+    font-weight: bold;
+    /* background: white; */
+    background: var(--legenda);
+    padding: 20px;
+    max-width: 700px;
+    margin: auto;
+    border-radius: 10px;
+    /* box-shadow: 0 4px 6px rgba(0,0,0,0.1);  */
+    box-shadow:  0 4px 6px var(--border);
+}
+
+#gravar , #ocultar {
     margin: auto;
     margin-top: 3vh;
     border-radius: 999px; 
     padding: 14px 22px;
     font-weight: bold;
-    background: #333; 
+    /* background: #333;  */
+    background: var(--bg-button);
 }
 
 #gravar.recording, .mic-btn.recording {
@@ -127,14 +168,15 @@ img, iframe {
     100% { transform: scale(1); }
 }
 
-.hidden {
+/* .hidden {
     display: none !important;
-}
+} */
 
 #panel {
     margin-top: 25px;
     display: flex;
-    flex-direction: column;
+    /* flex-direction: column; */
+    flex-wrap: wrap;
     align-items: center;
     gap: 15px;
 }
@@ -143,9 +185,11 @@ img, iframe {
     width: 100%;
     max-width: 700px;
     height: 120px;
-    background: #ffffff;
+    /* background: #ffffff; */
+    background: var(--wave);
     border-radius: 12px;
     border: 1px solid #e5e7eb;
+    flex:1 0 100%;
 }
 
 #transcript {
@@ -155,6 +199,31 @@ img, iframe {
     border-radius: 10px;
     max-width: 700px;
     font-size: 18px;
-    color: #333;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    /* color: #333;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); */
+    color: var(--transcript);
+    box-shadow: 0 4px 6px var(--border);
+}
+
+/* vertical */
+@media (orientation: portrait) {    
+    main{
+        justify-content: center;
+        flex-direction: column;
+    }
+    
+}
+
+/*Horizontal  */
+@media (orientation: landscape) {
+    main{
+        justify-content: space-between;
+    }
+    #painelPrincipal{
+        flex-grow: 2;
+        max-width: 50%;
+    }
+    #painelLateral {
+        max-width: 48%;
+    }   
 }
