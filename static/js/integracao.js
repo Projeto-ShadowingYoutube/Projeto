@@ -18,19 +18,32 @@ async function iniciarSessao(youtubeLink) {
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(youtubeLink)}`);
         
         carregamento.style.display = "none";
+
+        const jsonResponse = await resposta.json(); // Aqui recebemos o objeto completo
         
         if (!resposta.ok) { //aqui podemos colocar mensagem de erro diferente (MEMBRO 1)
+            // Se der erro (como o 429), tentamos atualizar os tokens se o servidor enviou
+            if (jsonResponse.tokens_restantes !== undefined) {
+                atualizarInterfaceTokens(jsonResponse.tokens_restantes);
+            }
             const erroData = await resposta.json();
             throw new Error(erroData.detail || "Erro ao carregar legenda. Verifique se o vídeo possui legendas manuais em inglês.");
         }
 
         // salva a lista de frases no estado global e zera o contador
-        blocosDeEstudo = await resposta.json();
+
+        // ATENÇÃO AQUI
+        // Antigamente 'jsonResponse' era a lista direta. 
+        // Agora a lista está em 'jsonResponse.dados'
+        blocosDeEstudo = jsonResponse.dados;
+        
+        // Atualizamos o contador na tela
+        atualizarInterfaceTokens(jsonResponse.tokens_restantes);
+        
         blocoAtualIndex = 0;
         currentVideoId = extractVideoId(youtubeLink); 
-        // legenda na tela
+        
         carregarFraseAtual();
-        //  comeca looping no video
         loadVideo(currentVideoId);
 
     } catch (erro) {
@@ -42,6 +55,25 @@ async function iniciarSessao(youtubeLink) {
             erroModal.style.display="block";
         }
         console.error("Falha na integração:", erro);
+    }
+}
+
+// Função auxiliar para atualizar os tokens (semana 2 membro 2)
+function atualizarInterfaceTokens(valor) {
+    // Salva na memória do navegador para a Home consultar depois
+    localStorage.setItem('tokens_restantes', valor);
+
+    // Atualiza o elemento visual se ele existir na página atual
+    const el = document.getElementById('token-count');
+    if (el) {
+        el.innerText = valor;
+        
+        // Troca a cor se chegar a zero
+        if (parseInt(valor) === 0) {
+            el.classList.add('token-low'); // Usando a classe CSS que sugerimos antes
+        } else {
+            el.classList.remove('token-low');
+        }
     }
 }
 
