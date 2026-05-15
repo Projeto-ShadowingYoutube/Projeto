@@ -2,9 +2,13 @@
 <html lang="pt-br">
     <head>
          <meta charset="UTF-8">
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
         <link rel="stylesheet" href="/static/css/style.css">
         
         <script src="https://www.youtube.com/iframe_api"></script>
+        <script src="/static/js/blur.js" defer></script>
+        <script src="/static/js/darkmode.js" defer></script>
         <script src="/static/js/player.js" defer></script>
         <script src="/static/js/voice.js" defer></script>
         <script src="/static/js/integracao.js" defer></script>
@@ -15,15 +19,26 @@
     </head>
     <body>
         <header>
-            <h1>Shadow</h1>
             <button hx-get="/revisao" hx-target="main">pagina 3</button>
+            <h1><a href="/">Shadow</a></h1>
+            <button id="mode">
+                <img id="modeSVG" src="/static/img/lightMode.svg" alt="">
+            </button>
         </header>
 
        <main hx-get="{{pagina}}"
               hx-target="main"
               hx-trigger="load">
         </main>
-
+        <div class="w3-modal w3-animate-opacity" id="erroModal">
+            <div class="w3-modal-content" id="erroDiv">
+                <p id="erro"></p>
+                <button id="botaoErro"
+                        hx-get="/"
+                        hx-target="main"
+                        hx-push-url="true">inicio</button>
+            </div>
+        </div>
         <script>
             document.body.addEventListener('htmx:afterSettle', function(evt) {
                 if (document.getElementById('player')) {

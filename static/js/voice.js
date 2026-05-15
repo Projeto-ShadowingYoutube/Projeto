@@ -10,6 +10,12 @@ const SILENCE_DELAY = 1200;
 function initSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
+        const erroModal=document.getElementById('erroMicModal');
+        const erroText=document.getElementById('erroMic');
+        if(erroModal) {
+            erroText.innerText="Speech API não suportada neste navegador.";
+            erroModal.style.display="block";
+        }
         console.error("Speech API não suportada neste navegador.");
         return;
     }
@@ -124,7 +130,13 @@ function startRecording() {
         drawWave();
     }).catch((err) => {
         console.error("Microfone bloqueado ou erro: ", err);
-        if (transcript) transcript.innerText = "Erro: Permita o uso do microfone no navegador.";
+        // if (transcript) transcript.innerText = "Erro: Permita o uso do microfone no navegador.";
+        const erroModal=document.getElementById('erroMicModal');
+        const erroText=document.getElementById('erroMic');
+        if(erroModal) {
+            erroText.innerText="Erro: Permita o uso do microfone no navegador.";
+            erroModal.style.display="block";
+        }
     });
 }
 
@@ -135,7 +147,7 @@ function stopRecording() {
     if (micBtn) micBtn.classList.remove("recording");
 
     if (recognition) recognition.stop();
-
+    
     if (silenceTimer) {
         clearTimeout(silenceTimer);
         silenceTimer = null;

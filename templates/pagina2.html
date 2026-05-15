@@ -1,24 +1,43 @@
 <!-- mudei id pra player -->
-<div id="player"></div> 
-
-<div id="legenda">
-        {{legenda}}
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.    
+<div id="painelPrincipal">
+    <div id="protecaoPlayer">
+        <button id="protecaoButton">Iniciar Estudos</button>
+    </div>
+    <div id="player"></div> 
+    <div id="botoes">
+        <button id="anterior">Frase anterior</button>
+        <button id="proximo">Próxima frase</button>
+    </div>
 </div>
 
-<!-- 0-ALTERACAO-0: Removido o onclick obsoleto do Membro 1 -->
-<button id="gravar">
-    &#127908 Gravar
-</button>
 
-<div id="botoes">
-    <button id="anterior">Frase anterior</button>
-    <button id="proximo">Próxima frase</button>
+
+
+
+<!--ALTERADO voz em ondas e transcrição escondidas -->
+<div id="painelLateral">
+    <div id="legendaPai">
+        <button id="ocultar">
+            <img id="olho" src="/static/img/olho.svg">
+        </button>
+        <div id="legenda">
+            Legendas
+        </div>
+    </div>
+    
+    <div id="panel" class="hidden">
+        <canvas id="wave" width="700" height="120"></canvas>
+        <div id="transcript">Fale algo...</div>
+
+        <!-- 0-ALTERACAO-0: Removido o onclick obsoleto do Membro 1 -->
+        <button id="gravar">
+            <img src="/static/img/mic.svg">
+        </button>
+    </div>
 </div>
 
-<!-- voz em ondas e transcrição escondidas -->
- 
-<div id="panel" class="hidden">
-    <canvas id="wave" width="700" height="120"></canvas>
-    <div id="transcript">Fale algo...</div>
+<!-- Tela carregamento -->
+<div id="carregamento">
+    <p>Extraindo legendas do vídeo... Isso pode levar alguns segundos.</p>
+    <p><i class="fa fa-spinner w3-spin" style="font-size:64px"></i></p>
 </div>
