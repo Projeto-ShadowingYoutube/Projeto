@@ -24,6 +24,10 @@
             <button id="mode">
                 <img id="modeSVG" src="/static/img/lightMode.svg" alt="">
             </button>
+                <span id="token-label">Tokens</span>
+                <div id="token-count">
+                    5
+                </div>
         </header>
 
        <main hx-get="{{pagina}}"
@@ -54,6 +58,27 @@
                     if(micBtn) micBtn.addEventListener("click", startRecording);
                 }
             });
+        </script>
+        <script>
+        // Uma nova função para sincronizar o contador do Token Bucket:
+            function sincronizarContadorHome() {
+                const saldoSalvo = localStorage.getItem('tokens_restantes');
+                const el = document.getElementById('token-count');
+            
+                if (saldoSalvo !== null && el) {
+                    el.innerText = saldoSalvo;
+                    if (parseInt(saldoSalvo) === 0) {
+                        el.classList.add('token-low');
+                    }
+                }
+            }
+
+        // Executa ao carregar a página
+            sincronizarContadorHome();
+
+        // Ouvinte para o HTMX: toda vez que ele trocar o conteúdo, 
+        // garantimos que o contador continue certo
+            document.body.addEventListener('htmx:afterSettle', sincronizarContadorHome);
         </script>
     </body>
 </html>
