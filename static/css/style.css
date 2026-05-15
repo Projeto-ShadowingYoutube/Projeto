@@ -90,8 +90,8 @@ form button {
 
 /* Modo Claro/Escuro */
 #mode{
-    max-width: fit-content;
-    max-height: fit-content;
+    max-width: 64px;
+    max-height: 64px;
     border-radius: 999px; 
 }
 
@@ -239,7 +239,7 @@ img, iframe {
 } */
 
 /* ERROS */
- #erro{
+ #erro , #erroMic{
     color: red;
 } 
 
