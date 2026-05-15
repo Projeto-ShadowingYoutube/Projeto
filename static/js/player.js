@@ -22,14 +22,28 @@ function extractVideoId(url) {
 }
 
 function loadVideo(videoId) {
-    if (player) {
-        player.cueVideoById({ videoId, startSeconds: startTime });
-    } else {
-        player = new YT.Player("player", {
-            videoId,
-            events: { onReady: onReady }
-        });
+    // 1. Verifica se o player existe na memória E já carregou suas funções
+    if (player && typeof player.cueVideoById === 'function') {
+        try {
+            // 2. Pega o elemento HTML (iframe) do player antigo
+            const iframe = player.getIframe();
+            
+            // 3. Verifica se o HTMX NÃO apagou o iframe da tela
+            if (document.body.contains(iframe)) {
+                player.cueVideoById({ videoId, startSeconds: startTime });
+                return; // Tudo certo, reaproveitamos o player e encerramos a função!
+            }
+        } catch (error) {
+            console.log("Player antigo perdido na transição. Recriando...");
+        }
     }
+
+    // 4. Se chegou aqui, é porque o HTMX recarregou a página 2 e o HTML antigo sumiu,
+    // ou o player deu erro na tentativa anterior. Criamos um zero bala!
+    player = new YT.Player("player", {
+        videoId,
+        events: { onReady: onReady }
+    });
 }
 
 function onReady() {

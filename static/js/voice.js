@@ -109,13 +109,13 @@ function startRecording() {
     
 
     // Busca os elementos APENAS quando o botão é clicado
-    const panel = document.getElementById("panel");
+    const wave = document.getElementById("wave");
     const transcript = document.getElementById("transcript");
     const micBtn = document.getElementById("gravar");
 
-    if (panel) panel.classList.remove("hidden");
+    if (wave) wave.style.display = "block"; // Faz a onda aparecer
     if (transcript) {
-        transcript.style.display = "block";
+        transcript.style.display = "block"; // Faz o texto aparecer
         transcript.innerText = "Listening...";
     }
 

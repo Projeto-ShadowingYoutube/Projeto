@@ -94,12 +94,15 @@ function carregarFraseAtual() {
     startTime = bloco.tempo_inicio; //esta em voice.js
     endTime = bloco.tempo_fim; //esta em voice.js
 
-    // Reseta gravação
-    const panel = document.getElementById("panel");
+    // Reseta gravação (Esconde apenas a onda e o texto, mantendo o mic visível)
+    const wave = document.getElementById("wave");
     const transcript = document.getElementById("transcript");
-    if (panel) panel.classList.add("hidden");
-    if (transcript) transcript.innerText = "Fale algo...";
-
+    
+    if (wave) wave.style.display = "none";
+    if (transcript) {
+        transcript.style.display = "none";
+        transcript.innerText = "Fale algo...";
+    }
     // looping das partes
     if (player && typeof player.seekTo === 'function') {
         player.seekTo(startTime, true);
@@ -139,3 +142,53 @@ document.addEventListener('click', function(event) {
     }
     //salvar pro anki vai ficar aqui 
 });
+
+// FUNÇÃO DE CHECAGEM (PÁGINA 1)
+async function verificarVideo(event) {
+    event.preventDefault(); // Impede o form de recarregar a página
+    
+    const input = document.querySelector('.url-input');
+    const link = input ? input.value : null;
+    if(!link) return;
+
+    // Muda o texto do botão para dar feedback visual
+    const btnLoad = document.querySelector('.btn-load');
+    const textoOriginal = btnLoad.innerText;
+    btnLoad.innerText = "VERIFICANDO...";
+    btnLoad.disabled = true;
+
+    try {
+        // 1. Tenta puxar a legenda ANTES de mudar de página
+        const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(link)}`);
+        const jsonResponse = await resposta.json();
+
+        // 2. Se deu erro (ex: Limite de Tokens ou Sem Legenda)
+        if (!resposta.ok) {
+            if (jsonResponse.tokens_restantes !== undefined) {
+                atualizarInterfaceTokens(jsonResponse.tokens_restantes);
+            }
+            throw new Error(jsonResponse.detail || "Erro desconhecido ao carregar legenda.");
+        }
+
+        // 3. Se deu tudo certo, aí sim navegamos via HTMX para a página 2
+        htmx.ajax('GET', `/legenda?link=${encodeURIComponent(link)}`, {target: 'main'}).then(() => {
+            // Atualiza a URL no navegador para ficar bonito
+            window.history.pushState(null, '', `/legenda?link=${encodeURIComponent(link)}`);
+        });
+
+    } catch (erro) {
+        // 4. Deu erro! Mostra o modal customizado e NÃO sai da página 1
+        const erroModal = document.getElementById('erroModal');
+        const erroText = document.getElementById('erro');
+        if (erroModal && erroText) {
+            erroText.innerText = erro.message;
+            erroModal.style.display = "block";
+        }
+    } finally {
+        // Restaura o botão
+        if (btnLoad) {
+            btnLoad.innerText = textoOriginal;
+            btnLoad.disabled = false;
+        }
+    }
+}
