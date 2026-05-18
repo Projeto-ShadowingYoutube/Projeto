@@ -1,7 +1,10 @@
 document.addEventListener('click', function(event) {
     let botao = document.getElementById('mode');
     
-    // Verifica se o clique foi no botão de tema ou dentro dele
+    // [NOVO]: Simplificação absurda do Dark Mode!
+    // Antigamente injetavam variáveis HEX uma por uma no JS.
+    // Agora, nós apenas trocamos o atributo `data-theme` na tag <html>.
+    // O arquivo style.css faz todo o resto do trabalho pesado sozinho.
     if(event.target.closest('#mode')) {
         const root = document.documentElement;
         const currentTheme = root.getAttribute('data-theme');

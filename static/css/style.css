@@ -78,7 +78,7 @@ a {
     text-decoration: none;
 }
 
-/* --- Fundo com Miniaturas Flutuantes --- */
+/*[NOVO] --- Fundo com Miniaturas Flutuantes --- */
 .thumbnails-bg {
     position: fixed; /* fixo para não distorcer quando o player carregar */
     top: 0; left: 0; width: 100%; height: 100%;
@@ -230,6 +230,7 @@ main {
 
 #painelPrincipal { position: relative; width: 100%; }
 #protecaoPlayer {
+      /* [NOVO]: Fundo "Glassmorphism" fosco bloqueando o vídeo */
     display: flex; position: absolute; width: 100%; height: 100%;
     background-color: var(--bg); z-index: 5;
 }
@@ -464,7 +465,7 @@ main {
     border: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
 }
-
+/* [NOVO]: Estrutura lado a lado para transcrição e microfone */
 .mic-area {
     display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%;
 }
@@ -541,6 +542,7 @@ main {
 /* ====================================================
    MODAL DE ERRO CUSTOMIZADO
    ==================================================== */
+   /* [NOVO]: novo modal de erros */
 .w3-modal {
     z-index: 1000;
     display: none;

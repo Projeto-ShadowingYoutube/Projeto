@@ -1,5 +1,6 @@
 // CODIGO YOUTUBE PLAYER
 
+// [MANTIDO]: As variáveis globais e controle de tempo originais foram mantidas.
 let player, loopRAF;
 let startTime = 0, endTime = 0; 
 let currentVideoId;
@@ -12,6 +13,7 @@ function handleLoadVideo() {
     loadVideo(id);
 }
 
+// [MANTIDO]: Excelente uso de Regex e URL API para extrair o ID.
 function extractVideoId(url) {
     try {
         const u = new URL(url);
@@ -22,24 +24,25 @@ function extractVideoId(url) {
 }
 
 function loadVideo(videoId) {
-    // 1. Verifica se o player existe na memória E já carregou suas funções
+    // [NOVO]: Solução para o bug do HTMX ("cueVideoById is not a function").
+    // O HTMX destrói o HTML antigo, mas o JS mantinha o player fantasma na memória.
+    // Passo 1: Verifica se o player existe e está com as funções carregadas.
     if (player && typeof player.cueVideoById === 'function') {
         try {
-            // 2. Pega o elemento HTML (iframe) do player antigo
+            // Passo 2: Pega o iframe gerado pelo YouTube.
             const iframe = player.getIframe();
             
-            // 3. Verifica se o HTMX NÃO apagou o iframe da tela
+            // Passo 3: Verifica se o iframe AINDA está grudado na tela atual (document.body).
             if (document.body.contains(iframe)) {
                 player.cueVideoById({ videoId, startSeconds: startTime });
-                return; // Tudo certo, reaproveitamos o player e encerramos a função!
+                return; // Tudo certo, reaproveita o player sem recarregar!
             }
         } catch (error) {
-            console.log("Player antigo perdido na transição. Recriando...");
+            console.log("Player antigo perdido na transição do HTMX. Recriando...");
         }
     }
 
-    // 4. Se chegou aqui, é porque o HTMX recarregou a página 2 e o HTML antigo sumiu,
-    // ou o player deu erro na tentativa anterior. Criamos um zero bala!
+    // [NOVO]: Se o iframe sumiu (porque mudou de página), criamos um player do zero na nova div.
     player = new YT.Player("player", {
         videoId,
         events: { onReady: onReady }
@@ -53,6 +56,7 @@ function onReady() {
     });
 }
 
+// [MANTIDO]: Toda a lógica de play, pause e loop via requestAnimationFrame
 function playVideo() {
     player.seekTo(startTime, true);
     player.playVideo();

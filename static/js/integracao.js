@@ -1,43 +1,35 @@
-
+// [MANTIDO]: Variáveis de estado para controlar as frases.
 let blocosDeEstudo = [];  // guarda o JSON com as frases 
 let blocoAtualIndex = 0;  // qual frase o usuário está no momento
 
-//  INICIAR SESSÃO
-
+// INICIAR SESSÃO
 async function iniciarSessao(youtubeLink) {
     try {
-        
-        // tela carregamento na legenda
-        let carregamento=document.getElementById('carregamento')
-        carregamento.style.display="flex";
-        // if (legendaDiv) legendaDiv.innerText = "Extraindo legendas do vídeo... Isso pode levar alguns segundos.";
+        // [MANTIDO]: Controle da tela de carregamento.
+        let carregamento = document.getElementById('carregamento')
+        carregamento.style.display = "flex";
 
-        // Chama a API que pega a legenda
         const legendaDiv = document.getElementById('legenda');
-
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(youtubeLink)}`);
         
         carregamento.style.display = "none";
 
-        const jsonResponse = await resposta.json(); // Aqui recebemos o objeto completo
+        const jsonResponse = await resposta.json(); 
         
-        if (!resposta.ok) { //aqui podemos colocar mensagem de erro diferente (MEMBRO 1)
-            // Se der erro (como o 429), tentamos atualizar os tokens se o servidor enviou
+        if (!resposta.ok) { 
+            // [MANTIDO]: Tratamento de limite de tokens retornado pela API.
             if (jsonResponse.tokens_restantes !== undefined) {
                 atualizarInterfaceTokens(jsonResponse.tokens_restantes);
             }
             const erroData = await resposta.json();
-            throw new Error(erroData.detail || "Erro ao carregar legenda. Verifique se o vídeo possui legendas manuais em inglês.");
+            throw new Error(erroData.detail || "Erro ao carregar legenda.");
         }
 
-        // salva a lista de frases no estado global e zera o contador
-
-        // ATENÇÃO AQUI
-        // Antigamente 'jsonResponse' era a lista direta. 
-        // Agora a lista está em 'jsonResponse.dados'
+        // [NOVO]: ATENÇÃO AQUI! A estrutura do JSON mudou. 
+        // Antes era a lista direta, agora encapsulamos os dados dentro de 'jsonResponse.dados' 
+        // para trafegar os tokens_restantes na mesma requisição com mais segurança.
         blocosDeEstudo = jsonResponse.dados;
         
-        // Atualizamos o contador na tela
         atualizarInterfaceTokens(jsonResponse.tokens_restantes);
         
         blocoAtualIndex = 0;
@@ -47,54 +39,45 @@ async function iniciarSessao(youtubeLink) {
         loadVideo(currentVideoId);
 
     } catch (erro) {
-        //modal do Erro
-        const erroModal=document.getElementById('erroModal');
-        const erroText=document.getElementById('erro');
+        // [NOVO]: Integração com o novo Modal de erro.
+        const erroModal = document.getElementById('erroModal');
+        const erroText = document.getElementById('erro');
         if(erroModal) {
-            erroText.innerText=erro.message;
-            erroModal.style.display="block";
+            erroText.innerText = erro.message;
+            erroModal.style.display = "block";
         }
         console.error("Falha na integração:", erro);
     }
 }
 
-// Função auxiliar para atualizar os tokens (semana 2 membro 2)
+// [MANTIDO]: Função gerenciar tokens.
 function atualizarInterfaceTokens(valor) {
-    // Salva na memória do navegador para a Home consultar depois
     localStorage.setItem('tokens_restantes', valor);
-
-    // Atualiza o elemento visual se ele existir na página atual
     const el = document.getElementById('token-count');
     if (el) {
         el.innerText = valor;
-        
-        // Troca a cor se chegar a zero
         if (parseInt(valor) === 0) {
-            el.classList.add('token-low'); // Usando a classe CSS que sugerimos antes
+            el.classList.add('token-low'); 
         } else {
             el.classList.remove('token-low');
         }
     }
 }
 
-//  TELA E VÍDEO
+// TELA E VÍDEO
 function carregarFraseAtual() {
-    // PRECISA TEM DADO AQUI se nao não faz nada
     if (!blocosDeEstudo || blocosDeEstudo.length === 0) return;
 
-    // Pega o bloco
     const bloco = blocosDeEstudo[blocoAtualIndex];
-
-    
-    // Atualiza o texto legenda
     const legendaDiv = document.getElementById('legenda');
     if (legendaDiv) legendaDiv.innerText = bloco.texto_limpo;
 
-    // Atualiza os tempos de corte para o looping
-    startTime = bloco.tempo_inicio; //esta em voice.js
-    endTime = bloco.tempo_fim; //esta em voice.js
+    startTime = bloco.tempo_inicio; 
+    endTime = bloco.tempo_fim; 
 
-    // Reseta gravação (Esconde apenas a onda e o texto, mantendo o mic visível)
+    // [NOVO]: Em vez de esconder o painel INTEIRO (o que sumia com o microfone),
+    // agora escondemos apenas a onda (canvas) e o texto (transcript). 
+    // Assim o botão vermelho do microfone fica sempre visível e fixo na tela.
     const wave = document.getElementById("wave");
     const transcript = document.getElementById("transcript");
     
@@ -103,7 +86,8 @@ function carregarFraseAtual() {
         transcript.style.display = "none";
         transcript.innerText = "Fale algo...";
     }
-    // looping das partes
+    
+    // [MANTIDO]: Loop da frase.
     if (player && typeof player.seekTo === 'function') {
         player.seekTo(startTime, true);
         player.playVideo();
@@ -113,56 +97,52 @@ function carregarFraseAtual() {
 
 // BOTÕES
 document.addEventListener('click', function(event) {
-    //protecaoPlayer
+    // [NOVO]: O botão de erro agora apenas fecha o modal.
+    if(event.target.id === 'botaoErro'){
+        document.getElementById('erroModal').style.display = "none";
+    }
+
+    // [MANTIDO]: Navegação entre frases.
     if (event.target.id === 'protecaoButton') {
         document.getElementById('protecaoPlayer').style.display = "none";
         blocoAtualIndex++;
         carregarFraseAtual();
     }
-
-    //botão de erro
-    if(event.target.id==='botaoErro'){
-        document.getElementById('erroModal').style.display = "none";
-    }
-    
-    // Próxima Frase
     if (event.target.id === 'proximo') {
         if (blocoAtualIndex < blocosDeEstudo.length - 1) {
             blocoAtualIndex++;
             carregarFraseAtual();
         }
     }
-    
-    //Frase Anterior
     if (event.target.id === 'anterior') {
         if (blocoAtualIndex > 0) {
             blocoAtualIndex--;
             carregarFraseAtual();
         }
     }
-    //salvar pro anki vai ficar aqui 
 });
 
-// FUNÇÃO DE CHECAGEM (PÁGINA 1)
+// [NOVO]: FUNÇÃO DE CHECAGEM (PÁGINA 1) - TRATAMENTO DE ERROS PARA USUÁRIO
+// Antigamente o HTMX trocava para a página 2 logo no clique. Se a API desse erro, 
+// o usuário ficava preso numa página 2 quebrada. 
+// Agora, esta função intercepta o formulário, checa a API primeiro e SÓ permite o HTMX
+// avançar se o vídeo realmente tiver legenda e o usuário tiver tokens.
 async function verificarVideo(event) {
-    event.preventDefault(); // Impede o form de recarregar a página
+    event.preventDefault(); 
     
     const input = document.querySelector('.url-input');
     const link = input ? input.value : null;
     if(!link) return;
 
-    // Muda o texto do botão para dar feedback visual
     const btnLoad = document.querySelector('.btn-load');
     const textoOriginal = btnLoad.innerText;
     btnLoad.innerText = "VERIFICANDO...";
     btnLoad.disabled = true;
 
     try {
-        // 1. Tenta puxar a legenda ANTES de mudar de página
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(link)}`);
         const jsonResponse = await resposta.json();
 
-        // 2. Se deu erro (ex: Limite de Tokens ou Sem Legenda)
         if (!resposta.ok) {
             if (jsonResponse.tokens_restantes !== undefined) {
                 atualizarInterfaceTokens(jsonResponse.tokens_restantes);
@@ -170,14 +150,13 @@ async function verificarVideo(event) {
             throw new Error(jsonResponse.detail || "Erro desconhecido ao carregar legenda.");
         }
 
-        // 3. Se deu tudo certo, aí sim navegamos via HTMX para a página 2
+        // Dispara o HTMX manualmente via JS para mudar de tela.
         htmx.ajax('GET', `/legenda?link=${encodeURIComponent(link)}`, {target: 'main'}).then(() => {
-            // Atualiza a URL no navegador para ficar bonito
             window.history.pushState(null, '', `/legenda?link=${encodeURIComponent(link)}`);
         });
 
     } catch (erro) {
-        // 4. Deu erro! Mostra o modal customizado e NÃO sai da página 1
+        // Exibe o erro na própria Página 1.
         const erroModal = document.getElementById('erroModal');
         const erroText = document.getElementById('erro');
         if (erroModal && erroText) {
@@ -185,7 +164,6 @@ async function verificarVideo(event) {
             erroModal.style.display = "block";
         }
     } finally {
-        // Restaura o botão
         if (btnLoad) {
             btnLoad.innerText = textoOriginal;
             btnLoad.disabled = false;
