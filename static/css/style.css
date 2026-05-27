@@ -6,6 +6,7 @@
     --nav-bg: rgba(15, 23, 42, 0.7);
     --card-bg: rgba(30, 41, 59, 0.4);
     --text-main: #ffffff;
+    --text-button: #ffffff;
     --text-sub: #94a3b8;
     --input-bg: #f8fafc;
     --input-text: #0f172a;
@@ -32,6 +33,7 @@
     --nav-bg: rgba(255, 255, 255, 0.8);
     --card-bg: rgba(255, 255, 255, 0.6);
     --text-main: #1e293b;
+    --text-button: black;
     --text-sub: #64748b;
     --input-bg: #ffffff;
     --input-text: #0f172a;
@@ -41,8 +43,8 @@
 
     /* Variáveis antigas mapeadas para as novas cores */
     --bg: #f4f4f4;
-    --bg-button: #333;
-    --button-hover: #555;
+    --bg-button: rgba(225, 225, 225, 0.8);
+    --button-hover: #999;
     --wave: #ffffff;
     --button: white;
     --legenda: white;
@@ -165,16 +167,18 @@ a {
 .token-low { background-color: #e74c3c !important; color: white !important; }
 
 /* --- Main UI (Home) --- */
-.content {
+.content{
     position: relative;
     z-index: 10;
     flex: 1;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     padding: 0 20px;
 }
+
+.content:has(> .input-card)  { flex-direction: column; }
+
 .hero-title {
     font-size: 5.5rem; font-weight: 900; margin: 0;
     background: linear-gradient(180deg, #c084fc 0%, #9333ea 100%);
@@ -248,7 +252,7 @@ img, iframe { width: 100%; height: auto; margin: auto; border-radius: 10px; }
 #anterior, #proximo, #protecaoButton {
     border-radius: 8px; font-size: large; padding: 10px 15px;
     cursor: pointer; border: 1px solid var(--border-color);
-    background: var(--bg-button); color: var(--text-main);
+    /* background: var(--bg-button); color: var(--text-button); */
     transition: background 0.3s ease;
 }
 #anterior:hover, #proximo:hover, #protecaoButton:hover { background: var(--button-hover); }
@@ -330,13 +334,13 @@ img, iframe { width: 100%; height: auto; margin: auto; border-radius: 10px; }
     .footer-tag { font-size: 0.8rem; padding: 6px 12px; margin-bottom: 20px; text-align: center; }
 }
 
-@media (orientation: portrait) {    
+@media (orientation: portrait) {
     main { justify-content: center; flex-direction: column; }
 }
 @media (orientation: landscape) {
     main { justify-content: space-between; }
     #painelPrincipal { flex-grow: 2; max-width: 50%; }
-    #painelLateral { max-width: 48%; }   
+    #painelLateral { max-width: 48%; }
 }
 
 /* ====================================================
@@ -351,34 +355,34 @@ main {
 }
 
 /* --- Coluna Esquerda: Vídeo --- */
-#painelPrincipal { 
-    position: relative; 
-    width: 100%; 
+#painelPrincipal {
+    position: relative;
+    width: 100%;
     flex: 1.2;
 }
 
 #protecaoPlayer {
-    display: flex; 
-    position: absolute; 
+    display: flex;
+    position: absolute;
     top: 0;
     left: 0;
-    width: 100%; 
+    width: 100%;
     height: 100%;
     background-color: var(--overlay-bg); /* Agora muda com o tema! */
-    backdrop-filter: blur(8px); 
+    backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    z-index: 5; 
+    z-index: 5;
     border-radius: 10px;
 }
 
 /* Botão de Iniciar Estudos (Destaque) */
-#protecaoButton { 
-    margin: auto; 
-    padding: 15px 35px; 
+#protecaoButton {
+    margin: auto;
+    padding: 15px 35px;
     font-size: 1.2rem;
     font-weight: bold;
     color: #ffffff !important; /* Força o texto a ficar branco */
-    background: linear-gradient(90deg, #818cf8, #c084fc) !important; /* Gradiente moderno */
+    background: linear-gradient(90deg, #818cf8, #c084fc) ;/*!important; Gradiente moderno*/
     border: none !important;
     border-radius: 14px;
     cursor: pointer;
@@ -400,39 +404,54 @@ main {
     aspect-ratio: 16 / 9;
 }
 
-#player iframe { 
-    width: 100%; height: 100%; 
-    border-radius: 10px; 
-    border: 1px solid var(--border-color); 
+#player iframe {
+    width: 100%; height: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
-#botoes { 
-    margin-top: 15px; display: flex; justify-content: center; gap: 15px; 
+#botoes {
+    margin-top: 15px; display: flex; justify-content: center; gap: 15px;
 }
 
-#anterior, #proximo, #protecaoButton {
+/* Parte igual botoes página 2 e de revisão */
+#botoes button,#delete{
     border-radius: 8px; font-size: 1rem; padding: 12px 20px;
     cursor: pointer; border: 1px solid var(--border-color);
-    background: var(--bg-button); color: var(--text-main);
+    backdrop-filter: blur(10px);
     transition: background 0.3s ease; font-weight: bold;
 }
+#botoes button:hover, #delete:hover, #ocultar:hover, .nav-right button:hover {
+    background: var(--button-hover);
+}
 
-#anterior:hover, #proximo:hover, #protecaoButton:hover { 
-    background: var(--button-hover); 
+/* Botões página 2 e delete*/
+#anterior, #proximo, #protecaoButton, #salvar,#delete {
+    background: var(--bg-button);
+    color: var(--text-button); 
+}    
+
+/* Botões página revisão */
+#facil    { background:green; }
+#medio    { background:yellow; }
+#dificil  { background:red; }
+#delete {
+    align-self: flex-end;
+    margin-bottom: 2vh;
 }
 
 /* --- Coluna Direita: Legenda, Onda e Microfone --- */
-#painelLateral { 
-    width: 100%; flex: 1; 
-    display: flex; flex-direction: column; 
+#painelLateral {
+    width: 100%; flex: 1;
+    display: flex; flex-direction: column;
     gap: 20px; padding-top: 10px;
 }
 
 /* Linha do Olho + Legenda */
-#legendaPai { 
-    display: flex; width: 100%; 
-    align-items: center; gap: 15px; 
+#legendaPai {
+    display: flex; width: 100%;
+    align-items: center; gap: 15px;
 }
 
 #ocultar {
@@ -442,9 +461,10 @@ main {
     cursor: pointer; transition: 0.2s;
 }
 
-#ocultar img { width: 28px; filter: invert(var(--icon-invert, 0)); }
-:root[data-theme="dark"] { --icon-invert: 1; } /* Deixa o olho branco no tema escuro */
-:root[data-theme="light"] { --icon-invert: 0; }
+/*imagem do delete igual imagem do ocultar*/
+#ocultar img, #delete img { width: 28px; filter: invert(var(--icon-invert, 0)); }
+:root[data-theme="dark"] { --icon-invert: 0; } /* Deixa o olho branco no tema escuro */
+:root[data-theme="light"] { --icon-invert: 1; }
 
 #legenda {
     margin: 0; font-size: 1.1rem; font-weight: bold;
@@ -455,8 +475,8 @@ main {
 }
 
 /* Área do Microfone e Onda */
-#panel { 
-    display: flex; flex-direction: column; width: 100%; gap: 15px; 
+#panel {
+    display: flex; flex-direction: column; width: 100%; gap: 15px;
 }
 
 #wave {
@@ -528,7 +548,7 @@ main {
     .nav-right { gap: 8px; }
     .nav-btn { padding: 6px 12px; font-size: 0.8rem; }
     .btn-text-mobile { display: none; }
-    
+
     .hero-title { font-size: 2.8rem; }
     .hero-sub { font-size: 0.95rem; padding: 0 10px; margin-bottom: 25px; }
     .input-card { padding: 20px; border-radius: 20px; margin: 0 10px; width: auto; }

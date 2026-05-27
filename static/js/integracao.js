@@ -5,14 +5,20 @@ let blocoAtualIndex = 0;  // qual frase o usuário está no momento
 // INICIAR SESSÃO
 async function iniciarSessao(youtubeLink) {
     try {
+        
+        //Bloquear iniciar estudos
+        const botaoIniciar=document.getElementById('protecaoButton');
+        botaoIniciar.style.background="black";
+        botaoIniciar.disabled=true;
+
         // [MANTIDO]: Controle da tela de carregamento.
-        let carregamento = document.getElementById('carregamento')
+        let carregamento = document.getElementById('carregamento');
         carregamento.style.display = "flex";
 
         const legendaDiv = document.getElementById('legenda');
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(youtubeLink)}`);
         
-        carregamento.style.display = "none";
+        
 
         const jsonResponse = await resposta.json(); 
         
@@ -30,13 +36,22 @@ async function iniciarSessao(youtubeLink) {
         // para trafegar os tokens_restantes na mesma requisição com mais segurança.
         blocosDeEstudo = jsonResponse.dados;
         
-        atualizarInterfaceTokens(jsonResponse.tokens_restantes);
+        await atualizarInterfaceTokens(jsonResponse.tokens_restantes);
         
         blocoAtualIndex = 0;
         currentVideoId = extractVideoId(youtubeLink); 
-        
         carregarFraseAtual();
-        loadVideo(currentVideoId);
+        
+        await loadVideo(currentVideoId);
+
+        await new Promise(r => setTimeout(r, 300));
+        carregamento.style.display = "none";
+        
+        //Debloquear Botão
+        botaoIniciar.style.background='linear-gradient(90deg, #818cf8, #c084fc)';
+        botaoIniciar.disabled=false;
+       
+
 
     } catch (erro) {
         // [NOVO]: Integração com o novo Modal de erro.
@@ -49,6 +64,7 @@ async function iniciarSessao(youtubeLink) {
         console.error("Falha na integração:", erro);
     }
 }
+
 
 // [MANTIDO]: Função gerenciar tokens.
 function atualizarInterfaceTokens(valor) {
@@ -105,7 +121,6 @@ document.addEventListener('click', function(event) {
     // [MANTIDO]: Navegação entre frases.
     if (event.target.id === 'protecaoButton') {
         document.getElementById('protecaoPlayer').style.display = "none";
-        blocoAtualIndex++;
         carregarFraseAtual();
     }
     if (event.target.id === 'proximo') {

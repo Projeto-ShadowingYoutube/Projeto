@@ -42,7 +42,7 @@
             <div class="logo"><a href="/" style="color: inherit;">Shadowing</a></div>
             <div class="nav-right">
                 <button class="nav-btn">🔗 <span class="btn-text-mobile">Token</span> <span id="token-count">5</span></button>
-                <button class="nav-btn" hx-get="/revisao" hx-target="main">↺ <span class="btn-text-mobile">Revisar</span></button>
+                <button class="nav-btn" hx-get="/revisao" hx-target="main" hx-push-url="true">↺ <span class="btn-text-mobile">Revisar</span></button>
                 <button class="nav-btn theme-toggle" id="mode">☀️</button>
             </div>
         </header>
@@ -55,6 +55,7 @@
 
         <div class="w3-modal w3-animate-opacity" id="erroModal">
             <div class="w3-modal-content" id="erroDiv">
+                <span onclick="document.getElementById('erroModal').style.display='none'" class="w3-button w3-display-topright">&times;</span>
                 <p id="erro"></p>
                 <button id="botaoErro" hx-get="/" hx-target="main" hx-push-url="true">inicio</button>
             </div>

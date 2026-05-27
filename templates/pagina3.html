@@ -1,21 +1,37 @@
-<div id="video">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png" alt="YouTube Logo">
-</div> 
-
-<div id="legenda">
-    REVISAO        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.           
+<div id="painelPrincipal">
+    <div id="player"></div> 
+    <div id="botoes">
+        <button id="dificil">DIFÍCIL</button>
+        <button id="medio">MÉDIO</button>
+        <button id="facil">FÁCIL</button>
+    </div>
+    
 </div>
 
-<button id="gravar">
-    &#127908 Gravar
-</button>
+<div id="painelLateral">
+    <div id="legendaPai">
+        <button id="ocultar">
+            <img id="olho" src="/static/img/olho.svg" alt="Ocultar">
+        </button>
+        <div id="legenda">
+            Legendas
+        </div>
+    </div>
+    
+    <div id="panel">
+        <canvas id="wave" width="700" height="120"></canvas>
+        
+        <div class="mic-area">
+            <div id="transcript">Fale algo...</div>
+            <button id="gravar">
+                <img src="/static/img/mic.svg" alt="Gravar">
+            </button>
+        </div>
+    </div>
+    <button id="delete"><img id="lixeira" src="/static/img/delete.svg" alt="apagar"></button>
 
-<div id="botoes">
-    <button id="dificil">Difícil</button>
-    <button id="medio">Médio</button>
-    <button id="facil">Fácil</button>
 </div>
-
-<button id="excluir">Excluir &#128465</button>
-
-<div id="transcricao">Isso é pra depois </div> 
+<div id="carregamento">
+    <p>Extraindo legendas do vídeo... Isso pode levar alguns segundos.</p>
+    <p><i class="fa fa-spinner w3-spin" style="font-size:64px"></i></p>
+</div>
