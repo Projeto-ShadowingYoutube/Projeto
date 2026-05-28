@@ -54,6 +54,12 @@ function onReady() {
         videoId: currentVideoId,
         startSeconds: startTime
     });
+
+    //MUDANÇA MEMBRO 1:SAIR DO CARREGAMENTO E LIBERAR BOTÃO QUANDO PRONTO
+    document.getElementById('carregamento').style.display = "none"; 
+    //Debloquear Botão
+    document.getElementById('protecaoButton').style.background='linear-gradient(90deg, #818cf8, #c084fc)';
+    document.getElementById('protecaoButton').disabled=false;
 }
 
 // [MANTIDO]: Toda a lógica de play, pause e loop via requestAnimationFrame

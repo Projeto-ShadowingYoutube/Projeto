@@ -2,6 +2,8 @@
 let blocosDeEstudo = [];  // guarda o JSON com as frases 
 let blocoAtualIndex = 0;  // qual frase o usuário está no momento
 
+
+
 // INICIAR SESSÃO
 async function iniciarSessao(youtubeLink) {
     try {
@@ -36,20 +38,14 @@ async function iniciarSessao(youtubeLink) {
         // para trafegar os tokens_restantes na mesma requisição com mais segurança.
         blocosDeEstudo = jsonResponse.dados;
         
-        await atualizarInterfaceTokens(jsonResponse.tokens_restantes);
+        atualizarInterfaceTokens(jsonResponse.tokens_restantes);
         
         blocoAtualIndex = 0;
         currentVideoId = extractVideoId(youtubeLink); 
         carregarFraseAtual();
         
-        await loadVideo(currentVideoId);
-
-        await new Promise(r => setTimeout(r, 300));
-        carregamento.style.display = "none";
+        loadVideo(currentVideoId);
         
-        //Debloquear Botão
-        botaoIniciar.style.background='linear-gradient(90deg, #818cf8, #c084fc)';
-        botaoIniciar.disabled=false;
        
 
 
