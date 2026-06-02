@@ -1,26 +1,34 @@
 from fastapi import FastAPI, Request, Form, HTTPException 
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from youtube_transcript_api import YouTubeTranscriptApi 
 from requests import Session
 import re 
+
 # Alguns novos imports serão necessários para implementar o Token Bucket e a Cache:
-# Para a funcionalidade do Token Bucket, precisaremos de:
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from limits import parse
-# Para a funcionalidade da Cache, precisaremos de:
 from database import salvar_na_cache, carregar_da_cache
 
+# Imports necessários para a geração de áudio (Waves)
+import yt_dlp
+import asyncio
+import os
+import subprocess
+import traceback
 
 # Começamos definindo o limitador:
 # Ele servirá para restringir a quantidade de requisições que o usuário poderá fazer ao Youtube
-limitador = Limiter(key_func=get_remote_address) # limitador por IP
+limitador = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limitador
+
+# DICIONÁRIO DE CADEADOS PARA DOWNLOADS SIMULTÂNEOS
+download_locks = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -177,3 +185,94 @@ async def obter_legenda(request: Request, url: str):
         
         print(f"Erro técnico: {e}")
         raise HTTPException(status_code=500, detail="Erro ao processar legendas.")
+
+
+# --- INTEGRAÇÃO DO SISTEMA DE ÁUDIO (WAVES) ---
+
+def _baixar_audio_sync(url: str, audio_base: str):
+    """Executa o download do yt_dlp de forma síncrona — chamado via executor."""
+    ydl_opts = {
+        "format": "bestaudio[ext=m4a]/bestaudio",
+        "outtmpl": audio_base,
+        "quiet": True,
+        "noplaylist": True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl: # type: ignore
+        ydl.download([url])
+
+def _cortar_audio_sync(inicio_f: float, fim_f: float, audio_base: str, bloco_wav: str):
+    """Executa o FFmpeg de forma síncrona via executor para driblar o erro do Windows."""
+    comando = [
+        "ffmpeg",
+        "-y",
+        "-ss", str(inicio_f),
+        "-to", str(fim_f),
+        "-i", audio_base,
+        "-vn",
+        "-acodec", "pcm_s16le",
+        "-ar", "44100",
+        "-ac", "1",
+        bloco_wav
+    ]
+    # Roda o comando escondendo os logs do ffmpeg no terminal
+    resultado = subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    if resultado.returncode != 0:
+        raise RuntimeError(f"ffmpeg encerrou com código {resultado.returncode}")
+
+
+@app.get("/api/audio")
+async def obter_audio(url: str, inicio: str, fim: str):
+    os.makedirs("audio", exist_ok=True)
+
+    try:
+        inicio_f = float(inicio)
+        fim_f = float(fim)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Parâmetros 'inicio' e 'fim' devem ser números.")
+
+    video_id = limpar_url_extrair_id(url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="URL do YouTube inválida.")
+
+    audio_base = f"audio/{video_id}.m4a"
+    bloco_wav = f"audio/{video_id}_{inicio_f:.2f}_{fim_f:.2f}.wav"
+
+    # CACHE DO BLOCO
+    if os.path.exists(bloco_wav):
+        print("CACHE HIT BLOCO")
+        return FileResponse(bloco_wav, media_type="audio/wav")
+
+    loop = asyncio.get_event_loop()
+
+    # --- PROTEÇÃO CONTRA RACE CONDITION ---
+    
+    # Cria um cadeado específico para este vídeo, se não existir
+    if video_id not in download_locks:
+        download_locks[video_id] = asyncio.Lock()
+
+    # Só permite que uma requisição por vez entre neste bloco
+    async with download_locks[video_id]:
+        # Verifica NOVAMENTE se o arquivo existe (pois a requisição anterior pode ter acabado de criá-lo)
+        if not os.path.exists(audio_base):
+            print(f"BAIXANDO ÁUDIO BASE ({video_id})...")
+            try:
+                await loop.run_in_executor(None, _baixar_audio_sync, url, audio_base)
+            except Exception as e:
+                print("=== ERRO AO BAIXAR ÁUDIO ===")
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail="Erro ao baixar áudio base.")
+                
+    # --- FIM DA PROTEÇÃO ---
+
+    # CORTE DO BLOCO — Todas as requisições podem cortar o áudio base simultaneamente
+    try:
+        print(f"GERANDO BLOCO {inicio_f:.2f} -> {fim_f:.2f}")
+        await loop.run_in_executor(None, _cortar_audio_sync, inicio_f, fim_f, audio_base, bloco_wav)
+
+        return FileResponse(bloco_wav, media_type="audio/wav")
+
+    except Exception as e:
+        print("=== ERRO AO GERAR BLOCO ===")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Erro ao gerar bloco.")
