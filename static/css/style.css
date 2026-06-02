@@ -25,7 +25,13 @@
     --transcript: #ffffff;
     --border: rgba(255, 255, 255, 0.1);
     --icon-invert: 1;
-    --overlay-bg: rgba(11, 15, 25, 0.6); /* Vidro escuro */
+    --overlay-bg: rgba(11, 15, 25, 0.6);
+
+    /*Popup de Dicionário*/
+    --popup-bg: rgba(30, 41, 59, 0.95);
+    --popup-text: #ffffff;
+    --popup-muted: #94a3b8;
+    --popup-border: rgba(255, 255, 255, 0.15);
 }
 
 :root[data-theme="light"] {
@@ -52,7 +58,13 @@
     --transcript: #333;
     --border: rgba(0,0,0,0.2);
     --icon-invert: 0;
-    --overlay-bg: rgba(255, 255, 255, 0.5); /* Vidro claro/esbranquiçado */
+    --overlay-bg: rgba(255, 255, 255, 0.5);
+
+    /*Popup de Dicionário*/
+    --popup-bg: rgba(255, 255, 255, 0.95);
+    --popup-text: #1e293b;
+    --popup-muted: #64748b;
+    --popup-border: rgba(0, 0, 0, 0.15);
 }
 
 /* ====================================================
@@ -80,9 +92,9 @@ a {
     text-decoration: none;
 }
 
-/*[NOVO] --- Fundo com Miniaturas Flutuantes --- */
+/* --- Fundo com Miniaturas Flutuantes --- */
 .thumbnails-bg {
-    position: fixed; /* fixo para não distorcer quando o player carregar */
+    position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     z-index: 0;
     overflow: hidden;
@@ -219,131 +231,6 @@ a {
 }
 
 /* ====================================================
-   ESTILOS ANTIGOS DO PLAYER (Página 2)
-   ==================================================== */
-main {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin: auto;
-    width: 100%;
-    max-width: 1400px;
-    gap: 30px;
-}
-
-#painelPrincipal { position: relative; width: 100%; }
-#protecaoPlayer {
-      /* [NOVO]: Fundo "Glassmorphism" fosco bloqueando o vídeo */
-    display: flex; position: absolute; width: 100%; height: 100%;
-    background-color: var(--bg); z-index: 5;
-}
-#protecaoButton { margin: auto; }
-#video, #player {
-    display: flex; margin: 20px auto; width: 100%; max-width: 800px;
-    aspect-ratio: 16 / 9;
-}
-#player iframe { width: 100%; height: 100%; border-radius: 10px; border: 1px solid var(--border-color); }
-img, iframe { width: 100%; height: auto; margin: auto; border-radius: 10px; }
-
-#botoes { margin-top: 2vh; display: flex; justify-content: center; gap: 10px; }
-
-/* Botões genéricos da página de treino */
-#anterior, #proximo, #protecaoButton {
-    border-radius: 8px; font-size: large; padding: 10px 15px;
-    cursor: pointer; border: 1px solid var(--border-color);
-    /* background: var(--bg-button); color: var(--text-button); */
-    transition: background 0.3s ease;
-}
-#anterior:hover, #proximo:hover, #protecaoButton:hover { background: var(--button-hover); }
-
-/* Legenda e Microfone */
-#painelLateral { margin-top: 2vh; width: 100%; display: flex; flex-direction: column; align-items: center;}
-#legendaPai { display: flex; width: 100%; justify-content: center;}
-#legenda {
-    margin-top: 20px; font-size: 22px; font-weight: bold;
-    background: var(--legenda); color: var(--text-main);
-    padding: 20px; width: 100%; max-width: 700px;
-    border-radius: 10px; box-shadow: 0 4px 6px var(--border-color);
-    border: 1px solid var(--border-color);
-    backdrop-filter: blur(10px);
-}
-
-#gravar, #ocultar {
-    margin: auto; margin-top: 3vh; border-radius: 999px;
-    padding: 14px 22px; font-weight: bold;
-    background: var(--bg-button); border: 1px solid var(--border-color);
-    cursor: pointer;
-}
-#gravar img, #ocultar img { width: 24px; }
-#gravar.recording, .mic-btn.recording {
-    background: red; color: white; animation: recordingPulse 0.8s infinite;
-}
-@keyframes recordingPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-}
-
-
-#panel { margin-top: 25px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; width: 100%; }
-#wave {
-    display: none; /* <-- ADICIONE ESTA LINHA */
-    width: 100%; height: 140px;
-    background: var(--card-bg); border-radius: 12px;
-    border: 1px solid var(--border-color);
-    backdrop-filter: blur(10px);
-}
-#transcript {
-    display: none; background: var(--legenda); color: var(--text-main);
-    padding: 15px; border-radius: 10px; max-width: 700px; font-size: 18px;
-    box-shadow: 0 4px 6px var(--border-color); border: 1px solid var(--border-color);
-}
-
-/* Carregamento e Erros */
-#carregamento {
-    display: none; flex-direction: column; background: var(--bg-color);
-    position: fixed; width: 100%; height: 100%; align-content: center;
-    color: var(--text-main); z-index: 50; top: 0; left: 0; padding-top: 20vh;
-}
-#erro, #erroMic { color: #e74c3c; font-weight: bold; }
-
-/* ====================================================
-   RESPONSIVIDADE E MEDIA QUERIES
-   ==================================================== */
-@media (max-width: 1024px) {
-    .hero-title { font-size: 4rem; letter-spacing: -2px; }
-    .hero-sub { font-size: 1rem; margin-bottom: 30px; }
-    .t5, .t6, .t7, .t8 { display: none; }
-}
-
-@media (max-width: 768px) {
-    .thumbnails-bg { display: none; }
-    .navbar { margin: 15px; padding: 10px 15px; border-radius: 20px; }
-    .logo { font-size: 1rem; }
-    .nav-right { gap: 8px; }
-    .nav-btn { padding: 6px 12px; font-size: 0.8rem; }
-    .btn-text-mobile { display: none; }
-    .hero-title { font-size: 2.8rem; }
-    .hero-sub { font-size: 0.95rem; padding: 0 10px; margin-bottom: 25px; }
-    .input-card { padding: 20px; border-radius: 20px; margin: 0 10px; width: auto; }
-    .url-input { height: 50px; font-size: 1rem; border-radius: 14px; }
-    .btn-row { flex-direction: column; gap: 12px; }
-    .main-btn { height: 50px; font-size: 0.95rem; border-radius: 14px; }
-    .waves-wrapper { height: 250px; }
-    .footer-tag { font-size: 0.8rem; padding: 6px 12px; margin-bottom: 20px; text-align: center; }
-}
-
-@media (orientation: portrait) {
-    main { justify-content: center; flex-direction: column; }
-}
-@media (orientation: landscape) {
-    main { justify-content: space-between; }
-    #painelPrincipal { flex-grow: 2; max-width: 50%; }
-    #painelLateral { max-width: 48%; }
-}
-
-/* ====================================================
    ESTILOS DO PLAYER E PAINEL (Página 2)
    ==================================================== */
 main {
@@ -368,7 +255,7 @@ main {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: var(--overlay-bg); /* Agora muda com o tema! */
+    background-color: var(--overlay-bg);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 5;
@@ -391,13 +278,10 @@ main {
 }
 
 #protecaoButton:hover {
-    transform: translateY(-2px) scale(1.02); /* Dá uma leve "levantada" ao passar o mouse */
+    transform: translateY(-2px) scale(1.02);
     box-shadow: 0 10px 25px rgba(147, 51, 234, 0.4);
 }
-
-#protecaoButton:active {
-    transform: scale(0.95); /* Efeito de clique */
-}
+#protecaoButton:active { transform: scale(0.95); }
 
 #video, #player {
     display: flex; width: 100%;
@@ -415,8 +299,7 @@ main {
     margin-top: 15px; display: flex; justify-content: center; gap: 15px;
 }
 
-/* Parte igual botoes página 2 e de revisão */
-#botoes button,#delete{
+#botoes button, #delete {
     border-radius: 8px; font-size: 1rem; padding: 12px 20px;
     cursor: pointer; border: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
@@ -426,20 +309,16 @@ main {
     background: var(--button-hover);
 }
 
-/* Botões página 2 e delete*/
-#anterior, #proximo, #protecaoButton, #salvar,#delete {
+#anterior, #proximo, #salvar, #delete {
     background: var(--bg-button);
     color: var(--text-button); 
 }    
 
 /* Botões página revisão */
-#facil    { background:green; }
-#medio    { background:yellow; }
-#dificil  { background:red; }
-#delete {
-    align-self: flex-end;
-    margin-bottom: 2vh;
-}
+#facil    { background: green; }
+#medio    { background: yellow; color: black; }
+#dificil  { background: red; }
+#delete { align-self: flex-end; margin-bottom: 2vh; }
 
 /* --- Coluna Direita: Legenda, Onda e Microfone --- */
 #painelLateral {
@@ -448,7 +327,6 @@ main {
     gap: 20px; padding-top: 10px;
 }
 
-/* Linha do Olho + Legenda */
 #legendaPai {
     display: flex; width: 100%;
     align-items: center; gap: 15px;
@@ -472,11 +350,44 @@ main {
     padding: 15px 20px; width: 100%; text-align: left;
     border-radius: 10px; border: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
+    line-height: 1.6;
 }
 
-/* Área do Microfone e Onda */
 #panel {
     display: flex; flex-direction: column; width: 100%; gap: 15px;
+}
+
+/*  Waveform Original  */
+#waveformContainer, #waveMicContainer {
+    width: 100%;
+}
+
+#waveformContainer {
+    width: 100%; 
+    min-height: 140px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+#waveform {
+    width: 100%; 
+    height: 140px;
+    position: relative;
+    z-index: 2; /* Traz o canvas da onda para a frente */
+}
+
+#waveCursor {
+    position: absolute; 
+    top: 0; bottom: 0;
+    width: 2px;
+    background: #e74c3c; /*Cursor vermelho pra fiacr mais legal*/
+    left: 0%;
+    z-index: 5; 
+    pointer-events: none;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.8);
 }
 
 #wave {
@@ -484,14 +395,37 @@ main {
     background: var(--card-bg); border-radius: 12px;
     border: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
+    display: block;
 }
-/* [NOVO]: Estrutura lado a lado para transcrição e microfone */
+
+/* TIMER */
+#timerContainer {
+    width: 100%; display: flex; flex-direction: column; gap: 8px;
+}
+
+#timerTrack {
+    width: 100%; height: 14px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 999px; overflow: hidden;
+}
+
+#timerProgress {
+    width: 0%; height: 100%;
+    background: linear-gradient(90deg, #818cf8, #c084fc);
+    transition: width 0.05s linear;
+}
+
+#timerTexto {
+    font-weight: bold; color: var(--text-main); font-size: 14px; text-align: center;
+}
+
+/* Layout lado a lado para transcrição e microfone */
 .mic-area {
     display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%;
 }
 
 #transcript {
-    display: none; background: var(--card-bg); color: var(--text-main);
+    background: var(--card-bg); color: var(--text-main);
     padding: 15px 20px; border-radius: 10px; flex-grow: 1; text-align: left;
     font-size: 1rem; border: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
@@ -500,15 +434,12 @@ main {
 #gravar {
     margin: 0; border-radius: 50%; width: 60px; height: 60px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    background: #e74c3c; border: none; /* Vermelho fixo igual da imagem */
+    background: #e74c3c; border: none;
     cursor: pointer; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
     transition: transform 0.2s;
 }
-
-#gravar img { width: 24px; filter: brightness(0) invert(1); } /* Ícone branco */
-
+#gravar img { width: 24px; filter: brightness(0) invert(1); }
 #gravar:active { transform: scale(0.95); }
-
 #gravar.recording, .mic-btn.recording {
     background: #c0392b; animation: recordingPulse 1s infinite;
 }
@@ -521,13 +452,179 @@ main {
 
 .hidden { display: none !important; }
 
-/* Carregamento e Erros */
+/* ====================================================
+   POPUP DE DICIONÁRIO E LEGENDAS
+   ==================================================== */
+.palavra-legenda {
+    cursor: pointer;
+    display: inline-block;
+    border-radius: 4px;
+    padding: 1px 2px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.palavra-legenda:hover {
+    background: rgba(129, 140, 248, 0.3); /* Destaque na cor do tema */
+}
+
+#popupPalavra {
+    position: absolute;
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    min-width: 200px;
+    max-width: 300px;
+    text-align: left;
+    animation: fadeInPopup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    backdrop-filter: blur(15px);
+}
+
+@keyframes fadeInPopup {
+    from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.popup-header {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    border-bottom: 2px solid #818cf8;
+    padding-bottom: 8px; margin-bottom: 10px;
+}
+
+.popup-palavra {
+    font-weight: bold; font-size: 19px; color: var(--popup-text);
+}
+
+.popup-fonetica {
+    font-size: 14px; color: var(--popup-muted);
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.popup-definicao {
+    font-size: 14px; color: var(--popup-text);
+    line-height: 1.5; margin-top: 8px;
+}
+
+.popup-exemplo {
+    font-size: 13px; color: var(--popup-muted);
+    font-style: italic; margin-top: 8px;
+    border-left: 3px solid #818cf8; padding-left: 8px;
+}
+
+.popup-audio-btn {
+    background: rgba(129, 140, 248, 0.1);
+    border: 1px solid #818cf8; border-radius: 30px;
+    color: #818cf8; padding: 6px 16px; font-size: 13px;
+    cursor: pointer; transition: all 0.2s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: bold; margin-top: 12px; align-self: center;
+}
+
+.popup-audio-btn:hover { background: #818cf8; color: white; }
+.popup-loading { font-size: 13px; color: var(--text-sub); text-align: center; padding: 8px; }
+.popup-erro { font-size: 13px; color: #e74c3c; text-align: center; padding: 8px; }
+
+/* ====================================================
+   MODAL DE ERRO E CARREGAMENTO
+   ==================================================== */
 #carregamento {
-    display: none; flex-direction: column; background: var(--bg-color);
+    display: none; flex-direction: column; background: rgba(0, 0, 0, 0.7);
     position: fixed; width: 100%; height: 100%; align-content: center;
-    color: var(--text-main); z-index: 50; top: 0; left: 0; padding-top: 20vh;
+    color: white; z-index: 5000; top: 0; left: 0; padding-top: 20vh;
+    backdrop-filter: blur(5px);
 }
 #erro, #erroMic { color: #e74c3c; font-weight: bold; }
+
+.w3-modal {
+    z-index: 10000; display: none; padding-top: 15vh;
+    position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+}
+
+.w3-modal-content {
+    margin: auto; background: var(--card-bg); border: 1px solid var(--border-color);
+    color: var(--text-main); padding: 40px 30px; width: 90%; max-width: 450px;
+    border-radius: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    backdrop-filter: blur(20px); animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#botaoErro {
+    background: #e74c3c; color: white; border: none; padding: 14px 40px;
+    border-radius: 14px; font-size: 1rem; font-weight: bold; cursor: pointer;
+    transition: all 0.2s; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+#botaoErro:hover { background: #c0392b; transform: scale(1.05); }
+/* [ MEMBRO 3 - BLOCO 3 ]: */
+
+/* ====================================================
+   MODAL DE SUCESSO - COPIA IDÊNTICA DO MODAL DE ERRO
+   ==================================================== */
+
+/* O fundo transparente/blur e container usam as mesmas classes do original */
+.modal-sucesso-card {
+    z-index: 1000;
+    display: none; 
+    padding-top: 15vh;
+    position: fixed;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+/* Copiado exatamente do .w3-modal-content */
+.modal-sucesso-content {
+    margin: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 40px 30px;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 24px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    backdrop-filter: blur(20px);
+    animation: modalFadeIn 0.3s ease;
+}
+
+/* O texto onde os logs serão injetados */
+#textologs {
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--text-main); 
+}
+
+/* O botão "continuar" */
+#botaoContinuarCard {
+    background: #2ecc71; 
+    color: white;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+}
+
+#botaoContinuarCard:hover {
+    background: #27ae60; 
+    transform: scale(1.05);
+}
 
 /* ====================================================
    RESPONSIVIDADE E MEDIA QUERIES
@@ -537,8 +634,7 @@ main {
     .hero-sub { font-size: 1rem; margin-bottom: 30px; }
     .t5, .t6, .t7, .t8 { display: none; }
     main { flex-direction: column; align-items: center; }
-    #painelPrincipal { max-width: 800px; }
-    #painelLateral { max-width: 800px; }
+    #painelPrincipal, #painelLateral { max-width: 800px; }
 }
 
 @media (max-width: 768px) {
@@ -556,65 +652,4 @@ main {
     .btn-row { flex-direction: column; gap: 12px; }
     .main-btn { height: 50px; font-size: 0.95rem; border-radius: 14px; }
     .waves-wrapper { height: 250px; }
-    .footer-tag { font-size: 0.8rem; padding: 6px 12px; margin-bottom: 20px; text-align: center; }
-}
-
-/* ====================================================
-   MODAL DE ERRO CUSTOMIZADO
-   ==================================================== */
-   /* [NOVO]: novo modal de erros */
-.w3-modal {
-    z-index: 1000;
-    display: none;
-    padding-top: 15vh; /* Fica um pouco mais acima na tela */
-    position: fixed;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.6); /* Fundo escuro atrás do modal */
-    backdrop-filter: blur(8px);
-}
-
-.w3-modal-content {
-    margin: auto;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
-    padding: 40px 30px;
-    width: 90%;
-    max-width: 450px;
-    border-radius: 24px;
-    text-align: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
-    backdrop-filter: blur(20px);
-    animation: modalFadeIn 0.3s ease;
-}
-
-@keyframes modalFadeIn {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-#erro {
-    font-size: 1.1rem;
-    margin-bottom: 30px;
-    font-weight: 500;
-    line-height: 1.5;
-}
-
-#botaoErro {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 14px 40px;
-    border-radius: 14px;
-    font-size: 1rem;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
-}
-
-#botaoErro:hover {
-    background: #c0392b;
-    transform: scale(1.05);
 }
