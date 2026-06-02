@@ -1,146 +1,189 @@
-// [MANTIDO]: Variáveis de estado para controlar as frases.
-let blocosDeEstudo = [];  // guarda o JSON com as frases 
-let blocoAtualIndex = 0;  // qual frase o usuário está no momento
+let blocosDeEstudo = []; // guarda o JSON com as frases 
+let blocoAtualIndex = 0; // qual frase o usuário está no momento
+currentVideoTitle = "Vídeo do Youtube"; // O título do vídeo do Youtube. Por padrão, deixarei ela inicialmente como essa string.
+currentVideoId = ""; // O ID do vídeo.
+startTime = 0; // O tempo de início da legenda.
+endTime = 0; // O tempo de fim da legenda.
 
 
+function mostrarCarregamento(mensagem) {
+    const carregamento = document.getElementById("carregamento");
+    const texto = document.getElementById("carregamentoTexto");
+    if (texto && mensagem) texto.innerText = mensagem;
+    if (carregamento) carregamento.style.display = "flex";
+}
 
-// INICIAR SESSÃO
+function esconderCarregamento() {
+    const carregamento = document.getElementById("carregamento");
+    if (carregamento) carregamento.style.display = "none";
+}
+
 async function iniciarSessao(youtubeLink) {
     try {
-        
-        //Bloquear iniciar estudos
-        const botaoIniciar=document.getElementById('protecaoButton');
-        botaoIniciar.style.background="black";
-        botaoIniciar.disabled=true;
+        const botaoIniciar = document.getElementById('protecaoButton');
+        if (botaoIniciar) {
+            botaoIniciar.style.background = "black";
+            botaoIniciar.disabled = true;
+        }
 
-        // [MANTIDO]: Controle da tela de carregamento.
-        let carregamento = document.getElementById('carregamento');
-        carregamento.style.display = "flex";
+        // Aqui no início faz sentido ter a tela de carregamento!
+        mostrarCarregamento("Extraindo legendas e preparando áudio...");
 
-        const legendaDiv = document.getElementById('legenda');
         const resposta = await fetch(`/api/legenda?url=${encodeURIComponent(youtubeLink)}`);
-        
-        
+        const jsonResponse = await resposta.json();
 
-        const jsonResponse = await resposta.json(); 
-        
-        if (!resposta.ok) { 
-            // [MANTIDO]: Tratamento de limite de tokens retornado pela API.
+        if (!resposta.ok) {
             if (jsonResponse.tokens_restantes !== undefined) {
                 atualizarInterfaceTokens(jsonResponse.tokens_restantes);
             }
-            const erroData = await resposta.json();
-            throw new Error(erroData.detail || "Erro ao carregar legenda.");
+            throw new Error(jsonResponse.detail || "Erro ao carregar legenda.");
         }
 
-        // [NOVO]: ATENÇÃO AQUI! A estrutura do JSON mudou. 
-        // Antes era a lista direta, agora encapsulamos os dados dentro de 'jsonResponse.dados' 
-        // para trafegar os tokens_restantes na mesma requisição com mais segurança.
         blocosDeEstudo = jsonResponse.dados;
-        
+        currentVideoTitle = jsonResponse.titulo_video;
         atualizarInterfaceTokens(jsonResponse.tokens_restantes);
-        
         blocoAtualIndex = 0;
-        currentVideoId = extractVideoId(youtubeLink); 
-        carregarFraseAtual();
-        
-        loadVideo(currentVideoId);
-        
-       
+        currentVideoId = extractVideoId(youtubeLink);
 
+        loadVideo(currentVideoId);
+
+        let tentativas = 0;
+        while (!document.getElementById("legenda") && tentativas < 50) {
+            await new Promise(r => setTimeout(r, 100));
+            tentativas++;
+        }
+
+        await carregarFraseAtual();
 
     } catch (erro) {
-        // [NOVO]: Integração com o novo Modal de erro.
-        const erroModal = document.getElementById('erroModal');
-        const erroText = document.getElementById('erro');
-        if(erroModal) {
+        const erroModal = document.getElementById("erroModal");
+        const erroText = document.getElementById("erro");
+        if (erroModal && erroText) {
             erroText.innerText = erro.message;
             erroModal.style.display = "block";
         }
         console.error("Falha na integração:", erro);
+    } finally {
+        esconderCarregamento();
     }
 }
 
-
-// [MANTIDO]: Função gerenciar tokens.
 function atualizarInterfaceTokens(valor) {
-    localStorage.setItem('tokens_restantes', valor);
-    const el = document.getElementById('token-count');
-    if (el) {
-        el.innerText = valor;
-        if (parseInt(valor) === 0) {
-            el.classList.add('token-low'); 
-        } else {
-            el.classList.remove('token-low');
-        }
+    localStorage.setItem("tokens_restantes", valor);
+    const el = document.getElementById("token-count");
+    if (!el) return;
+    el.innerText = valor;
+    if (parseInt(valor) === 0) {
+        el.classList.add("token-low");
+    } else {
+        el.classList.remove("token-low");
     }
 }
 
-// TELA E VÍDEO
-function carregarFraseAtual() {
+async function carregarFraseAtual() {
     if (!blocosDeEstudo || blocosDeEstudo.length === 0) return;
 
     const bloco = blocosDeEstudo[blocoAtualIndex];
-    const legendaDiv = document.getElementById('legenda');
-    if (legendaDiv) legendaDiv.innerText = bloco.texto_limpo;
 
-    startTime = bloco.tempo_inicio; 
-    endTime = bloco.tempo_fim; 
+    const renderizarQuandoExistir = () => {
+        const legendaDiv = document.getElementById("legenda");
+        if (legendaDiv && typeof renderizarLegenda === "function") {
+            renderizarLegenda(bloco.texto_limpo);
+            return true;
+        } else if (legendaDiv) {
+            legendaDiv.innerText = bloco.texto_limpo;
+            return true;
+        }
+        return false;
+    };
 
-    // [NOVO]: Em vez de esconder o painel INTEIRO (o que sumia com o microfone),
-    // agora escondemos apenas a onda (canvas) e o texto (transcript). 
-    // Assim o botão vermelho do microfone fica sempre visível e fixo na tela.
-    const wave = document.getElementById("wave");
+    if (!renderizarQuandoExistir()) {
+        await new Promise((resolve) => {
+            const observer = new MutationObserver(() => {
+                if (renderizarQuandoExistir()) {
+                    observer.disconnect();
+                    resolve();
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            setTimeout(() => { observer.disconnect(); resolve(); }, 5000);
+        });
+    }
+
+    const panel = document.getElementById("panel");
     const transcript = document.getElementById("transcript");
-    
-    if (wave) wave.style.display = "none";
+
+    if (panel) panel.classList.remove("hidden");
+
+    startTime = bloco.tempo_inicio;
+    endTime = bloco.tempo_fim;
+
+    const tempoTotal = endTime - startTime;
+    const link = new URLSearchParams(window.location.search).get("link");
+    const audioURL = `/api/audio?url=${encodeURIComponent(link)}&inicio=${startTime}&fim=${endTime}`;
+
     if (transcript) {
-        transcript.style.display = "none";
+        //transcript.style.display = "none"; tirei pra atualizar sem piscar
         transcript.innerText = "Fale algo...";
     }
-    
-    // [MANTIDO]: Loop da frase.
-    if (player && typeof player.seekTo === 'function') {
-        player.seekTo(startTime, true);
-        player.playVideo();
-        startLoop();
+
+    if (typeof resetarTimerVisual === "function") resetarTimerVisual();
+
+    try {
+        if (typeof carregarWaveform === "function") {
+            await carregarWaveform(audioURL, tempoTotal);
+        }
+
+        if (typeof aguardarPlayerPronto === "function") {
+            await aguardarPlayerPronto();
+        }
+
+        if (player && typeof player.seekTo === "function") {
+            player.seekTo(startTime, true);
+            player.playVideo();
+            if (typeof startLoop === "function") startLoop();
+        }
+
+        // Continua fazendo o download silencioso das próximas 2 frases
+        for (let i = blocoAtualIndex + 1; i <= blocoAtualIndex + 2; i++) {
+            if (i >= blocosDeEstudo.length) continue;
+            const prox = blocosDeEstudo[i];
+            const proxURL = `/api/audio?url=${encodeURIComponent(link)}&inicio=${prox.tempo_inicio}&fim=${prox.tempo_fim}`;
+            fetch(proxURL).catch(console.error);
+        }
+    } catch(e) {
+        console.error(e);
     }
 }
 
-// BOTÕES
-document.addEventListener('click', function(event) {
-    // [NOVO]: O botão de erro agora apenas fecha o modal.
-    if(event.target.id === 'botaoErro'){
-        document.getElementById('erroModal').style.display = "none";
+document.addEventListener("click", function(event) {
+    if (event.target.id === "protecaoButton") {
+        const overlay = document.getElementById("protecaoPlayer");
+        if (overlay) overlay.style.display = "none";
     }
 
-    // [MANTIDO]: Navegação entre frases.
-    if (event.target.id === 'protecaoButton') {
-        document.getElementById('protecaoPlayer').style.display = "none";
-        carregarFraseAtual();
+    if (event.target.id === "botaoErro") {
+        const modal = document.getElementById("erroModal");
+        if (modal) modal.style.display = "none";
     }
-    if (event.target.id === 'proximo') {
+
+    if (event.target.id === "proximo") {
         if (blocoAtualIndex < blocosDeEstudo.length - 1) {
             blocoAtualIndex++;
-            carregarFraseAtual();
+            void carregarFraseAtual();
         }
     }
-    if (event.target.id === 'anterior') {
+
+    if (event.target.id === "anterior") {
         if (blocoAtualIndex > 0) {
             blocoAtualIndex--;
-            carregarFraseAtual();
+            void carregarFraseAtual();
         }
     }
 });
 
-// [NOVO]: FUNÇÃO DE CHECAGEM (PÁGINA 1) - TRATAMENTO DE ERROS PARA USUÁRIO
-// Antigamente o HTMX trocava para a página 2 logo no clique. Se a API desse erro, 
-// o usuário ficava preso numa página 2 quebrada. 
-// Agora, esta função intercepta o formulário, checa a API primeiro e SÓ permite o HTMX
-// avançar se o vídeo realmente tiver legenda e o usuário tiver tokens.
 async function verificarVideo(event) {
     event.preventDefault(); 
-    
     const input = document.querySelector('.url-input');
     const link = input ? input.value : null;
     if(!link) return;
@@ -161,13 +204,11 @@ async function verificarVideo(event) {
             throw new Error(jsonResponse.detail || "Erro desconhecido ao carregar legenda.");
         }
 
-        // Dispara o HTMX manualmente via JS para mudar de tela.
         htmx.ajax('GET', `/legenda?link=${encodeURIComponent(link)}`, {target: 'main'}).then(() => {
             window.history.pushState(null, '', `/legenda?link=${encodeURIComponent(link)}`);
         });
 
     } catch (erro) {
-        // Exibe o erro na própria Página 1.
         const erroModal = document.getElementById('erroModal');
         const erroText = document.getElementById('erro');
         if (erroModal && erroText) {
