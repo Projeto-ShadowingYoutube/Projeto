@@ -14,5 +14,6 @@ python -m venv venv
 venv\Scripts\activate
 
 pip install -r requirements.txt
+sudo apt update && sudo apt install -y ffmpeg
 
 python -m uvicorn main:app --reload
