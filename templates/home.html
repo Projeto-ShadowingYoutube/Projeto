@@ -15,6 +15,11 @@
         <script src="/static/js/player.js" defer></script>
         <script src="/static/js/voice.js" defer></script>
         <script src="/static/js/integracao.js" defer></script>
+
+        <script src="https://unpkg.com/wavesurfer.js"></script>
+        <script src="/static/js/waveform.js" defer></script>
+        <script src="/static/js/legenda.js" defer></script>
+
         <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.js" crossorigin="anonymous"></script>
     </head>
     <body>
@@ -62,20 +67,40 @@
         </div>
 
         <script>
-            document.body.addEventListener('htmx:afterSettle', function(evt) {
-                if (document.getElementById('player')) {
-                    const parametrosDaURL = new URLSearchParams(window.location.search);
-                    const link = parametrosDaURL.get('link');
-                    
-                    if (link) {
-                        iniciarSessao(link);
-                    }
-                    
-                    const micBtn = document.getElementById("gravar");
-                    if(micBtn) micBtn.addEventListener("click", startRecording);
+            if (typeof sessaoInicializada === "undefined") {
+                var sessaoInicializada = false;
+            }
+
+            document.body.addEventListener("htmx:afterSwap", async () => {
+                const player = document.getElementById("player");
+                if (!player) return;
+                if (sessaoInicializada) return;
+
+                const link = new URLSearchParams(window.location.search).get("link");
+                if (!link || typeof iniciarSessao !== "function") return;
+
+                sessaoInicializada = true;
+
+                try {
+                    await iniciarSessao(link);
+                } catch (erro) {
+                    console.error("Erro ao iniciar sessão:");
+                    console.error(erro);
+                    sessaoInicializada = false;
+                }
+
+                const micBtn = document.getElementById("gravar");
+                if (micBtn && typeof startRecording === "function") {
+                    micBtn.onclick = startRecording;
                 }
             });
 
+            document.body.addEventListener("htmx:beforeRequest", () => {
+                sessaoInicializada = false;
+            });
+        </script>
+
+        <script>
             function sincronizarContadorHome() {
                 const saldoSalvo = localStorage.getItem('tokens_restantes');
                 const el = document.getElementById('token-count');
@@ -84,12 +109,14 @@
                     el.innerText = saldoSalvo;
                     if (parseInt(saldoSalvo) === 0) {
                         el.classList.add('token-low');
+                    } else {
+                        el.classList.remove('token-low');
                     }
                 }
             }
 
             sincronizarContadorHome();
-            document.body.addEventListener('htmx:afterSettle', sincronizarContadorHome);
+            document.body.addEventListener('htmx:afterSwap', sincronizarContadorHome);
         </script>
     </body>
 </html>
