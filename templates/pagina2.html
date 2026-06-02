@@ -1,8 +1,21 @@
+<!-- [ MEMBRO 3 - BLOCO 3 ]: Novo modal para o usuário ser informado sobre salvamento de Cards e Decks.
+     Esse modal será reaproveitado a fim de avisar o usuário sobre o tipo de legenda e o título do vídeo também.  -->
+<div id="modalSucessoCard" class="modal-sucesso-card">
+    <div class="modal-sucesso-content">
+        <p id="textologs"></p>
+        <button id="botaoContinuarCard">continuar</button>
+    </div>
+</div>
+
 <div id="painelPrincipal">
     <div id="protecaoPlayer">
         <button id="protecaoButton">Iniciar Estudos</button>
     </div>
-    <div id="player"></div> 
+    
+    <div id="playerContainer">
+        <div id="player"></div> 
+    </div>
+    
     <div id="botoes">
         <button id="anterior">Frase anterior</button>
         <button id="salvar">Salvar Card</button>
@@ -21,7 +34,25 @@
     </div>
     
     <div id="panel">
-        <canvas id="wave" width="700" height="120"></canvas>
+        
+        <div id="waveformContainer">
+            <div id="waveform">
+                <div id="waveCursor"></div>
+            </div>
+        </div>
+
+        <div id="waveMicContainer">
+            <canvas id="wave" width="700" height="140"></canvas>
+        </div>
+
+        <div id="timerContainer">
+            <div id="timerTrack">
+                <div id="timerProgress"></div>
+            </div>
+            <div id="timerTexto">
+                0.0s / 0.0s
+            </div>
+        </div>
         
         <div class="mic-area">
             <div id="transcript">Fale algo...</div>
@@ -33,6 +64,12 @@
 </div>
 
 <div id="carregamento">
-    <p>Extraindo legendas do vídeo... Isso pode levar alguns segundos.</p>
-    <p><i class="fa fa-spinner w3-spin" style="font-size:64px"></i></p>
+    <div class="carregamento-box">
+        <p id="carregamentoTexto">
+            Extraindo legendas do vídeo... Isso pode levar alguns segundos.
+        </p>
+        <p>
+            <i class="fa fa-spinner w3-spin" style="font-size:64px"></i>
+        </p>
+    </div>
 </div>
