@@ -6,3 +6,6 @@ requests
 slowapi
 pydantic
 limits
+yt-dlp
+ffmpeg-python
+sqlmodel
