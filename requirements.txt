@@ -9,3 +9,4 @@ limits
 yt-dlp
 ffmpeg-python
 sqlmodel
+tzdata # BD responsável por fusos-horários.
