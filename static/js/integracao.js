@@ -4,7 +4,12 @@ currentVideoTitle = "Vídeo do Youtube"; // O título do vídeo do Youtube. Por 
 currentVideoId = ""; // O ID do vídeo.
 startTime = 0; // O tempo de início da legenda.
 endTime = 0; // O tempo de fim da legenda.
-
+let deckSelecionadoId = null; // [ MEMBRO 3 - BLOCO 4 ]: Variável para guardar o ID do Deck que o usuário selecionar no novo modal de escolha de Decks.
+let modoSubModal = "criar"; // [ MEMBRO 3 - BLOCO 4 ]: Aqui, controlamos o modo do submodal que servirá para coletar nomes de Decks que vão ser criados/renomeados.
+// Dependendo da origem do botão que requeriu o submodal, existem dois modos: "criar" ou "renomear".
+// Essa linha abaixo só serve para dizer que por padrão, o usuário não está revisando Cards ainda.
+window.emModoRevisao = false;
+// Essa situação pode mudar somente no script na pagina4.html, onde ocorrem as revisões.
 
 function mostrarCarregamento(mensagem) {
     const carregamento = document.getElementById("carregamento");
@@ -47,6 +52,15 @@ async function iniciarSessao(youtubeLink) {
 
         loadVideo(currentVideoId);
 
+        // [ MEMBRO 3 - BLOCO 4 ]: Aqui, localizo os elementos do novo modal que informa sobre o tipo de legenda e título do vídeo e injeto o log de aviso:
+        const modalLegenda = document.getElementById("modalLegendaTitulo");
+        const textoLogs = document.getElementById("textologs");
+
+        if (modalLegenda && textoLogs && jsonResponse.aviso_legenda) {
+            textoLogs.innerText = jsonResponse.aviso_legenda; // Defino a string que foi construída no main.py pela rota GET.
+            modalLegenda.style.display = "flex"; // E então, fazemos o modal aparecer na tela.
+        }
+
         let tentativas = 0;
         while (!document.getElementById("legenda") && tentativas < 50) {
             await new Promise(r => setTimeout(r, 100));
@@ -81,6 +95,12 @@ function atualizarInterfaceTokens(valor) {
 }
 
 async function carregarFraseAtual() {
+    // [ MEMBRO 3 - BLOCO 4 ]: Garanto que o botão da tela principal saia do estado "Salvo!" volte ao estado normal "Salvar Card", sempre que mudamos de frase:
+    const btnSalvarPrincipal = document.getElementById("salvar");
+    if (btnSalvarPrincipal) {
+        btnSalvarPrincipal.innerText = "Salvar Card";
+    }
+    
     if (!blocosDeEstudo || blocosDeEstudo.length === 0) return;
 
     const bloco = blocosDeEstudo[blocoAtualIndex];
@@ -138,6 +158,7 @@ async function carregarFraseAtual() {
             await aguardarPlayerPronto();
         }
 
+        
         if (player && typeof player.seekTo === "function") {
             player.seekTo(startTime, true);
             player.playVideo();
@@ -157,9 +178,111 @@ async function carregarFraseAtual() {
 }
 
 document.addEventListener("click", function(event) {
+    // [ MEMBRO 3 - BLOCO 4 ]: Aqui está a lógica de escuta do clique no botão "Continuar" do novo modal, que informa sobre tipo de legenda e título do vídeo:
+    if (event.target.id === "botaoContinuar") {
+        const modalLegenda = document.getElementById("modalLegendaTitulo");
+        if (modalLegenda) {
+            modalLegenda.style.display = "none"; // Quando o usuário clicar em "Continuar", o modal deve sumir.
+        }
+    }
+
     if (event.target.id === "protecaoButton") {
         const overlay = document.getElementById("protecaoPlayer");
         if (overlay) overlay.style.display = "none";
+    }
+
+    // [ MEMBRO 3 - BLOCO 4 ]: Além disso, é necessário fazer com que o botão "Salvar Card" da página2.html redirecione para o novo modal de escolha de Decks:
+    if (event.target.id === "salvar") {
+        const btnSalvarPrincipal = event.target;
+
+        // Se o botão já estava como "Salvo!", o primeiro clique apenas reseta o texto:
+        if (btnSalvarPrincipal.innerText === "Salvo!") {
+            btnSalvarPrincipal.innerText = "Salvar Card";
+            return; // Interrompe aqui. O modal NÃO abre neste clique, apenas o texto foi resetado de "Salvo!" para "Salvar Card" novamente. 
+            // Se depois disso, o usuário clicar em "Salvar Card" novamente, aí sim o modal abre e vai ter o mesmo funcionamento de sempre.
+        }
+    
+        // Mas se o botão estava como "Salvar Card", o botão segue o comportamento padrão de abrir o modal:
+        const modalDeck = document.getElementById("modalDeck");
+        if (modalDeck) {
+            modalDeck.style.display = "flex"; // Fazemos o modal aparecer na tela.
+            // Toda vez que esse modal abrir, precisamos carregar os Decks presentes no BD, para o usuário ser capaz de ver eles:
+            carregarDecks(); // A lógica da função usada aqui está logo abaixo dessa função escutadora de cliques.
+        }
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: Também é necessário escutar o clique no botão "Salvar Card" do modal de escolha de Decks:
+    // OBS: Esse é o botão "Salvar Card" que está dentro do modal. O de fora que aparece na pagina2.html abaixo dos vídeos já foi configurado no if logo acima desse.
+    if (event.target.id === "btnSalvar") {
+        // Buscamos o bloco de estudo atual, com base no índice da tela:
+        const bloco = blocosDeEstudo[blocoAtualIndex];
+        if (!bloco) return;
+        // Chamamos a função auxiliar organizada, passando todas as variáveis globais necessárias:
+        executarSalvamentoDeCard(deckSelecionadoId, currentVideoId, bloco.texto_limpo, startTime, endTime);
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: Também vai ser necessário fazer a lógica do submodal, que abre quando o usuário clica em "Criar Deck".
+    // Além disso, quando o usuário estiver na página3.html, o mesmo submodal será utilizado para obter o nome do novo Deck criado:
+    // Para cobrir cada um dos dois casos descritos nas duas linhas de comentário anteriores a esta, temos o OU desse próximo if:
+    if (event.target.id === "btnCriarDeckModal" || event.target.id === "btnCriarDeckRevisao") {
+        const subModal = document.getElementById("subModalCriarDeck");
+        const inputNome = document.getElementById("novoNomeDeckInput");
+        
+        if (subModal) {
+            subModal.style.display = "flex"; // Faço o submodal aparecer.
+            
+            // Limpo o campo e coloco o cursor do teclado nele:
+            if (inputNome) {
+                inputNome.value = "";
+                inputNome.focus();
+            }
+        }
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: Após isso, quando o usuário decidir o nome do novo Deck e clicar no botão "OK" para salvar o Deck no BD, a seguinte lógica será executada:
+    if (event.target.id === "btnConfirmarCriarDeck") {
+        const inputNome = document.getElementById("novoNomeDeckInput");
+        // Pegamos o valor digitado e usamos o .trim() para ignorar espaços digitados antes ou depois do texto:
+        let nomeDigitado = inputNome ? inputNome.value.trim() : "";
+
+        // Se o usuário tentar criar um Deck de nome vazio, automaticamente o nome desse Deck será "Deck":
+        if (nomeDigitado === "") {
+        nomeDigitado = "Deck";
+        }
+
+        // Depois, usamos o modo do submodal para decidir se o usuário está criando OU renomeando um Deck:
+        if (modoSubModal === "criar") {
+            executarCriacaoDeDeck(nomeDigitado); // Se passar da validação, chamamos a função auxiliar que faz o envio para o main.py, para formatarmos os dados e sermos capazes de usar a ROTA 2.
+            // Essa função se encontra um pouco abaixo dessa função escutadora de cliques, logo abaixo da função carregarDecks().
+        }
+        else if (modoSubModal === "renomear") {
+            executarRenomeacaoDeDeck(deckSelecionadoId, nomeDigitado); // Essa função auxiliar usará a ROTA 5 do main.py, própria para renomear Decks. 
+            // O código dela está abaixo dessa função escutadora de cliques também.
+        }
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: Analogamente, uma lógica inversa para os botões que servem para fechar o submodal:
+    // Temos duas opções para fechar o submodal:
+    // Clicar no botão "Cancelar" OU clicar no "X" no canto superior direito do submodal. Logo:
+    if (event.target.id === "btnCancelarSubModalX" || event.target.id === "btnCancelarSubModal") {
+        const subModal = document.getElementById("subModalCriarDeck");
+        if (subModal) {
+            subModal.style.display = "none"; // Oculto o submodal, mantendo o modal principal de trás aberto.
+        }
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: A lógica inversa ao bloco de if do botão "Salvar Card" que abre o modal principal também vale para os botões "X" e "Cancelar" do modal principal, para fechá-lo:
+    if (event.target.id === "btnCancelar" || event.target.id === "btnCancelarRodape") {
+        const modalDeck = document.getElementById("modalDeck");
+        if (modalDeck) {
+            modalDeck.style.display = "none";
+        }
+    }
+    // [ MEMBRO 3 - BLOCO 4 ]: Escuta o clique no botão "Deletar Deck" do rodapé do modal principal.
+    if (event.target.id === "btnDeletarDeckModal") {
+        // Confirmação de segurança:
+        const confirmar = confirm("Tem certeza absoluta de que deseja deletar o baralho selecionado?");
+        if (!confirmar) {
+            return; // Se o usuário clicar em cancelar, interrompe e não deleta.
+        }
+
+        // Se confirmou e tem ID válido, chamo a função auxiliar assíncrona para deletar:
+        executarDelecaoDeDeck(deckSelecionadoId);
     }
 
     if (event.target.id === "botaoErro") {
@@ -181,6 +304,437 @@ document.addEventListener("click", function(event) {
         }
     }
 });
+
+// --- [ MEMBRO 3  - BLOCO 4 ]: FUNÇÕES AUXILIARES PARA A MANUTENÇÂO DOS DECKS E CARDS NO BD ---
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função carregarDecks(), para controlar e renderizar Decks no novo modal principal, que aparece quando o usuário quer Salvar Card:
+async function carregarDecks() {
+
+    const listaUl = document.getElementById("listaDecks"); // Começo obtendo o pedaço do HTML que corresponde a lista de Decks, no novo modal na pagina2.html.
+    const btnDeletar = document.getElementById("btnDeletarDeckModal"); // Capturo o botão "Deletar Deck", para ele ficar bloqueado enquanto nenhum Deck é selecionado.
+    const btnSalvar = document.getElementById("btnSalvar"); // Faço o mesmo para o botão "Salvar Card".
+
+    if (!listaUl) return; 
+
+    try {
+        // E então, uso a ROTA 1 criada no main.py para listar os Decks do BD:
+        const resposta = await fetch("/api/listar_decks");
+        if (!resposta.ok) throw new Error("Erro ao buscar baralhos.");
+        
+        const decks = await resposta.json(); // Depois, transformamos o JSON em um array do JS.
+        
+        // E então, limpo a lista antiga para não duplicar visualmente os itens na tela:
+        listaUl.innerHTML = "";
+        deckSelecionadoId = null; // Precisamos resetar o Deck selecionado pelo clique do usuário toda vez que a lista carrega também.
+
+        // E então, também reseto o campo de texto do filtro, para ele começar completamente vazio toda vez que o modal abre:
+        const inputBusca = document.getElementById("filtroInput");
+        if (inputBusca) {
+            inputBusca.value = ""; 
+
+            // Removemos qualquer escutador antigo (para evitar duplicidade), e adicionamos o novo:
+            inputBusca.removeEventListener("input", filtrarDecks);
+            inputBusca.addEventListener("input", filtrarDecks);
+        }
+
+        // Sempre que a lista é recarregada, os botões "Deletar Deck" e "Salvar Card" devem começar desabilitados, pois nenhum Deck foi selecionado ainda:
+        if (btnDeletar) btnDeletar.disabled = true;
+        if (btnSalvar) btnSalvar.disabled = true;
+
+        // Se o BD estiver novo (ou simplesmente sem nenhum Deck), podemos retornar um aviso para o usuário:
+        if (decks.length === 0) {
+            // [ MEMBRO 1 && MEMBRO 3 - BLOCO 4, PARTE 4/5 ]: Essa mensagem pode ter seu estilo alterado.
+            listaUl.innerHTML = `<li class="modal-deck-item apenas-texto" style="color: #888; cursor: default; text-align: center; padding: 15px;">Nenhum Deck encontrado.</li>`;
+            return;
+        }
+
+        // Se houver decks, vamos criar um <li> para cada um deles no html do modal principal:
+        decks.forEach(deck => {
+            const li = document.createElement("li");
+            li.className = "modal-deck-item";
+            li.innerText = deck.nome;
+
+            // Adiciono também um escutador de cliques individual para permitir a seleção visual (fundo azul que aparece quando o usuário clica num Deck):
+            li.addEventListener("click", function() {
+                // Começo removendo a classe "selected" de todos os itens (Decks) da lista:
+                document.querySelectorAll(".modal-deck-item").forEach(item => {
+                    item.classList.remove("selected");
+                });
+
+                // E então adiciono a classe "selected" (azul) apenas neste que foi clicado:
+                li.classList.add("selected");
+                
+                // Além disso, salvo o ID deste deck na nossa variável de controle global:
+                deckSelecionadoId = deck.id;
+                console.log("Deck selecionado atualmente:", deck.nome, "(ID:", deckSelecionadoId + ")");
+
+                // Quando o usuário clica em um Deck, aí sim finalmente os botões "Deletar Deck" e "Salvar Card" são desbloqueados:
+                if (btnDeletar) btnDeletar.disabled = false;
+                if (btnSalvar) btnSalvar.disabled = false;
+            });
+
+            // Por fim, adiciono o elemento <li> recém-criado com o nome do Deck dentro da nossa <ul>:
+            listaUl.appendChild(li);
+        });
+
+    } catch (erro) {
+        console.error("Erro ao renderizar decks:", erro);
+        // [ MEMBRO 1 && MEMBRO 3 - BLOCO 4, PARTE 5/5 ]: Essa mensagem pode ter seu estilo alterado.
+        listaUl.innerHTML = `<li class="modal-deck-item" style="color: #ff6b6b; cursor: default; padding: 15px;">Erro ao carregar baralhos.</li>`;
+    }
+}
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função que filtra os Decks visualmente no modal principal, com base na digitação do usuário:
+function filtrarDecks() {
+    const inputBusca = document.getElementById("filtroInput"); 
+    const listaUl = document.getElementById("listaDecks");
+    if (!inputBusca || !listaUl) return;
+
+    // Convertemos o termo digitado para letras minúsculas, e removemos espaços nas pontas.
+    // Isso garante que buscar "culinária", "Culinaria" ou "CULINÁRIA" funcione igual:
+    const termoBusca = inputBusca.value.toLowerCase().trim();
+
+    // Capturamos todos os itens de nomes de Decks <li> que estão dentro da nossa lista <ul>:
+    const itens = listaUl.querySelectorAll(".modal-deck-item");
+
+    // Varremos item por item para aplicar o filtro:
+    itens.forEach(item => {
+        // Se for a mensagem de "Nenhum baralho encontrado", ignoramos o filtro nela, pois isso significa que ainda não tem nenhum Deck criado:
+        if (item.classList.contains("apenas-texto")) return;
+
+        const nomeDoBaralho = item.innerText.toLowerCase();
+
+        // Checagem se o nome do baralho contém o termo que o usuário digitou:
+        if (nomeDoBaralho.includes(termoBusca)) {
+            item.style.display = ""; // Se sim, fazemos o nome do Deck aparecer.
+        } else {
+            item.style.display = "none"; // Se não, o nome do Deck não deve aparecer.
+        }
+    });
+}
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função auxiliar responsável por enviar os dados via POST para salvar o Card no BD, usando a ROTA 4 do main.py:
+async function executarSalvamentoDeCard(idDoDeck, idDoVideo, textoLegenda, tempoInicio, tempoFim) {
+    try {
+        // Preparo os dados, simulando o envio de um formulário tradicional padrão do FastAPI (Form(...)):
+        const dadosCard = new FormData();
+        dadosCard.append('deck_id', idDoDeck);
+        dadosCard.append('video_id', idDoVideo);
+        dadosCard.append('texto_legenda', textoLegenda);
+        dadosCard.append('start_time', tempoInicio);
+        dadosCard.append('end_time', tempoFim);
+
+        // Faço o disparo assíncrono para a ROTA 4 do main.py, responsável por salvar Cards:
+        const resposta = await fetch('/salvar_card', {
+            method: 'POST',
+            body: dadosCard
+        });
+
+        const data = await resposta.json();
+
+        if (resposta.ok) {
+            
+            // CASO 1: O main.py detectou que o Card é DUPLICADO naquele Deck.
+            if (data.status === 'duplicado') {
+                // Então, exibo o alerta avisando que o Card já foi salvo anteriormente nesse Deck:
+                alert(`⚠️ ${data.mensagem}`);
+                
+                // E assim fecho o modal:
+                const modalDeck = document.getElementById('modalDeck');
+                if (modalDeck) modalDeck.style.display = "none";
+                
+                deckSelecionadoId = null;
+                return; // Interrompo a execução aqui (não altero o botão da tela principal para "Salvo!").
+            }
+
+            // CASO 2: Sucesso (Card inédito salvo).
+            if (data.status === 'sucesso') {
+                // Capturo o botão da tela principal e mudo o texto:
+                const btnSalvarTelaPrincipal = document.getElementById("salvar");
+                if (btnSalvarTelaPrincipal) {
+                    btnSalvarTelaPrincipal.innerText = "Salvo!";
+                }
+                
+                // E assim fecho o modal:
+                const modalDeck = document.getElementById('modalDeck');
+                if (modalDeck) modalDeck.style.display = "none";
+                
+                deckSelecionadoId = null;
+            }
+
+        } else {
+            // Caso ocorra algum erro crítico de validação ou banco de dados (ex: status 404 ou 500):
+            alert("Erro ao salvar: " + (data.mensagem || data.detail || "Erro desconhecido"));
+        }
+
+    } catch (erro) {
+        console.error("Erro na requisição de salvamento:", erro);
+        alert("Falha técnica ao tentar salvar o cartão.");
+    }
+}
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função responsável por enviar dados via POST para criação de um Deck, usando a ROTA 2 do main.py:
+async function executarCriacaoDeDeck(nome) {
+    try {
+        // Criamos o objeto FormData, porque a rota Python espera um parâmetro do tipo Form(...) novamente:
+        const dadosFormulario = new FormData();
+        dadosFormulario.append("nome", nome); // Adiciono a chave "nome", com o valor recebido por parâmetro.
+
+        // Finalmente disparamos a requisição assíncrona para a ROTA 2:
+        const resposta = await fetch("/api/criar_deck", {
+            method: "POST",
+            body: dadosFormulario
+        });
+
+        // E então, transformamos o 'content' JSON enviado pelo main.py em um objeto JavaScript:
+        const resultado = await resposta.json();
+
+        // Caso o usuário tenha sucesso em criar o Deck, escondo o submodal automaticamente, já que o baralho foi salvo:
+        const subModal = document.getElementById("subModalCriarDeck");
+        if (subModal) {
+            subModal.style.display = "none";
+        }
+
+        // Aqui, obtenho a variável que representa o Dashboard da pagina3.html:
+        const tabelaDashboard = document.getElementById("corpoTabelaDecksRevisao");
+
+        // Se estivermos na nova pagina3.html (Dashboard de Decks), a lógica é diferente:
+        if (tabelaDashboard) {
+            // Se essa tabela existe na tela, o usuário está na pagina3.html.
+            // Então, chamo a função do Dashboard para atualizar a tabela na hora.
+            await carregarDashboardDecks(); 
+        } else {
+            // Se não existe, então ele está na pagina2.html.
+            // Chamo então a função antiga para atualizar a lista do modal de escolha, para o sistema identificar o novo Deck criado, e já colocá-lo na lista.
+            await carregarDecks(); 
+        }
+
+    } catch (erro) {
+        console.error("Erro na comunicação com o servidor ao criar deck:", erro);
+        alert("Ocorreu um erro inesperado ao tentar se comunicar com o servidor.");
+    }
+}
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função responsável por renomear Decks, usando a ROTA 5 do main.py:
+async function executarRenomeacaoDeDeck(id, novoNome) {
+    try {
+        const dadosFormulario = new FormData();
+        dadosFormulario.append("deck_id", id);
+        dadosFormulario.append("nome", novoNome);
+
+        const resposta = await fetch("/api/renomear_deck", {
+            method: "POST",
+            body: dadosFormulario
+        });
+
+        if (resposta.ok) {
+            const subModal = document.getElementById("subModalCriarDeck");
+            if (subModal) subModal.style.display = "none";
+            
+            await carregarDashboardDecks(); // Atualizo a tabela logo depois da renomeação, para que o novo nome do Deck já apareça para o usuário no Dashboard.
+        } else {
+            alert("Erro ao tentar renomear o deck.");
+        }
+    } catch (erro) {
+        console.error("Erro ao renomear deck:", erro);
+    }
+}
+
+// [ MEMBRO 3 - BLOCO 4 ] - Função responsável por fazer o POST para deletar Decks, usando a ROTA 3 do main.py:
+async function executarDelecaoDeDeck(idDoDeck) {
+    try {
+        // Começo preparando os dados simulando um formulário que o 'Form(...)' que a ROTA 3 do main.py exige:
+        const dadosFormulario = new FormData();
+        dadosFormulario.append("deck_id", idDoDeck);
+
+        // E então, faço a requisição enviando o pacote:
+        const resposta = await fetch("/api/deletar_deck", {
+            method: "POST",
+            body: dadosFormulario
+        });
+
+        const resultado = await resposta.json();
+
+        // Se o servidor retornar erro:
+        if (!resposta.ok) {
+            alert(`Erro: ${resultado.mensagem}`);
+            return;
+        }
+
+        // Muito importante - Como o deck sumiu, limpamos nossa variável de controle que indica o Deck selecionado:
+        deckSelecionadoId = null;
+
+        // E então, atualizo a lista na tela imediatamente, para o baralho sumir do modal:
+        await carregarDecks();
+
+    } catch (erro) {
+        console.error("Erro na comunicação com o servidor ao deletar deck:", erro);
+        alert("Ocorreu um erro inesperado ao tentar se comunicar com o servidor.");
+    }
+}
+
+// --- [ MEMBRO 3  - BLOCO 4 ]: FUNÇÕES AUXILIARES PARA A MANUTENÇÃO DO DASHBOARD (nova pagina3.html) ---
+
+// Começo executando a busca e renderização dos Decks, assim que a página terminar de carregar:
+document.addEventListener("DOMContentLoaded", () => {
+    // Caso a tabela de revisão exista na tela, carrego os dados:
+    if (document.getElementById("corpoTabelaDecksRevisao")) {
+        carregarDashboardDecks();
+        configurarBotoesDashboard();
+    }
+});
+
+document.body.addEventListener('htmx:afterSwap', (event) => {
+    if (document.getElementById("corpoTabelaDecksRevisao")) {
+        carregarDashboardDecks();
+        configurarBotoesDashboard();
+    }
+});
+
+// Essa função abaixo serve para carregar adequadamente os Decks como linhas no novo Dashboard da nova pagina3.html:
+async function carregarDashboardDecks() {
+    const corpoTabela = document.getElementById("corpoTabelaDecksRevisao");
+    const btnDeletar = document.getElementById("btnDeletarDeckRevisao");
+    const btnRenomear = document.getElementById("btnRenomearDeckRevisao");
+    
+    if (!corpoTabela) return;
+    
+    try {
+        // Começo tentando buscar os dados reais agregados do Back-end, usando a ROTA 1 do main.py para listar os Decks:
+        const resposta = await fetch("/api/listar_decks");
+        if (!resposta.ok) throw new Error("Erro ao listar decks do banco de dados.");
+        
+        const decks = await resposta.json();
+        
+        // Depois, limpo qualquer placeholder antigo que possa vir a existir:
+        corpoTabela.innerHTML = "";
+        deckSelecionadoId = null; 
+
+        if (btnDeletar) btnDeletar.disabled = true; // E mantenho o botão de "Deletar Deck" bloqueado, até o usuário selecionar algum Deck.
+        if (btnRenomear) btnRenomear.disabled = true; // O mesmo vale para o botão "Renomear Deck".
+        
+        // Caso ainda não tenha nenhum Deck cadastrado no BD, aviso isso ao usuário com uma frase dentro do próprio Dashboard:
+        if (decks.length === 0) {
+            corpoTabela.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #64748b; padding: 20px;">
+                        Nenhum deck cadastrado. Clique em CRIAR DECK para começar a povoar.
+                    </td>
+                </tr>`;
+            return;
+        }
+        
+        // Se não, monto as linhas que representam os Decks no Dashboard:
+        decks.forEach(deck => {
+            const tr = document.createElement("tr");
+            tr.className = "dashboard-tr-deck";
+            tr.setAttribute("data-id", deck.id);
+            
+            tr.innerHTML = `
+                <td class="td-deck-name">${deck.nome}</td>
+                <td class="td-novos text-blue">${deck.novos}</td>
+                <td class="td-revisar text-green">${deck.revisar}</td>
+                <td class="td-qtd-total text-yellow">${deck.quantidade_total}</td>
+            `;
+            
+            // E adiciono o evento de clique para seleção visual:
+            tr.addEventListener("click", () => {
+                // Para aplicar a seleção visual, primeiro removo a classe "selected" de todas as linhas:
+                document.querySelectorAll(".dashboard-tr-deck").forEach(linha => {
+                    linha.classList.remove("selected");
+                });
+                
+                // E depois aplico ela somente na que o usuário clicou:
+                tr.classList.add("selected");
+                
+                // Por fim, atualizo a variável global com o ID correto e ativo os botões DELETAR DECK e RENOMEAR DECK, pois agora temos um Deck selecionado:
+                deckSelecionadoId = deck.id;
+                if (btnDeletar) btnDeletar.disabled = false;
+                if (btnRenomear) btnRenomear.disabled = false;
+            });
+
+            // Além disso, se o usuário der um duplo clique, ele será redirecionado para a pagina4.html, então poderá começar a revisão do Deck usando o HTMX:
+            tr.addEventListener("dblclick", () => {
+                htmx.ajax('GET', `/estudo_revisao?deck_id=${deck.id}`, {
+                    target: 'main',
+                    swap: 'innerHTML'
+                });
+                // Aproveito para atualizar a URL do navegador:
+                window.history.pushState({}, "", `/estudo_revisao?deck_id=${deck.id}`)
+            });
+            corpoTabela.appendChild(tr); // Por fim, adiciono o novo nome de Deck na tabela.
+        });
+
+        
+    } catch (erro) {
+        console.error("Erro ao povoar a tabela de decks:", erro);
+    }
+}
+
+// Essa outra função configura os ouvintes de clique nos botões inferiores "CRIAR DECK", "RENOMEAR DECK" e "DELETAR DECK", me aproveitando ao máximo dos submodais já criados para criar/renomear Deck:
+function configurarBotoesDashboard() {
+    const btnCriar = document.getElementById("btnCriarDeckRevisao");
+    const btnRenomear = document.getElementById("btnRenomearDeckRevisao");
+    const btnDeletar = document.getElementById("btnDeletarDeckRevisao");
+
+    const tituloModal = document.querySelector(".submodal-titulo");
+    const subModal = document.getElementById("subModalCriarDeck");
+    const inputNome = document.getElementById("novoNomeDeckInput");
+    
+    // O botão de CRIAR DECK presente junto com o Dashboard agora apenas abre o submodal que já havíamos construído para a pagina2.html:
+    if (btnCriar) {
+        btnCriar.onclick = () => {
+            modoSubModal = "criar"; // Define o modo do submodal
+            if (tituloModal) tituloModal.textContent = "Criar novo Deck"; // Se o modo do submodal for "criar", o título do submodal deve ser "Criar novo Deck".
+            
+            // E então, abro o submodal, com o campo de texto limpo e já fazendo o teclado funcionar dentro dele:
+            if (subModal) {
+                subModal.style.display = "flex";
+                if (inputNome) {
+                    inputNome.value = "";
+                    inputNome.focus();
+                }
+            }
+        };
+    }
+
+    // Agora, vem a lógica do botão "RENOMEAR DECK", que é análoga:
+    if (btnRenomear) {
+        btnRenomear.onclick = () => {
+            modoSubModal = "renomear"; 
+            if (tituloModal) tituloModal.textContent = "Renomear Deck"; // Se o modo do submodal for "renomear", o título do submodal deve ser "Renomear Deck".
+            
+            if (subModal) {
+                subModal.style.display = "flex";
+                if (inputNome) { 
+                    inputNome.value = ""; 
+                    inputNome.focus(); 
+                }
+            }
+        };
+    }
+    
+    // O botão "DELETAR DECK" continua com o comportamento antigo dele chamando a ROTA 3 do main.py, mas usando carregarDashboardDecks(), pois agora estamos no Dashboard:
+    if (btnDeletar) {
+        btnDeletar.onclick = async () => {
+            if (!deckSelecionadoId) return;
+            
+            if (confirm("Tem certeza que deseja deletar este deck permanentemente?")) {
+                const formData = new FormData();
+                formData.append("deck_id", deckSelecionadoId);
+                
+                const resposta = await fetch("/api/deletar_deck", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                if (resposta.ok) {
+                    carregarDashboardDecks(); // Atualizo a tabela do Dashboard, para que o Deck deletado já suma dela após a deleção.
+                }
+            }
+        };
+    }
+}
 
 async function verificarVideo(event) {
     event.preventDefault(); 
@@ -222,3 +776,5 @@ async function verificarVideo(event) {
         }
     }
 }
+
+
