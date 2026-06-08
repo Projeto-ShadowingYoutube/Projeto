@@ -563,14 +563,14 @@ main {
     transition: all 0.2s; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
 }
 #botaoErro:hover { background: #c0392b; transform: scale(1.05); }
-/* [ MEMBRO 3 - BLOCO 3 ]: */
 
-/* ====================================================
-   MODAL DE SUCESSO - COPIA IDÊNTICA DO MODAL DE ERRO
-   ==================================================== */
+/* [ MEMBRO 3 - BLOCO 4 ]: */
 
-/* O fundo transparente/blur e container usam as mesmas classes do original */
-.modal-sucesso-card {
+/* =====================================================================================
+   ESTILO PARA O MODAL SOBRE LEGENDA E TÍTULO DO VÍDEO (CÓPIA IDÊNTICA DO MODAL DE ERRO)
+   ===================================================================================== */
+
+.modal-legenda-titulo {
     z-index: 1000;
     display: none; 
     padding-top: 15vh;
@@ -582,7 +582,7 @@ main {
 }
 
 /* Copiado exatamente do .w3-modal-content */
-.modal-sucesso-content {
+.modal-legenda-titulo-content {
     margin: auto;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -607,8 +607,8 @@ main {
     color: var(--text-main); 
 }
 
-/* O botão "continuar" */
-#botaoContinuarCard {
+/* O botão "Continuar" */
+#botaoContinuar {
     background: #2ecc71; 
     color: white;
     border: none;
@@ -621,10 +621,448 @@ main {
     box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
 }
 
-#botaoContinuarCard:hover {
+#botaoContinuar:hover {
     background: #27ae60; 
     transform: scale(1.05);
 }
+
+/* [ MEMBRO 1 && MEMBRO 3 - BLOCO 4, PARTE 1/5 ]: Esse estilo a seguir pode vir a ser mudado. */
+
+/* ====================================================================================
+    ESTILO PARA O NOVO MODAL DE ESCOLHA DE DECKS QUE APARECE AO CLICAR EM "SALVAR CARD" 
+   ==================================================================================== */
+
+/* Container de fundo do modal (Overlay) */
+
+.modal-decks {
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.7); 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Caixa da Janela Principal */
+
+.modal-conteudo {
+    background-color: #2c2c2c;
+    color: #f0f0f0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    width: 480px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.modal-titulo {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Botão "X" que fica no canto superior direito do modal, para fechá-lo */
+
+.btn-X {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.btn-X:hover { color: #fff; }
+
+/* Seção de Filtro */
+
+.filtro-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13px;
+}
+
+.modal-input-text {
+    flex: 1;
+    background-color: #1a1a1a;
+    border: 1px solid #444;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 3px;
+    outline: none;
+}
+
+.modal-input-text:focus { border-color: #5294e2; }
+
+/* Caixa onde vai ficar a lista de Decks */
+
+.modal-list-container {
+    background-color: #1e1e1e;
+    border: 1px solid #444;
+    height: 180px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    border-radius: 2px;
+}
+
+.modal-deck-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left; /* Força a lista a alinhar o texto à esquerda */
+}
+
+.modal-deck-item {
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.modal-deck-item:hover {
+    background-color: #2a2a2a;
+}
+
+/* Estado do Deck quando ele for selecionado */
+
+.modal-deck-item.selected {
+    background-color: #4a6984 !important;
+    color: #fff;
+}
+
+/* Rodapé de Botões */
+
+.modal-colecao-botoes {
+    display: flex;
+    justify-content: space-between; /* Distribui o espaço igualmente entre os botões */
+    gap: 8px;                       
+    margin-top: 4px;
+}
+
+/* Botões em si (os que ficam ativados assim que o modal abre) */
+.modal-decks-btn {
+    flex: 1;                        
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    padding: 6px 0;                 
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+
+/* Botões em si (os que ficam desativados assim que o modal abre, no caso o "Salvar" e "Deletar Deck", pois eles esperam o usuário selecionar um Deck para serem habilitados) */
+.modal-decks-btn:disabled {
+    background-color: #1a1a1a;
+    color: #555;
+    cursor: not-allowed;
+    border-color: #333;
+}
+
+.modal-decks-btn:hover {
+    background-color: #4a4a4a;
+    border-color: #666;
+}
+
+/* Destaque para o botão "Salvar" */
+.modal-decks-btn.btn-primary {
+    border: 1px solid #4a6984;
+    box-shadow: inset 0 0 2px rgba(255,255,255,0.2);
+}
+
+/* Remove o hover e o cursor de clique para itens que são apenas texto informativo */
+.modal-deck-item.apenas-texto:hover {
+    background-color: transparent !important;
+}
+
+/* [ MEMBRO 1 && MEMBRO 3 - BLOCO 4, PARTE 2/5 ]: Esse estilo a seguir pode vir a ser mudado. */
+
+/* ===================================================================================================================
+    ESTILO PARA O NOVO SUBMODAL DE CRIAÇÃO DE DECKS QUE APARECE AO CLICAR EM "CRIAR DECKS", DENTRO DO MODAL DE ESCOLHA 
+   =================================================================================================================== */
+
+/* Container de fundo (Overlay) exclusivo do Submodal */
+.submodal-decks {
+    position: fixed;
+    z-index: 30000; 
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(2px);
+    
+    /* Centralização e controle de exibição */
+    display: none; /* Controlado como 'flex' via JS */
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Caixa da Janela Principal do Submodal */
+.submodal-decks .submodal-conteudo {
+    background-color: #2c2c2c;
+    color: #f0f0f0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    width: 400px; /* Um pouco mais estreito que o modal principal */
+    max-width: 90%;
+    border: 1px solid #444;
+    border-radius: 6px;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.7);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Cabeçalho do Submodal */
+.submodal-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3a3a3a;
+    padding-bottom: 8px;
+}
+
+/* Título e Ícone */
+.submodal-titulo {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f0f0f0;
+    display: flex;
+    align-items: center;
+}
+
+/* Corpo do Submodal (Área do Input) */
+.submodal-corpo {
+    padding: 6px 0;
+}
+
+.submodal-texto-orientacao {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: #f0f0f0;
+}
+
+/* Força o input de texto a ocupar toda a largura interna disponível */
+.submodal-input-largura {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Rodapé de Botões (Alinhado à direita para padrão de diálogo do Anki) */
+.submodal-colecao-botoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+/* Customização de largura fixa para os botões OK e Cancelar do submodal */
+.submodal-decks .submodal-btn-largura {
+    flex: none; /* Desativa o 'flex: 1' herdado para não esticar os botões */
+    min-width: 80px;
+    padding: 6px 12px;
+}
+
+/* [ MEMBRO 1 && MEMBRO 3 - BLOCO 4, PARTE 3/5 ]: Esse estilo a seguir pode vir a ser mudado. */
+
+/* ==========================================================
+    ESTILO PARA O NOVO DASHBOARD DE DECKS (nova pagina3.html) 
+   ========================================================== */
+
+/* Usei !important em todas as regras para evitar conflitos de herança com outras regras desse arquivo, isso pode vir a ser alterado depois */
+
+/* O container principal como um todo */
+.dashboard-container {
+    width: 100%;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 0 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* A caixa cinza onde vai aparecer a lista de Decks */
+.card-board {
+    background: rgba(30, 34, 42, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 20px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+/* Estrututuras geral do Dashboard (linhas de nomes de Decks e dos cabeçalhos "Deck", "Novos" e "Quantidade Total") */
+.dashboard-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+/* Estilo específico para os cabeçalhos */
+.dashboard-table th {
+    padding: 16px 12px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+    text-transform: none !important;
+}
+
+/* Distribuição de larguras para impedir o esmagamento  */
+.th-deck { width: 40% !important; text-align: left !important; }
+.th-novos { width: 20% !important; text-align: center !important; }
+.th-revisar { width: 20% !important; text-align: center !important; }
+.th-qtd-total { width: 20% !important; text-align: center !important; }
+
+/* Comportamento específico das linhas, que contem os nomes dos Decks */
+.dashboard-tr-deck {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+/* Leve hover quando passar o mouse por cima da linha do nome de um Deck */
+.dashboard-tr-deck:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Leve hover quando selecionar um Deck ao clicar */
+.dashboard-tr-deck.selected {
+    background: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* As células de texto */
+.td-deck-name {
+    padding: 16px 12px !important;
+    font-size: 15px !important;
+    color: #f8fafc !important;
+    text-align: left !important;
+}
+
+.td-novos, .td-revisar, .td-qtd-total {
+    padding: 16px 12px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+}
+
+/* Cores para os números */
+.text-blue   { color: #3b82f6 !important; }
+.text-green { color: #10b981 !important; }
+.text-yellow { color: #eab308 !important; }
+
+.td-action {
+    text-align: center !important;
+    padding: 12px 0 !important;
+}
+
+/* Forçando os botões Criar e Deletar a ficarem lado a lado nas extremidades */
+.dashboard-actions-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 20px !important;
+    margin-top: 10px !important;
+}
+
+/* Estilo geral dos botões */
+.btn-action {
+    flex: 1 !important;
+    padding: 12px 0 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.5px !important;
+    background: transparent !important;
+    border: 2px solid #ef4444 !important;
+    color: #ef4444 !important;
+    border-radius: 8px !important;
+    cursor: pointer;
+    transition: all 0.2s ease !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+}
+
+/* Customização específica para o botão CRIAR DECK ficar verde */
+#btnCriarDeckRevisao {
+    border: 2px solid #10b981 !important; /* Borda Verde */
+    color: #10b981 !important;            /* Texto Verde */
+}
+
+/* Efeito Hover específico para o botão CRIAR DECK */
+#btnCriarDeckRevisao:hover {
+    background: #10b981 !important;       /* Fundo Verde no Hover */
+    color: #ffffff !important;            /* Texto Branco no Hover */
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3) !important; /* Brilho Verde */
+}
+
+/* Customização específica para o botão RENOMEAR DECK ficar azul */
+#btnRenomearDeckRevisao {
+    border: 2px solid #3b82f6 !important; /* Borda Azul */
+    color: #3b82f6 !important;            /* Texto Azul */
+}
+
+/* Efeito Hover específico para o botão RENOMEAR DECK */
+#btnRenomearDeckRevisao:hover:not(:disabled) {
+    background: #3b82f6 !important;       /* Fundo Azul no Hover */
+    color: #ffffff !important;            /* Texto Branco no Hover */
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; /* Brilho Azul */
+}
+
+/* Customização específica para o botão DELETAR DECK, quando ele estiver habilitado */
+.btn-action:hover:not(:disabled) {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+/* Customização específica para o botão DELETAR DECK, quando ele estiver desabilitado */
+.btn-action:disabled {
+    border-color: #334155 !important;
+    color: #475569 !important;
+    cursor: not-allowed !important;
+    opacity: 0.4 !important;
+    background: transparent !important;
+}
+
+/* Animação */
+.animate-fade-in {
+    animation: dashboardFadeIn 0.25s ease-out forwards;
+}
+
+@keyframes dashboardFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 
 /* ====================================================
    RESPONSIVIDADE E MEDIA QUERIES
