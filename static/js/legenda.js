@@ -10,9 +10,13 @@ function renderizarLegenda(frase) {
 
     legendaDiv.querySelectorAll(".palavra-legenda").forEach(span => {
         span.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const palavra = span.textContent.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
-            if (palavra) abrirPopupPalavra(span, palavra);
+            // MEMBRO 1: Verificar se a legenda esta oculta antes de abrir o popup
+            if(!ocultar){
+                e.stopPropagation();
+                const palavra = span.textContent.replace(/[^a-zA-Z'-]/g, "").toLowerCase();
+                if (palavra) abrirPopupPalavra(span, palavra);
+            }
+            
         });
     });
 }
