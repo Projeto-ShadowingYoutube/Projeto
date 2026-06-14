@@ -189,6 +189,7 @@ document.addEventListener("click", function(event) {
     if (event.target.id === "protecaoButton") {
         const overlay = document.getElementById("protecaoPlayer");
         if (overlay) overlay.style.display = "none";
+        void carregarFraseAtual();
     }
 
     // [ MEMBRO 3 - BLOCO 4 ]: Além disso, é necessário fazer com que o botão "Salvar Card" da página2.html redirecione para o novo modal de escolha de Decks:

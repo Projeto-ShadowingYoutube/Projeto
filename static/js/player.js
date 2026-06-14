@@ -71,10 +71,10 @@ function onReady() {
         });
     }
 
-    const carregamento = document.getElementById('carregamento');
+    // const carregamento = document.getElementById('carregamento');
     const protecaoButton = document.getElementById('protecaoButton');
 
-    if (carregamento) carregamento.style.display = "none";
+    // if (carregamento) carregamento.style.display = "none";
     if (protecaoButton) {
         protecaoButton.style.background = 'linear-gradient(90deg, #818cf8, #c084fc)';
         protecaoButton.disabled = false;
