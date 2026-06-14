@@ -70,11 +70,12 @@ function onReady() {
             startSeconds: startTime
         });
     }
-
+    // MEMBRO 1: Mudança para não retirar a tela de carregamento assim que o vídeo está pronto 
     // const carregamento = document.getElementById('carregamento');
-    const protecaoButton = document.getElementById('protecaoButton');
+    
 
     // if (carregamento) carregamento.style.display = "none";
+    const protecaoButton = document.getElementById('protecaoButton');
     if (protecaoButton) {
         protecaoButton.style.background = 'linear-gradient(90deg, #818cf8, #c084fc)';
         protecaoButton.disabled = false;

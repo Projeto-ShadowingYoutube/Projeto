@@ -259,6 +259,7 @@ main {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     z-index: 5;
+    /* Era possível clicar na borda do vídeo e começa-lo sem retirar a tela de carregamento */
     /* border-radius: 10px; */
 }
 
