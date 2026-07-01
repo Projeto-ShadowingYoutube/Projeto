@@ -10,7 +10,8 @@ let modoSubModal = "criar"; // [ MEMBRO 3 - BLOCO 4 ]: Aqui, controlamos o modo 
 // Essa linha abaixo só serve para dizer que por padrão, o usuário não está revisando Cards ainda.
 window.emModoRevisao = false;
 // Essa situação pode mudar somente no script na pagina4.html, onde ocorrem as revisões.
-
+// Variavel para saber se a tela de protecao foi desativada
+let protecaoDesativada=false;
 function mostrarCarregamento(mensagem) {
     const carregamento = document.getElementById("carregamento");
     const texto = document.getElementById("carregamentoTexto");
@@ -27,6 +28,7 @@ async function iniciarSessao(youtubeLink) {
     try {
         const botaoIniciar = document.getElementById('protecaoButton');
         if (botaoIniciar) {
+            protecaoDesativada=false;
             botaoIniciar.style.background = "black";
             botaoIniciar.disabled = true;
         }
@@ -99,7 +101,7 @@ async function carregarFraseAtual() {
     const btnSalvarPrincipal = document.getElementById("salvar");
     if (btnSalvarPrincipal) {
         btnSalvarPrincipal.innerText = "Salvar Card";
-    }
+    }    
     
     if (!blocosDeEstudo || blocosDeEstudo.length === 0) return;
 
@@ -159,7 +161,7 @@ async function carregarFraseAtual() {
         }
 
         
-        if (player && typeof player.seekTo === "function") {
+        if (player && typeof player.seekTo === "function" && protecaoDesativada) {    
             player.seekTo(startTime, true);
             player.playVideo();
             if (typeof startLoop === "function") startLoop();
@@ -188,7 +190,10 @@ document.addEventListener("click", function(event) {
 
     if (event.target.id === "protecaoButton") {
         const overlay = document.getElementById("protecaoPlayer");
-        if (overlay) overlay.style.display = "none";
+        if (overlay) {
+            overlay.style.display = "none";
+            protecaoDesativada=true;
+        }
         void carregarFraseAtual();
     }
 
