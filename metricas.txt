@@ -1,0 +1,65 @@
+
+MÉTRICAS- Radon 6.0 
+
+1. Maintainability Index
+
+Arquivo                  Nota     Índice
+------------------------------------------------------------
+cache.py                  A       83.38
+database.py               A       80.25
+main.py                   A       41.31
+models.py                 A       100.00
+
+Resultado:
+Todos os módulos receberam classificação A de manutenibilidade,
+indicando boa facilidade de manutenção segundo os critérios do Radon.
+
+2. Complexidade Ciclomática
+
+Distribuição das funções:
+
+A (1-5)   : 16 funções
+B (6-10)  : 3 funções
+C (11-20) : 1 função
+D-F       : 0 funções
+
+Funções de maior complexidade:
+
+Função                     Complexidade     Classificação
+------------------------------------------------------------
+obter_legenda()                 20               C
+obter_audio()                    8               B
+listar_decks()                   8               B
+renomear_deck()                  7               B
+
+Resultado:
+A maior parte das funções possui baixa complexidade (A),
+havendo apenas uma função classificada como C.
+
+3. Métricas Brutas do Projeto
+============================================================
+
+Total de linhas (LOC):                  957
+Linhas de código (SLOC):                609
+Linhas lógicas (LLOC):                  502
+Comentários:                            199
+Linhas em branco:                       166
+
+Percentual de comentários:
+- Aproximadamente 21% das linhas do projeto são comentários.
+
+4. Métricas de Halstead
+============================================================
+
+Função com maior esforço estimado:
+
+Função:
+obter_legenda()
+
+Resultados:
+
+Volume:        157.89
+Dificuldade:     5.18
+Esforço:       817.32
+Tempo:          45.41
+Bugs estimados:  0.053
