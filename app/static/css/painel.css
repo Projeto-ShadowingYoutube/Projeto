@@ -1,0 +1,212 @@
+/* ====================================================
+   PAINEL LATERAL: LEGENDA, ONDAS, TIMER E MICROFONE
+   ==================================================== */
+/* --- Coluna Direita: Legenda, Onda e Microfone --- */
+#painelLateral {
+    width: 100%; flex: 1;
+    display: flex; flex-direction: column;
+    gap: 20px; padding-top: 10px;
+}
+
+#legendaPai {
+    display: flex; width: 100%;
+    align-items: center; gap: 15px;
+}
+
+#ocultar {
+    margin: 0; border-radius: 50%; width: 50px; height: 50px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg-button); border: 1px solid var(--border-color);
+    cursor: pointer; transition: 0.2s;
+}
+
+/*imagem do delete igual imagem do ocultar*/
+#ocultar img { width: 28px; filter: invert(var(--icon-invert, 0)); }
+:root[data-theme="dark"] { --icon-invert: 0; } /* Deixa o olho branco no tema escuro */
+:root[data-theme="light"] { --icon-invert: 1; }
+
+#legenda {
+    margin: 0; font-size: 1.1rem; font-weight: bold;
+    background: var(--card-bg); color: var(--text-main);
+    padding: 15px 20px; width: 100%; text-align: left;
+    border-radius: 10px; border: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+    line-height: 1.6;
+}
+
+#panel {
+    display: flex; flex-direction: column; width: 100%; gap: 15px;
+}
+
+/*  Waveform Original  */
+#waveformContainer, #waveMicContainer {
+    width: 100%;
+}
+
+#waveformContainer {
+    width: 100%; 
+    min-height: 140px;
+    cursor: pointer;
+    touch-action: none; /* no celular, arrastar o cursor não rola a página */
+    user-select: none;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+#waveform {
+    width: 100%; 
+    height: 140px;
+    position: relative;
+    z-index: 2; /* Traz o canvas da onda para a frente */
+}
+
+#waveCursor {
+    position: absolute; 
+    top: 0; bottom: 0;
+    width: 2px;
+    background: #e74c3c; /*Cursor vermelho pra fiacr mais legal*/
+    left: 0%;
+    z-index: 5; 
+    pointer-events: none;
+    box-shadow: 0 0 5px rgba(231, 76, 60, 0.8);
+}
+
+#wave {
+    width: 100%; height: 140px;
+    background: var(--card-bg); border-radius: 12px;
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+    display: block;
+}
+
+/* TIMER */
+#timerContainer {
+    width: 100%; display: flex; flex-direction: column; gap: 8px;
+}
+
+#timerTrack {
+    width: 100%; height: 14px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 999px; overflow: hidden;
+}
+
+#timerProgress {
+    width: 0%; height: 100%;
+    background: linear-gradient(90deg, #818cf8, #c084fc);
+    transition: width 0.05s linear;
+}
+
+#timerTexto {
+    font-weight: bold; color: var(--text-main); font-size: 14px; text-align: center;
+}
+
+/* Layout lado a lado para transcrição e microfone */
+.mic-area {
+    display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%;
+}
+
+#transcript {
+    background: var(--card-bg); color: var(--text-main);
+    padding: 15px 20px; border-radius: 10px; flex-grow: 1; text-align: left;
+    font-size: 1rem; border: 1px solid var(--border-color);
+    backdrop-filter: blur(10px);
+}
+
+#gravar {
+    margin: 0; border-radius: 50%; width: 60px; height: 60px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #e74c3c; border: none;
+    cursor: pointer; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+    transition: transform 0.2s;
+}
+#gravar img { width: 24px; filter: brightness(0) invert(1); }
+#gravar:active { transform: scale(0.95); }
+#gravar.recording, .mic-btn.recording {
+    background: #c0392b; animation: recordingPulse 1s infinite;
+}
+
+@keyframes recordingPulse {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+/* Aviso exibido no lugar da onda quando o áudio da frase não pôde ser carregado. */
+.waveform-falha {
+    margin: 0;
+    padding: 50px 16px;
+    color: var(--text-sub);
+    font-size: 14px;
+}
+
+/* Cursor da onda arrastável: alça redonda no topo da linha vermelha. */
+#waveCursor::before {
+    content: ""; position: absolute; top: 0; left: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #e74c3c; transform: translate(-50%, -2px);
+    box-shadow: 0 0 6px rgba(231, 76, 60, 0.8);
+}
+#waveformContainer.arrastando { cursor: grabbing; }
+#waveformContainer.arrastando #waveCursor { width: 3px; }
+
+/* ====================================================
+   AVALIAÇÃO DA FALA
+   ==================================================== */
+#avaliacao {
+    padding: 16px 18px;
+    background: var(--card-bg); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 14px;
+    backdrop-filter: blur(10px);
+}
+#avaliacao[hidden] { display: none; }
+
+.avaliacao-status { margin: 0; text-align: center; color: var(--text-sub); }
+
+.avaliacao-topo { display: flex; align-items: center; gap: 18px; }
+
+/* Nota geral num círculo. */
+.avaliacao-nota {
+    width: 72px; height: 72px; flex-shrink: 0; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 4px solid currentColor;
+}
+.avaliacao-nota strong { font-size: 1.6rem; line-height: 1; }
+.avaliacao-nota span { font-size: 0.7rem; color: var(--text-sub); }
+
+.avaliacao-medidores { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.avaliacao-medidor { display: grid; grid-template-columns: 82px 1fr 32px; align-items: center; gap: 10px; cursor: help; }
+.avaliacao-rotulo { font-size: 0.85rem; font-weight: bold; }
+.avaliacao-numero { font-size: 0.85rem; font-weight: bold; text-align: right; font-variant-numeric: tabular-nums; }
+.avaliacao-barra { height: 8px; border-radius: 999px; background: rgba(128, 128, 128, 0.25); overflow: hidden; }
+.avaliacao-preenchimento { height: 100%; border-radius: 999px; }
+
+/* Cores das notas: boa (≥ 80), média (≥ 50) e fraca. */
+.avaliacao-nota.boa { color: #22c55e; }
+.avaliacao-nota.media { color: #f59e0b; }
+.avaliacao-nota.fraca { color: #ef4444; }
+.avaliacao-preenchimento.boa { background: #22c55e; }
+.avaliacao-preenchimento.media { background: #f59e0b; }
+.avaliacao-preenchimento.fraca { background: #ef4444; }
+
+/* Melodia do original (tracejada) e a do usuário (roxa). */
+.avaliacao-entonacao { margin-top: 14px; }
+.avaliacao-grafico { width: 100%; height: 60px; display: block; }
+.avaliacao-grafico polyline { fill: none; stroke-width: 2.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.avaliacao-grafico .linha-original { stroke: var(--text-sub); stroke-dasharray: 5 4; }
+.avaliacao-grafico .linha-usuario { stroke: #a78bfa; }
+.avaliacao-legenda-grafico { display: flex; gap: 14px; font-size: 0.75rem; color: var(--text-sub); }
+.avaliacao-legenda-grafico span::before {
+    content: ""; display: inline-block; width: 14px; height: 0; margin-right: 6px; vertical-align: middle;
+}
+.item-original::before { border-top: 2px dashed var(--text-sub); }
+.item-usuario::before { border-top: 2px solid #a78bfa; }
+
+.avaliacao-dicas { margin: 12px 0 0; padding-left: 18px; font-size: 0.9rem; color: var(--text-sub); text-align: left; }
+/* Com a legenda oculta, as dicas não podem entregar as palavras. */
+.avaliacao-dicas .sem-legenda { display: none; }
+#painelLateral:has(#legenda.oculta) .avaliacao-dicas .com-legenda { display: none; }
+#painelLateral:has(#legenda.oculta) .avaliacao-dicas .sem-legenda { display: inline; }
+.avaliacao-dicas li + li { margin-top: 4px; }

@@ -1,34 +1,36 @@
-import importlib
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine
+
+from app import config, db
+from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def dados_isolados(tmp_path, monkeypatch):
+    """Nenhum teste encosta na pasta dados/ de verdade (vídeos, cache, modelo de fala)."""
+    monkeypatch.setattr(config, "PASTA_MIDIA", tmp_path / "midia")
+    monkeypatch.setattr(config, "PASTA_MODELOS", tmp_path / "modelos")
+    monkeypatch.setattr(config, "ARQUIVO_CACHE_LEGENDAS", tmp_path / "ultimo_video.json")
 
 
 @pytest.fixture()
-def main_module(monkeypatch, tmp_path):
-    """Importa o main.py e isola o banco para cada teste."""
-    Path("static").mkdir(exist_ok=True)
-    Path("templates/Partials").mkdir(parents=True, exist_ok=True)
-
-    main = importlib.import_module("main")
-
-    test_db = tmp_path / "test_estudos.db"
-    test_engine = create_engine(
-        f"sqlite:///{test_db}",
+def client(tmp_path, monkeypatch):
+    """Cliente HTTP de teste usando um banco temporário e isolado para cada teste."""
+    engine_teste = create_engine(
+        f"sqlite:///{tmp_path / 'test_estudos.db'}",
         connect_args={"check_same_thread": False},
     )
-    SQLModel.metadata.create_all(test_engine)
-    monkeypatch.setattr(main, "engine", test_engine)
+    SQLModel.metadata.create_all(engine_teste)
+    # O lifespan cria as tabelas no banco real; no teste, ele não deve encostar nele.
+    monkeypatch.setattr(db, "criar_db_e_tabelas", lambda: None)
 
-    yield main
+    def get_session_teste():
+        with Session(engine_teste) as session:
+            yield session
 
-    test_engine.dispose()
-
-
-@pytest.fixture()
-def client(main_module):
-    """Cliente HTTP de teste do FastAPI usando banco temporário."""
-    with TestClient(main_module.app) as c:
+    app.dependency_overrides[db.get_session] = get_session_teste
+    with TestClient(app) as c:
         yield c
+    app.dependency_overrides.clear()
+    engine_teste.dispose()

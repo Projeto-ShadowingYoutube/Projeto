@@ -1,0 +1,27 @@
+<!-- Dashboard de Decks: o JavaScript dela está em static/js/paginas/decks.js. -->
+<div class="pagina" data-pagina="decks">
+    {% include "partials/submodal_deck.html" %}
+
+    <div class="dashboard-container animate-fade-in">
+        <div class="card-board">
+            <table class="dashboard-table">
+                <thead>
+                    <tr>
+                        <th class="th-deck">Deck</th>
+                        <th class="th-novos text-blue">Novos</th>
+                        <th class="th-revisar text-green">Revisar</th>
+                        <th class="th-qtd-total text-yellow">Quantidade Total</th>
+                    </tr>
+                </thead>
+                <tbody id="corpoTabelaDecksRevisao"></tbody>
+            </table>
+        </div>
+
+        <div class="dashboard-actions-footer">
+            <button id="btnRevisarDeck" class="btn-action btn-danger-outline" disabled>REVISAR DECK</button>
+            <button id="btnCriarDeckRevisao" class="btn-action btn-danger-outline">CRIAR DECK</button>
+            <button id="btnRenomearDeckRevisao" class="btn-action btn-danger-outline" disabled>RENOMEAR DECK</button>
+            <button id="btnDeletarDeckRevisao" class="btn-action btn-danger-outline" disabled>DELETAR DECK</button>
+        </div>
+    </div>
+</div>

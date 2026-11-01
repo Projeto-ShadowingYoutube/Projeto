@@ -1,0 +1,184 @@
+/* ==========================================================
+    ESTILO DO DASHBOARD DE DECKS (paginas/decks.html)
+   ========================================================== */
+
+/* Usei !important em todas as regras para evitar conflitos de herança com outras regras desse arquivo, isso pode vir a ser alterado depois */
+
+/* O container principal como um todo */
+.dashboard-container {
+    width: 100%;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 0 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* A caixa cinza onde vai aparecer a lista de Decks */
+.card-board {
+    background: rgba(30, 34, 42, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 20px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+/* Estrututuras geral do Dashboard (linhas de nomes de Decks e dos cabeçalhos "Deck", "Novos" e "Quantidade Total") */
+.dashboard-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+/* Estilo específico para os cabeçalhos */
+.dashboard-table th {
+    padding: 16px 12px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
+    background: transparent !important;
+    text-transform: none !important;
+}
+
+/* Distribuição de larguras para impedir o esmagamento  */
+.th-deck { width: 40% !important; text-align: left !important; }
+.th-novos { width: 20% !important; text-align: center !important; }
+.th-revisar { width: 20% !important; text-align: center !important; }
+.th-qtd-total { width: 20% !important; text-align: center !important; }
+
+/* Comportamento específico das linhas, que contem os nomes dos Decks */
+.dashboard-tr-deck {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    background: transparent !important;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+/* Leve hover quando passar o mouse por cima da linha do nome de um Deck */
+.dashboard-tr-deck:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Leve hover quando selecionar um Deck ao clicar */
+.dashboard-tr-deck.selected {
+    background: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* As células de texto */
+.td-deck-name {
+    padding: 16px 12px !important;
+    font-size: 15px !important;
+    color: #f8fafc !important;
+    text-align: left !important;
+}
+
+.td-novos, .td-revisar, .td-qtd-total {
+    padding: 16px 12px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+}
+
+/* Cores para os números */
+.text-blue   { color: #3b82f6 !important; }
+.text-green { color: #10b981 !important; }
+.text-yellow { color: #eab308 !important; }
+
+.td-action {
+    text-align: center !important;
+    padding: 12px 0 !important;
+}
+
+/* Forçando os botões Criar e Deletar a ficarem lado a lado nas extremidades */
+.dashboard-actions-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 20px !important;
+    margin-top: 10px !important;
+}
+
+/* Estilo geral dos botões */
+.btn-action {
+    flex: 1 !important;
+    padding: 12px 0 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.5px !important;
+    background: transparent !important;
+    border: 2px solid #ef4444 !important;
+    color: #ef4444 !important;
+    border-radius: 8px !important;
+    cursor: pointer;
+    transition: all 0.2s ease !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+}
+
+/* Customização específica para o botão CRIAR DECK ficar verde */
+#btnCriarDeckRevisao {
+    border: 2px solid var(--btn-criar-deck) !important; /* Borda Verde */
+    color: var(--btn-criar-deck) !important;            /* Texto Verde */
+}
+
+/* Efeito Hover específico para o botão CRIAR DECK */
+#btnCriarDeckRevisao:hover {
+    background: var(--btn-criar-deck) !important;       /* Fundo Verde no Hover */
+    color: #ffffff !important;            /* Texto Branco no Hover */
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3) !important; /* Brilho Verde */
+}
+
+/* Customização específica para o botão RENOMEAR DECK ficar azul */
+#btnRenomearDeckRevisao {
+    border: 2px solid #3b82f6 !important; /* Borda Azul */
+    color: #3b82f6 !important;            /* Texto Azul */
+}
+
+/* Efeito Hover específico para o botão RENOMEAR DECK */
+#btnRenomearDeckRevisao:hover:not(:disabled) {
+    background: #3b82f6 !important;       /* Fundo Azul no Hover */
+    color: #ffffff !important;            /* Texto Branco no Hover */
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; /* Brilho Azul */
+}
+
+/* Customização específica para o botão DELETAR DECK, quando ele estiver habilitado */
+.btn-action:hover:not(:disabled) {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+/* Customização específica para o botão DELETAR DECK, quando ele estiver desabilitado */
+.btn-action:disabled {
+    border-color: #334155 !important;
+    color: #475569 !important;
+    cursor: not-allowed !important;
+    opacity: 0.4 !important;
+    background: transparent !important;
+}
+
+/* Animação */
+.animate-fade-in {
+    animation: dashboardFadeIn 0.25s ease-out forwards;
+}
+
+@keyframes dashboardFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-aviso {
+    text-align: center;
+    color: #64748b;
+    padding: 20px;
+}

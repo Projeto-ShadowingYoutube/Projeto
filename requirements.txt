@@ -1,14 +1,22 @@
-fastapi[standard]
-uvicorn
-Jinja2
-youtube-transcript-api
-requests
-slowapi
-pydantic
-limits
-yt-dlp
-ffmpeg-python
-sqlmodel
-tzdata # BD responsável por fusos-horários.
-pytest
-pytest-cov
+# Dependências para rodar o app. Para desenvolver (testes, lint): pip install -r requirements-dev.txt
+fastapi[standard]==0.136.1
+uvicorn==0.47.0
+Jinja2==3.1.6
+requests==2.34.2
+limits==5.8.0
+pydantic==2.13.4
+sqlmodel==0.0.48
+tzdata==2026.6 # BD responsável por fusos-horários.
+
+# youtube-transcript-api e yt-dlp precisam ser atualizados com frequência, pois o YouTube muda sempre.
+# O yt-dlp precisa de um runtime JavaScript (Deno) para baixar vídeos do YouTube; o pacote "deno" instala ele na venv.
+youtube-transcript-api>=1.2.4
+yt-dlp[default]>=2026.10.21
+deno>=2.9.8
+
+# spaCy + modelo de inglês: forma base (is → be) e classe gramatical das palavras no dicionário.
+spacy==3.8.18
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+# Vosk: alinha o áudio com o texto para o modo karaokê (o modelo de ~40 MB é baixado no primeiro uso).
+vosk==0.3.45

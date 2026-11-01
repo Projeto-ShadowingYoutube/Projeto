@@ -1,0 +1,274 @@
+/* ====================================================
+   MODAL DE ERRO E CARREGAMENTO
+   ==================================================== */
+#carregamento {
+    display: none; flex-direction: column; background: rgba(0, 0, 0, 0.7);
+    position: fixed; width: 100%; height: 100%; align-content: center;
+    color: white; z-index: 5000; top: 0; left: 0; padding-top: 20vh;
+    backdrop-filter: blur(5px);
+}
+#erro, #erroMic { color: #e74c3c; font-weight: bold; }
+
+.w3-modal {
+    z-index: 10000; display: none; padding-top: 15vh;
+    position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+}
+
+.w3-modal-content {
+    margin: auto; background: var(--card-bg); border: 1px solid var(--border-color);
+    color: var(--text-main); padding: 40px 30px; width: 90%; max-width: 450px;
+    border-radius: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    backdrop-filter: blur(20px); animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#botaoErro {
+    background: #e74c3c; color: white; border: none; padding: 14px 40px;
+    border-radius: 14px; font-size: 1rem; font-weight: bold; cursor: pointer;
+    transition: all 0.2s; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+#botaoErro:hover { background: #c0392b; transform: scale(1.05); }
+
+
+/* =====================================================================================
+   ESTILO PARA O MODAL SOBRE LEGENDA E TÍTULO DO VÍDEO (CÓPIA IDÊNTICA DO MODAL DE ERRO)
+   ===================================================================================== */
+
+.modal-legenda-titulo {
+    z-index: 1000;
+    display: none; 
+    padding-top: 15vh;
+    position: fixed;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+/* Copiado exatamente do .w3-modal-content */
+.modal-legenda-titulo-content {
+    margin: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 40px 30px;
+    width: 90%;
+    max-width: 450px;
+    border-radius: 24px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    backdrop-filter: blur(20px);
+    animation: modalFadeIn 0.3s ease;
+}
+
+/* O texto onde os logs serão injetados */
+#textologs {
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--text-main); 
+}
+
+/* O botão "Continuar" */
+#botaoContinuar {
+    background: #2ecc71; 
+    color: white;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+}
+
+#botaoContinuar:hover {
+    background: #27ae60; 
+    transform: scale(1.05);
+}
+
+/* ====================================================================================
+    MODAL DE ESCOLHA DE DECKS ("Salvar Card") E SUBMODAL DE NOME DE DECK
+    Mesma estética dos outros modais do site: vidro desfocado, cantos arredondados,
+    gradiente roxo no botão principal e cores vindas das variáveis de tema.
+   ==================================================================================== */
+
+/* Fundo escurecido (overlay) dos dois modais */
+.modal-decks, .submodal-decks {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+}
+.modal-decks { z-index: 2000; display: flex; }
+.submodal-decks { z-index: 30000; display: none; /* vira flex via JS */ }
+
+/* Caixa dos modais */
+.modal-conteudo, .submodal-decks .submodal-conteudo {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    animation: modalFadeIn 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    text-align: left;
+}
+.modal-conteudo { max-width: 480px; padding: 28px; }
+.submodal-decks .submodal-conteudo { max-width: 400px; padding: 24px; }
+
+.modal-cabecalho, .submodal-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-titulo, .submodal-titulo {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* Botão "X" de fechar */
+.btn-X {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: rgba(125, 125, 125, 0.1);
+    color: var(--text-sub);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+.btn-X:hover { background: rgba(125, 125, 125, 0.25); color: var(--text-main); }
+
+/* Filtro e campo de nome */
+.filtro-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+}
+
+.modal-input-text {
+    flex: 1;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    background: var(--input-bg);
+    color: var(--input-text);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.modal-input-text:focus { border-color: #818cf8; }
+
+/* Lista de Decks */
+.modal-list-container {
+    height: 220px;
+    overflow-y: auto;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: rgba(125, 125, 125, 0.08);
+    padding: 6px;
+}
+
+.modal-deck-list { list-style: none; margin: 0; padding: 0; }
+
+.modal-deck-item {
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+    user-select: none;
+    border: 1px solid transparent;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.modal-deck-item:hover { background: rgba(129, 140, 248, 0.12); }
+.modal-deck-item.selected {
+    background: linear-gradient(90deg, rgba(129, 140, 248, 0.3), rgba(192, 132, 252, 0.3));
+    border-color: #818cf8;
+}
+
+/* Mensagens como "Nenhum Deck encontrado" */
+.modal-deck-item.apenas-texto {
+    color: var(--text-sub);
+    text-align: center;
+    cursor: default;
+    font-weight: 400;
+}
+.modal-deck-item.apenas-texto:hover { background: transparent; }
+
+/* Botões */
+.modal-colecao-botoes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.submodal-colecao-botoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-decks-btn {
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    background: rgba(125, 125, 125, 0.12);
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.2s, opacity 0.2s;
+}
+.modal-decks-btn:hover:not(:disabled) { background: rgba(125, 125, 125, 0.22); }
+.modal-decks-btn:active:not(:disabled) { transform: scale(0.97); }
+.modal-decks-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.modal-decks-btn.btn-primary {
+    border: none;
+    background: linear-gradient(90deg, #818cf8, #c084fc);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(147, 51, 234, 0.3);
+}
+.modal-decks-btn.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(90deg, #818cf8, #c084fc);
+    box-shadow: 0 10px 25px rgba(147, 51, 234, 0.4);
+}
+
+#btnDeletarDeckModal:hover:not(:disabled) {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #fff;
+}
+
+/* Corpo do submodal */
+.submodal-corpo { display: flex; flex-direction: column; gap: 10px; }
+.submodal-texto-orientacao { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-sub); }
+.submodal-input-largura { width: 100%; flex: none; }
+.submodal-decks .submodal-btn-largura { min-width: 110px; }

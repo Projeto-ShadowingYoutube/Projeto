@@ -1,0 +1,34 @@
+<!-- Revisão dos Cards de um Deck: o JavaScript dela está em static/js/paginas/revisao.js. -->
+<div class="pagina" data-pagina="revisao" data-deck-id="{{ deck_id }}">
+    <div id="painelPrincipal">
+        {% include "partials/player.html" %}
+
+        <!-- Avaliação do Card: define quando ele volta para revisão. -->
+        <div id="botoes">
+            <button id="dificil" disabled>Difícil</button>
+            <button id="medio" disabled>Médio</button>
+            <button id="facil" disabled>Fácil</button>
+        </div>
+    </div>
+
+    <div id="painelLateral">
+        <div id="legendaPai">
+            <div class="legenda-acoes">
+                <button id="ocultar" title="Ocultar legenda">
+                    <img id="olho" src="/static/img/olho.svg" alt="Ocultar legenda">
+                </button>
+                <button type="button" id="karaoke" title="Modo karaokê">
+                    <i class="fa fa-music"></i>
+                </button>
+            </div>
+            <div id="legenda">Carregando Cards...</div>
+            <button type="button" id="delete" class="btn-redondo" title="Apagar Card" disabled>
+                <i class="fa fa-trash-o"></i>
+            </button>
+        </div>
+
+        <div id="panel">
+            {% include "partials/microfone.html" %}
+        </div>
+    </div>
+</div>

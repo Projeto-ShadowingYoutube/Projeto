@@ -1,0 +1,142 @@
+/* ====================================================
+   POPUP DE DICIONÁRIO E LEGENDAS
+   ==================================================== */
+.palavra-legenda {
+    cursor: pointer;
+    display: inline-block;
+    border-radius: 4px;
+    padding: 1px 2px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.palavra-legenda:hover {
+    background: rgba(129, 140, 248, 0.3); /* Destaque na cor do tema */
+}
+
+#popupPalavra {
+    position: absolute;
+    background: var(--popup-bg);
+    border: 1px solid var(--popup-border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    min-width: 200px;
+    max-width: 300px;
+    text-align: left;
+    animation: fadeInPopup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    backdrop-filter: blur(15px);
+}
+
+@keyframes fadeInPopup {
+    from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.popup-header {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    border-bottom: 2px solid #818cf8;
+    padding-bottom: 8px; margin-bottom: 10px;
+}
+
+.popup-palavra {
+    font-weight: bold; font-size: 19px; color: var(--popup-text);
+}
+
+.popup-fonetica {
+    font-size: 14px; color: var(--popup-muted);
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.popup-definicao {
+    font-size: 14px; color: var(--popup-text);
+    line-height: 1.5; margin-top: 8px;
+}
+
+.popup-exemplo {
+    font-size: 13px; color: var(--popup-muted);
+    font-style: italic; margin-top: 8px;
+    border-left: 3px solid #818cf8; padding-left: 8px;
+}
+
+.popup-audio-btn {
+    background: rgba(129, 140, 248, 0.1);
+    border: 1px solid #818cf8; border-radius: 30px;
+    color: #818cf8; padding: 6px 16px; font-size: 13px;
+    cursor: pointer; transition: all 0.2s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: bold; margin-top: 12px; align-self: center;
+}
+
+.popup-audio-btn:hover { background: #818cf8; color: white; }
+.popup-loading { font-size: 13px; color: var(--text-sub); text-align: center; padding: 8px; }
+.popup-erro { font-size: 13px; color: #e74c3c; text-align: center; padding: 8px; }
+
+/* Legenda desfocada pelo botão do olho. */
+#legenda.oculta { filter: blur(5px); }
+
+/* Popup de dicionário: classes gramaticais e lista de definições */
+#popupPalavra { max-width: 340px; max-height: 60vh; overflow-y: auto; }
+
+.popup-lema { font-size: 12px; color: var(--popup-muted); margin: -4px 0 6px; }
+
+.popup-classe {
+    font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em;
+    color: #818cf8; margin-top: 10px;
+    display: flex; align-items: center; gap: 6px;
+}
+
+.popup-contexto {
+    font-size: 10px; text-transform: none; letter-spacing: 0;
+    background: rgba(129, 140, 248, 0.15); border-radius: 999px; padding: 1px 8px;
+}
+
+.popup-definicoes { margin: 2px 0 0; padding-left: 20px; }
+.popup-definicoes .popup-definicao { margin-top: 4px; }
+
+.popup-fonte { font-size: 11px; color: var(--popup-muted); margin-top: 8px; text-align: right; }
+
+/* Botões ao lado da legenda: ocultar e modo karaokê, um sobre o outro. */
+.legenda-acoes { display: flex; flex-direction: column; gap: 8px; }
+#legendaPai #ocultar { width: 44px; height: 44px; }
+#ocultar img { width: 24px; }
+#karaoke {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg-button); color: var(--text-sub);
+    border: 1px solid var(--border-color);
+    cursor: pointer; font-size: 1.05rem; transition: 0.2s;
+}
+#karaoke:hover { background: var(--button-hover); }
+#karaoke.ativo {
+    background: linear-gradient(90deg, #818cf8, #c084fc); color: #fff; border-color: transparent;
+}
+
+/* Modo karaokê: palavras já ditas coloridas e a palavra atual em destaque. */
+#legenda .palavra-legenda.dita { color: #a78bfa; }
+#legenda .palavra-legenda.atual {
+    color: #fff;
+    background: linear-gradient(90deg, #818cf8, #c084fc);
+    box-shadow: 0 2px 8px rgba(147, 51, 234, 0.35);
+}
+:root[data-theme="light"] #legenda .palavra-legenda.dita { color: #7c3aed; }
+
+/* Avaliação: palavras da frase que o usuário não disse na última gravação. */
+#legenda .palavra-legenda.faltou {
+    text-decoration: underline wavy #ef4444;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+}
+
+/* Legenda oculta: nada pode denunciar as palavras (nem o karaokê, nem o realce ao passar o mouse). */
+#legenda.oculta .palavra-legenda,
+#legenda.oculta .palavra-legenda:hover,
+#legenda.oculta .palavra-legenda.dita,
+#legenda.oculta .palavra-legenda.atual,
+#legenda.oculta .palavra-legenda.faltou {
+    /* !important: vence as regras do karaokê, inclusive a do tema claro (seletor mais específico). */
+    color: inherit !important; background: none !important; box-shadow: none !important; cursor: default;
+    text-decoration: none !important;
+}

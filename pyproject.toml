@@ -1,0 +1,23 @@
+[project]
+name = "shadowing"
+version = "0.2.0"
+description = "Prática de shadowing em inglês com vídeos do YouTube"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov=app --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Erros, avisos, imports (isort), bugs comuns e modernizações.
+select = ["E", "W", "F", "I", "B", "UP"]
+# B008: Depends()/Query() como valor padrão é o jeito do FastAPI.
+# B905: zip(lista, lista[1:]) é usado de propósito para pegar pares vizinhos.
+ignore = ["B008", "B905"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

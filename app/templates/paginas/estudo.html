@@ -1,0 +1,78 @@
+<!-- Página de estudo: o JavaScript dela está em static/js/paginas/estudo.js. -->
+<div class="pagina" data-pagina="estudo" data-link="{{ link }}">
+
+    <!-- Aviso sobre o tipo de legenda (manual/automática) e o título do vídeo. -->
+    <div id="modalLegendaTitulo" class="modal-legenda-titulo">
+        <div class="modal-legenda-titulo-content">
+            <p id="textologs"></p>
+            <button id="botaoContinuar">Continuar</button>
+        </div>
+    </div>
+
+    <!-- Modal para escolher em qual Deck salvar o Card (também permite criar e deletar Decks). -->
+    <div id="modalDeck" class="modal-decks" style="display: none;">
+        <div class="modal-conteudo">
+            <div class="modal-cabecalho">
+                <span class="modal-titulo">Escolher Deck</span>
+                <button type="button" class="btn-X" id="btnCancelar">&times;</button>
+            </div>
+
+            <div class="filtro-container">
+                <label for="filtroInput">Filtro:</label>
+                <input type="text" id="filtroInput" class="modal-input-text" placeholder="Digite para filtrar...">
+            </div>
+
+            <div class="modal-list-container">
+                <ul id="listaDecks" class="modal-deck-list"></ul>
+            </div>
+
+            <div class="modal-colecao-botoes">
+                <button type="button" id="btnSalvar" class="modal-decks-btn btn-primary" disabled>Salvar Card</button>
+                <button type="button" id="btnCriarDeckModal" class="modal-decks-btn">Criar Deck</button>
+                <button type="button" id="btnDeletarDeckModal" class="modal-decks-btn" disabled>Deletar Deck</button>
+                <button type="button" id="btnCancelarRodape" class="modal-decks-btn">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    {% include "partials/submodal_deck.html" %}
+
+    <div id="painelPrincipal">
+        {% set navegacao = true %}
+        {% include "partials/player.html" %}
+    </div>
+
+    <div id="painelLateral">
+        <div id="legendaPai">
+            <div class="legenda-acoes">
+                <button id="ocultar" title="Ocultar legenda">
+                    <img id="olho" src="/static/img/olho.svg" alt="Ocultar legenda">
+                </button>
+                <button type="button" id="karaoke" title="Modo karaokê">
+                    <i class="fa fa-music"></i>
+                </button>
+            </div>
+            <div id="legenda">Legendas</div>
+            <button type="button" id="salvar" class="btn-redondo" title="Salvar Card">
+                <i class="fa fa-bookmark-o"></i>
+            </button>
+        </div>
+
+        <div id="panel">
+            <!-- Onda do áudio original. O cursor vermelho acompanha o vídeo; clicar na onda leva o vídeo para aquele ponto. -->
+            <div id="waveformContainer" title="Clique para ir a este ponto da frase">
+                <div id="waveform"></div>
+                <div id="waveCursor"></div>
+            </div>
+
+            {% include "partials/microfone.html" %}
+        </div>
+    </div>
+
+    <div id="carregamento">
+        <div class="carregamento-box">
+            <p id="carregamentoTexto">Extraindo legendas do vídeo... Isso pode levar alguns segundos.</p>
+            <p><i class="fa fa-spinner w3-spin" style="font-size:64px"></i></p>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,38 @@
+<!-- Player de vídeo (controlado por static/js/componentes/player.js), usado nas páginas de estudo e de revisão.
+     Com "navegacao" definido, a barra também tem os botões de frase anterior/próxima e o contador. -->
+<div id="protecaoPlayer">
+    <button id="protecaoButton" disabled>Preparando o vídeo...</button>
+</div>
+
+<div id="playerContainer">
+    <div id="player"></div>
+    <!-- Progresso do download quando o vídeo muda (ex.: Cards de vídeos diferentes na revisão). -->
+    <div id="avisoPlayer" hidden></div>
+    <!-- Camada transparente sobre o vídeo: clicar nela pausa/continua, como o botão da barra. -->
+    <div id="bloqueioPlayer" title="Pausar / continuar"></div>
+</div>
+
+<div id="barraPlayer">
+    <div class="grupo-transporte">
+        {% if navegacao %}
+        <button type="button" id="anterior" class="btn-navegacao" disabled>
+            <i class="fa fa-step-backward"></i> Anterior
+        </button>
+        {% endif %}
+        <button type="button" id="pausar" class="btn-icone btn-play" title="Pausar" disabled>
+            <i class="fa fa-pause"></i>
+        </button>
+        {% if navegacao %}
+        <button type="button" id="proximo" class="btn-navegacao" disabled>
+            Próxima <i class="fa fa-step-forward"></i>
+        </button>
+        <span id="contadorFrase">– / –</span>
+        {% endif %}
+    </div>
+
+    <label class="controle-velocidade" title="Velocidade do vídeo (duplo clique volta para 1x)">
+        <i class="fa fa-tachometer"></i>
+        <input type="range" id="velocidade" min="0.25" max="1.5" step="0.05" value="1" disabled>
+        <output id="velocidadeValor" for="velocidade">1.00x</output>
+    </label>
+</div>

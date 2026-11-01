@@ -1,0 +1,67 @@
+"""Rotas do vídeo baixado: progresso do download, o arquivo, o áudio de uma frase e o tempo das palavras."""
+import logging
+import subprocess
+
+from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi.responses import FileResponse
+
+from app import config
+from app.schemas import StatusVideo, TemposPalavras
+from app.services import karaoke, midia
+
+logger = logging.getLogger("uvicorn.error")
+router = APIRouter(prefix="/api/videos/{video_id}", tags=["vídeos"])
+
+VideoId = Path(pattern=config.PADRAO_VIDEO_ID)
+
+
+def _validar_trecho(inicio: float, fim: float) -> None:
+    if fim <= inicio or fim - inicio > config.DURACAO_MAXIMA_TRECHO:
+        raise HTTPException(status_code=400, detail="Intervalo inválido.")
+
+
+@router.get("/status", response_model=StatusVideo)
+async def status_do_video(video_id: str = VideoId):
+    """Começa o download, se preciso, e informa o progresso. A página consulta até ficar pronto."""
+    if midia.arquivo_do_video(video_id):
+        return {"pronto": True, "progresso": 1.0}
+    midia.iniciar_download(video_id)
+    if midia.download_falhou(video_id):
+        raise HTTPException(status_code=502, detail="Não foi possível baixar o vídeo do YouTube.")
+    return {"pronto": False, "progresso": round(midia.progresso(video_id), 3)}
+
+
+@router.get("", response_class=FileResponse)
+async def obter_video(video_id: str = VideoId):
+    """O arquivo do vídeo (aceita Range, para o navegador pular para qualquer ponto)."""
+    caminho = midia.arquivo_do_video(video_id)
+    if not caminho:
+        raise HTTPException(status_code=404, detail="O vídeo ainda não foi baixado.")
+    return FileResponse(caminho, media_type=midia.tipo_do_video(caminho))
+
+
+@router.get("/audio", response_class=FileResponse)
+async def obter_audio(video_id: str = VideoId, inicio: float = Query(ge=0), fim: float = Query(gt=0)):
+    """WAV de uma frase, usado para desenhar o waveform de referência."""
+    _validar_trecho(inicio, fim)
+    try:
+        audio = await midia.audio_da_frase(video_id, inicio, fim)
+    except midia.VideoIndisponivel:
+        raise HTTPException(status_code=502, detail="Não foi possível baixar o vídeo do YouTube.") from None
+    except (OSError, subprocess.CalledProcessError):
+        logger.exception("Erro ao recortar o áudio do vídeo %s", video_id)
+        detalhe = "Erro ao gerar o áudio da frase. O FFmpeg está instalado?"
+        raise HTTPException(status_code=500, detail=detalhe) from None
+    return FileResponse(audio, media_type="audio/wav")
+
+
+@router.get("/palavras", response_model=TemposPalavras)
+async def tempos_das_palavras(
+    video_id: str = VideoId,
+    inicio: float = Query(ge=0),
+    fim: float = Query(gt=0),
+    texto: str = Query(min_length=1, max_length=1000),
+):
+    """Tempo de cada palavra da frase, para o modo karaokê."""
+    _validar_trecho(inicio, fim)
+    return await karaoke.tempos_das_palavras(video_id, inicio, fim, texto)

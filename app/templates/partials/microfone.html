@@ -1,0 +1,25 @@
+<!-- Gravação da voz do usuário (static/js/componentes/gravador.js), usada nas páginas de estudo e de revisão. -->
+<!-- Onda da voz do usuário, na mesma escala de tempo da onda do áudio original. -->
+<div id="waveMicContainer">
+    <canvas id="wave"></canvas>
+</div>
+
+<div id="timerContainer">
+    <div id="timerTrack">
+        <div id="timerProgress"></div>
+    </div>
+    <div id="timerTexto">0.0s / 0.0s</div>
+</div>
+
+<div class="mic-area">
+    <div id="transcript">Fale algo...</div>
+    <button type="button" id="ouvirGravacao" class="btn-redondo" title="Ouvir minha gravação" disabled>
+        <i class="fa fa-play"></i>
+    </button>
+    <button type="button" id="gravar" title="Gravar">
+        <img src="/static/img/mic.svg" alt="Gravar">
+    </button>
+</div>
+
+<!-- Avaliação da última gravação (static/js/componentes/avaliacao.js). -->
+<div id="avaliacao" hidden></div>
