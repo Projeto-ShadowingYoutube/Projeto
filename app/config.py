@@ -5,6 +5,7 @@ O que muda entre ambientes (desenvolvimento, teste, produção) vem de variávei
 arquivo .env na raiz do projeto (ver .env.example); sem elas, valem os padrões abaixo.
 """
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -25,12 +26,19 @@ class Configuracoes(BaseSettings):
     """Valores que dependem do ambiente. Ordem: variável de ambiente > arquivo .env > padrão daqui."""
     model_config = SettingsConfigDict(env_file=RAIZ_PROJETO / ".env", env_file_encoding="utf-8", extra="ignore")
 
-    # Ex.: postgresql+psycopg://usuario:senha@localhost:5432/shadowing. Padrão: o SQLite local de sempre.
+    # Ex.: postgresql+psycopg://usuario:senha@127.0.0.1:5432/shadowing. Padrão: o SQLite local de sempre.
     database_url: str = f"sqlite:///{ARQUIVO_BANCO}"
+    # Em "producao", o cookie de sessão só trafega por HTTPS (atributo Secure).
+    ambiente: Literal["desenvolvimento", "producao"] = "desenvolvimento"
 
 
 configuracoes = Configuracoes()
 DATABASE_URL = configuracoes.database_url
+AMBIENTE = configuracoes.ambiente
+
+# Sessão de login: nome do cookie e quanto tempo ela vale sem precisar entrar de novo.
+COOKIE_SESSAO = "sessao"
+DURACAO_SESSAO_DIAS = 14
 
 # Limite de vídeos novos por usuário (IP): cada vídeo que não está na cache gasta um token.
 LIMITE_TOKENS = "5/5 minute"

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import config, migrar
-from app.api import avaliacoes, decks, dicionario, legendas, paginas, videos
+from app.api import auth, avaliacoes, decks, dicionario, legendas, paginas, videos
 
 
 @asynccontextmanager
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 def criar_app() -> FastAPI:
     app = FastAPI(title="Shadowing", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=config.PASTA_STATIC), name="static")
-    for modulo in (paginas, legendas, videos, avaliacoes, decks, dicionario):
+    for modulo in (paginas, auth, legendas, videos, avaliacoes, decks, dicionario):
         app.include_router(modulo.router)
     return app
 

@@ -1,4 +1,4 @@
-"""Modelos do banco: Decks (baralhos) e os Cards de revisão espaçada de cada um."""
+"""Modelos do banco: usuários e suas sessões de login, Decks (baralhos) e os Cards de revisão espaçada de cada um."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -11,6 +11,23 @@ FUSO = ZoneInfo("America/Sao_Paulo")
 def agora() -> datetime:
     """Momento atual no horário de Brasília, sem fuso (é assim que as datas ficam gravadas no banco)."""
     return datetime.now(FUSO).replace(tzinfo=None)
+
+
+class Usuario(SQLModel, table=True):
+    """Conta de quem usa o app. A senha nunca é guardada: só o hash Argon2 dela (ver services/auth.py)."""
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(index=True, unique=True)  # sempre em minúsculas e sem espaços
+    senha_hash: str
+    data_criacao: NaiveDatetime = Field(default_factory=agora)
+
+
+class Sessao(SQLModel, table=True):
+    """Um login ativo. O cookie leva o token; aqui fica só o SHA-256 dele (um vazamento do banco não dá acesso)."""
+    id: int | None = Field(default=None, primary_key=True)
+    token_hash: str = Field(index=True, unique=True)
+    usuario_id: int = Field(foreign_key="usuario.id", index=True)
+    data_criacao: NaiveDatetime = Field(default_factory=agora)
+    expira_em: NaiveDatetime
 
 
 class Deck(SQLModel, table=True):

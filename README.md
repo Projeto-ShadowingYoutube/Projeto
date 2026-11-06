@@ -148,8 +148,13 @@ python -m uvicorn app.main:app --reload
 - **O banco de testes só é criado na primeira vez que o volume é iniciado.** Se o seu volume é anterior a este
   passo, crie-o à mão: `docker compose exec db createdb -U shadowing shadowing_teste`.
 
-**Backup e restauração do PostgreSQL** (funciona em cmd, PowerShell e bash: o arquivo é gerado dentro do
-container e depois copiado, porque o `>` do PowerShell corrompe arquivos binários):
+**Backup e restauração do PostgreSQL.** Faça o backup **antes** de rodar `python -m app.migrar` quando houver
+migração nova. O arquivo é gerado dentro do container e depois copiado, porque o `>` do PowerShell corrompe
+arquivos binários. Funciona em cmd, PowerShell e bash (Linux/macOS).
+
+> **Git Bash no Windows:** ele converte sozinho os caminhos `/tmp/...` em caminhos do Windows, e o `pg_dump` falha
+> com `could not open output file "C:/Users/..."`. Use `MSYS_NO_PATHCONV=1` antes de cada comando abaixo
+> (ex.: `MSYS_NO_PATHCONV=1 docker compose exec db pg_dump ...`).
 ```bash
 # Backup → dados/backup/postgres.dump
 docker compose exec db pg_dump -U shadowing -d shadowing -Fc -f /tmp/backup.dump
@@ -182,6 +187,28 @@ pytest                                                                         #
 O teste `tests/test_migracoes.py` falha se um modelo mudar sem a migração correspondente. Não use
 `alembic upgrade` direto: ele não faz backup. Use `python -m app.migrar`.
 
+## 🔐 Contas e login
+
+Cada pessoa tem uma conta (e-mail + senha). Por enquanto (bloco B4), a conta existe só na API (veja `/docs`, seção
+"autenticação"). As telas de login e a posse dos Decks por usuário vêm nos próximos blocos.
+
+| Rota | O que faz |
+|---|---|
+| `POST /api/auth/cadastro` | Cria a conta (`{email, senha}`; senha de 8 a 128 caracteres) e já entra nela |
+| `POST /api/auth/login` | Entra. Erro sempre como "E-mail ou senha incorretos" (não revela quais e-mails têm conta) |
+| `POST /api/auth/logout` | Sai: a sessão é apagada no servidor, e o cookie antigo deixa de funcionar |
+| `GET /api/auth/me` | Quem está logado (401 sem sessão) |
+
+**Como funciona:**
+- **Senha:** guardada só como hash **Argon2id** (`app/services/auth.py`), nunca em texto.
+- **Sessão:** ao entrar, o servidor gera um token aleatório de 256 bits. Ele vai num cookie `sessao` com
+  `HttpOnly` (o JavaScript não o lê) e `SameSite=Lax` (não é enviado em POSTs vindos de outros sites). No banco
+  (tabela `sessao`) fica só o SHA-256 do token. A sessão vale 14 dias (`DURACAO_SESSAO_DIAS` em `app/config.py`).
+- **Produção:** defina `AMBIENTE=producao` (no `.env` ou nas variáveis do servidor). Assim o cookie ganha `Secure` e
+  só trafega por HTTPS.
+- **Para proteger uma rota:** `usuario: Usuario = Depends(usuario_atual)` (de `app/api/auth.py`). Sem sessão válida,
+  a resposta é 401.
+
 ## 🎯 Avaliação da fala
 
 Cada gravação recebe uma nota, no modelo das provas automáticas de "repita a frase" (PTE, Versant):
@@ -200,17 +227,19 @@ A velocidade aparece à parte, no timer. A pronúncia de cada som (fonema) ainda
 app/
 ├── main.py           # cria o FastAPI e registra as rotas
 ├── config.py         # caminhos, constantes e configuração por ambiente (DATABASE_URL / .env)
-├── db.py, models.py  # conexão com o banco e modelos (Decks, Cards, cache do dicionário)
+├── db.py, models.py  # conexão com o banco e modelos (Usuários, Sessões, Decks, Cards, cache do dicionário)
 ├── migrar.py         # python -m app.migrar: backup + migrações do Alembic
 ├── schemas.py        # formatos de entrada/saída da API
 ├── api/              # camada HTTP: rotas finas, que validam e chamam os serviços
 │   ├── paginas.py      páginas HTML (navegação via HTMX)
+│   ├── auth.py         cadastro, login, logout, /me e a dependência usuario_atual
 │   ├── legendas.py     legendas + limite de tokens
 │   ├── videos.py       vídeo, áudio de cada frase e tempo das palavras
 │   ├── avaliacoes.py   avaliação da fala gravada
 │   ├── decks.py        Decks, Cards e revisão espaçada (REST)
 │   └── dicionario.py   popup de dicionário
 ├── services/         # regras de negócio, sem FastAPI (testáveis isoladamente)
+│   ├── auth.py         hash de senha (Argon2id), contas e sessões
 │   ├── youtube.py      tudo o que fala com o YouTube (legendas, título, download, legenda automática)
 │   ├── legendas.py     legendas da cache ou do YouTube
 │   ├── cache_legendas.py

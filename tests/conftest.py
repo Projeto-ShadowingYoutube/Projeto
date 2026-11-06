@@ -53,15 +53,24 @@ def url_banco_externo_teste():
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    """Cliente HTTP de teste usando um banco isolado e vazio para cada teste."""
+def engine_teste(tmp_path):
+    """Banco isolado e vazio para cada teste (o mesmo que o client usa; serve para conferir o que foi gravado)."""
     url = URL_BANCO_TESTE or f"sqlite:///{tmp_path / 'test_estudos.db'}"
-    engine_teste = create_engine(url, connect_args=db.opcoes_de_conexao(url))
+    engine = create_engine(url, connect_args=db.opcoes_de_conexao(url))
     if URL_BANCO_TESTE:
-        limpar_banco(engine_teste)  # sobras de um teste interrompido
+        limpar_banco(engine)  # sobras de um teste interrompido
     # create_all deixa os testes rápidos; tests/test_migracoes.py garante que as migrações
     # produzem exatamente este mesmo esquema.
-    SQLModel.metadata.create_all(engine_teste)
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    if URL_BANCO_TESTE:
+        limpar_banco(engine)
+    engine.dispose()
+
+
+@pytest.fixture()
+def client(engine_teste, monkeypatch):
+    """Cliente HTTP de teste usando o banco de engine_teste."""
     # O lifespan confere a versão do banco real; no teste, ele não deve encostar nele.
     monkeypatch.setattr(migrar, "verificar_banco", lambda: None)
 
@@ -73,6 +82,3 @@ def client(tmp_path, monkeypatch):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
-    if URL_BANCO_TESTE:
-        limpar_banco(engine_teste)
-    engine_teste.dispose()

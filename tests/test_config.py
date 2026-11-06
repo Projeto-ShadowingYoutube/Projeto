@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from app import config
 from app.db import opcoes_de_conexao
 
@@ -35,3 +38,15 @@ def test_variavel_de_ambiente_tem_prioridade_sobre_o_env(tmp_path, monkeypatch):
 def test_opcao_de_thread_so_vale_para_sqlite():
     assert opcoes_de_conexao("sqlite:///qualquer.db") == {"check_same_thread": False}
     assert opcoes_de_conexao("postgresql+psycopg://u:s@localhost/db") == {}
+
+
+def test_ambiente_padrao_e_desenvolvimento_e_so_aceita_valores_conhecidos(monkeypatch):
+    monkeypatch.delenv("AMBIENTE", raising=False)
+    assert config.Configuracoes(_env_file=None).ambiente == "desenvolvimento"
+
+    monkeypatch.setenv("AMBIENTE", "producao")
+    assert config.Configuracoes(_env_file=None).ambiente == "producao"
+
+    monkeypatch.setenv("AMBIENTE", "prod")  # erro de digitação não pode virar "desenvolvimento" em silêncio
+    with pytest.raises(ValidationError):
+        config.Configuracoes(_env_file=None)

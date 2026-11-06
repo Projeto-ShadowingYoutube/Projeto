@@ -1,7 +1,7 @@
 """Formatos de entrada e saída da API (validados pelo FastAPI e documentados em /docs)."""
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.config import PADRAO_VIDEO_ID
 
@@ -9,6 +9,18 @@ Dificuldade = Literal["dificil", "medio", "facil"]
 
 
 # --- Entrada ---
+
+class NovoUsuario(BaseModel):
+    email: EmailStr = Field(max_length=254)
+    # Mínimo de 8 (recomendação do NIST); o máximo evita que senhas enormes sobrecarreguem o Argon2.
+    senha: str = Field(min_length=8, max_length=128)
+
+
+class Credenciais(BaseModel):
+    # No login não se valida o formato: qualquer erro vira o mesmo 401 genérico.
+    email: str = Field(max_length=254)
+    senha: str = Field(max_length=128)
+
 
 class NomeDeck(BaseModel):
     nome: str = Field(max_length=100)
@@ -32,6 +44,12 @@ class AvaliacaoCard(BaseModel):
 
 
 # --- Saída ---
+
+class UsuarioPublico(BaseModel):
+    """O que a API mostra de um usuário (nunca o hash da senha)."""
+    id: int
+    email: str
+
 
 class Frase(BaseModel):
     id_do_bloco: int
