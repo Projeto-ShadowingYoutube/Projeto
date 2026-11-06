@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 
-from app import config, db
+from app import config, db, migrar
 from app.main import app
 
 
@@ -21,9 +21,11 @@ def client(tmp_path, monkeypatch):
         f"sqlite:///{tmp_path / 'test_estudos.db'}",
         connect_args={"check_same_thread": False},
     )
+    # create_all deixa os testes rápidos; tests/test_migracoes.py garante que as migrações
+    # produzem exatamente este mesmo esquema.
     SQLModel.metadata.create_all(engine_teste)
-    # O lifespan cria as tabelas no banco real; no teste, ele não deve encostar nele.
-    monkeypatch.setattr(db, "criar_db_e_tabelas", lambda: None)
+    # O lifespan confere a versão do banco real; no teste, ele não deve encostar nele.
+    monkeypatch.setattr(migrar, "verificar_banco", lambda: None)
 
     def get_session_teste():
         with Session(engine_teste) as session:

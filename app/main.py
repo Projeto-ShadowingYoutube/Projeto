@@ -7,13 +7,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app import config, db
+from app import config, migrar
 from app.api import avaliacoes, decks, dicionario, legendas, paginas, videos
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db.criar_db_e_tabelas()
+    # Não cria nem altera tabelas: só confere se o banco está na versão das migrações (senão, não sobe).
+    migrar.verificar_banco()
     yield
 
 
