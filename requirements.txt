@@ -8,6 +8,7 @@ pydantic==2.13.4
 pydantic-settings==2.16.2 # lê a configuração das variáveis de ambiente / .env
 sqlmodel==0.0.48
 alembic==1.20.1 # migrações versionadas do esquema do banco (python -m app.migrar)
+psycopg[binary]==3.3.8 # driver do PostgreSQL (DATABASE_URL=postgresql+psycopg://...)
 tzdata==2026.6 # BD responsável por fusos-horários.
 
 # youtube-transcript-api e yt-dlp precisam ser atualizados com frequência, pois o YouTube muda sempre.

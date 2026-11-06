@@ -5,7 +5,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlmodel import SQLModel
 
 import app.models  # noqa: F401  (registra as tabelas em SQLModel.metadata)
@@ -118,3 +118,23 @@ def test_app_nao_sobe_com_banco_desatualizado(banco, monkeypatch):
 
     with pytest.raises(migrar.BancoDesatualizado), TestClient(app):
         pass
+
+
+def test_migracoes_no_banco_externo_sobem_descem_e_batem_com_os_modelos(url_banco_externo_teste):
+    """Roda no Postgres (TEST_DATABASE_URL). Prova também que o downgrade de cada migração funciona."""
+    url = url_banco_externo_teste
+    cfg = migrar.config_alembic(url)
+
+    mensagens = migrar.migrar(url)
+    assert mensagens[-1] == f"Banco na versão {migrar.revisao_mais_recente()}."
+    migrar.verificar_banco(url)
+    engine = create_engine(url)
+    with engine.connect() as conexao:
+        assert compare_metadata(MigrationContext.configure(conexao), SQLModel.metadata) == []
+
+    command.downgrade(cfg, "base")
+    assert set(inspect(engine).get_table_names()) == {"alembic_version"}
+
+    command.upgrade(cfg, "head")
+    assert {"deck", "card", "entradadicionario"} <= set(inspect(engine).get_table_names())
+    engine.dispose()

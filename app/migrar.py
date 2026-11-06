@@ -128,7 +128,9 @@ def migrar(url: str | None = None, pasta_backup: Path | None = None) -> list[str
     if tem_dados and arquivo:
         mensagens.append(f"Backup criado: {fazer_backup(arquivo, pasta_backup or arquivo.parent / 'backup')}")
     elif tem_dados:
-        mensagens.append("Atenção: o backup automático só existe para SQLite. Faça o backup deste banco antes.")
+        # No Postgres, o backup é responsabilidade de quem migra (pg_dump; em produção, o snapshot do provedor).
+        mensagens.append("Sem backup automático: ele só existe para SQLite. Para PostgreSQL, faça o pg_dump "
+                         "antes de rodar este comando (veja o README).")
 
     cfg = config_alembic(url)
     if atual is None and tem_dados:

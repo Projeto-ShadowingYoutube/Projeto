@@ -1,0 +1,26 @@
+# Ambiente de desenvolvimento reproduzível. Por enquanto só o PostgreSQL: o app continua rodando na venv.
+# Uso: docker compose up -d db      (as variáveis POSTGRES_* vêm do .env, veja .env.example)
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shadowing}
+      # Sem valor padrão de propósito: a senha nunca fica no repositório.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env (veja .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-shadowing}
+    ports:
+      # Só a própria máquina acessa o banco (não fica exposto na rede).
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volume nomeado: os dados sobrevivem a "docker compose down" (só "down -v" apaga).
+      - postgres_dados:/var/lib/postgresql/data
+      # Roda só na primeira inicialização do volume: cria o banco separado dos testes.
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-banco-de-teste.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_dados:

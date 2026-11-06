@@ -104,7 +104,8 @@ primeiro uso do karaokê).
 **O que `python -m app.migrar` faz:**
 1. Lê em que versão o banco está.
 2. Se houver algo a mudar e o banco for SQLite com dados, **faz um backup** em `backup/`, ao lado do arquivo do
-   banco (para o padrão: `dados/backup/estudos-AAAAMMDD-HHMMSS-....db`).
+   banco (para o padrão: `dados/backup/estudos-AAAAMMDD-HHMMSS-....db`). **No PostgreSQL não há backup
+   automático:** faça o `pg_dump` antes (veja abaixo).
 3. **Banco antigo** (criado antes do Alembic, sem versão): confere se as tabelas são exatamente as do baseline e só
    **marca** o banco como versão `0001`, sem alterar nenhum dado. Se o esquema for diferente, para com erro e
    **não altera nada**.
@@ -117,6 +118,59 @@ num `--reload`, ou em vários processos ao mesmo tempo em produção, é arrisca
 versão ao subir, e para com uma instrução clara se estiver desatualizado.
 
 **Restaurar um backup (SQLite):** pare o servidor e copie o arquivo de `dados/backup/` por cima de `dados/estudos.db`.
+
+### Usando PostgreSQL no desenvolvimento (recomendado)
+
+O PostgreSQL é o banco de produção. O `docker-compose.yml` sobe um Postgres local, acessível só pela sua máquina
+(`127.0.0.1`), com dois bancos: `shadowing` (seus dados) e `shadowing_teste` (só para o pytest). Requer o
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) aberto.
+
+```bash
+# 1. Configuração: copie o modelo e troque a senha (POSTGRES_PASSWORD) por uma sua
+copy .env.example .env          # Linux/macOS: cp .env.example .env
+#    No .env, descomente a linha DATABASE_URL e coloque nela a MESMA senha.
+
+# 2. Suba o banco (fica rodando em segundo plano; os dados ficam num volume do Docker)
+docker compose up -d db
+docker compose ps               # espere o STATUS ficar "(healthy)"
+
+# 3. Crie as tabelas e rode o app normalmente
+python -m app.migrar
+python -m uvicorn app.main:app --reload
+```
+
+- **Use `127.0.0.1` na `DATABASE_URL`, e não `localhost`.** No Windows, `localhost` tenta antes o IPv6 (`::1`), onde
+  o container não escuta, e cada conexão demora segundos ou trava.
+- **Voltar ao SQLite:** apague ou comente a linha `DATABASE_URL` no `.env`.
+- **Parar o banco:** `docker compose stop db`. Os dados continuam no volume. `docker compose down` também preserva os
+  dados. **Só `docker compose down -v` apaga os dados.**
+- **Porta 5432 ocupada:** mude `POSTGRES_PORT` no `.env` e a porta na `DATABASE_URL`.
+- **O banco de testes só é criado na primeira vez que o volume é iniciado.** Se o seu volume é anterior a este
+  passo, crie-o à mão: `docker compose exec db createdb -U shadowing shadowing_teste`.
+
+**Backup e restauração do PostgreSQL** (funciona em cmd, PowerShell e bash: o arquivo é gerado dentro do
+container e depois copiado, porque o `>` do PowerShell corrompe arquivos binários):
+```bash
+# Backup → dados/backup/postgres.dump
+docker compose exec db pg_dump -U shadowing -d shadowing -Fc -f /tmp/backup.dump
+docker compose cp db:/tmp/backup.dump dados/backup/postgres.dump
+
+# Restauração (substitui o conteúdo atual do banco "shadowing"; pare o servidor antes)
+docker compose cp dados/backup/postgres.dump db:/tmp/restaurar.dump
+docker compose exec db pg_restore -U shadowing -d shadowing --clean --if-exists --no-owner /tmp/restaurar.dump
+```
+
+**Rodar os testes no PostgreSQL.** Sem configurar nada, o `pytest` usa SQLite temporário. Para rodar a mesma suíte
+no Postgres, defina `TEST_DATABASE_URL` **só no terminal** (de propósito, ela não é lida do `.env`), apontando
+para o banco `shadowing_teste`:
+```bash
+# cmd:         set TEST_DATABASE_URL=postgresql+psycopg://shadowing:SUA_SENHA@127.0.0.1:5432/shadowing_teste
+# PowerShell:  $env:TEST_DATABASE_URL="postgresql+psycopg://shadowing:SUA_SENHA@127.0.0.1:5432/shadowing_teste"
+# bash:        export TEST_DATABASE_URL=postgresql+psycopg://shadowing:SUA_SENHA@127.0.0.1:5432/shadowing_teste
+pytest
+```
+Os testes apagam e recriam as tabelas. Por segurança, eles **se recusam a rodar** se o nome do banco não terminar
+em `_teste`. Sem `TEST_DATABASE_URL`, o teste exclusivo do Postgres aparece como "skipped".
 
 **Para quem desenvolve: alterei um modelo (`app/models.py`), e agora?**
 ```bash
@@ -176,6 +230,9 @@ app/
         ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck
         └── paginas/      estudo, decks, revisao
 migrations/           # Alembic: env.py e versions/ (uma migração por mudança no esquema)
+docker/postgres/      # init.sql: cria o banco de testes no container do Postgres
+docker-compose.yml    # PostgreSQL local para desenvolvimento (docker compose up -d db)
+.env.example          # modelo das variáveis de ambiente (copie para .env)
 tests/                # um arquivo por módulo (pytest)
 docs/                 # plano de implementação (IMPLEMENTATION_PLAN.md) e métricas do projeto
 ```
