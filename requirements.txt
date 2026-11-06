@@ -5,6 +5,7 @@ Jinja2==3.1.6
 requests==2.34.2
 limits==5.8.0
 pydantic==2.13.4
+pydantic-settings==2.16.2 # lê a configuração das variáveis de ambiente / .env
 sqlmodel==0.0.48
 tzdata==2026.6 # BD responsável por fusos-horários.
 
