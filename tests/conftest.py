@@ -69,8 +69,8 @@ def engine_teste(tmp_path):
 
 
 @pytest.fixture()
-def client(engine_teste, monkeypatch):
-    """Cliente HTTP de teste usando o banco de engine_teste."""
+def app_de_teste(engine_teste, monkeypatch):
+    """O app apontando para o banco de engine_teste."""
     # O lifespan confere a versão do banco real; no teste, ele não deve encostar nele.
     monkeypatch.setattr(migrar, "verificar_banco", lambda: None)
 
@@ -79,6 +79,30 @@ def client(engine_teste, monkeypatch):
             yield session
 
     app.dependency_overrides[db.get_session] = get_session_teste
-    with TestClient(app) as c:
-        yield c
+    yield app
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def client(app_de_teste):
+    """Cliente HTTP de teste, sem login (um navegador que acabou de abrir o site)."""
+    with TestClient(app_de_teste) as c:
+        yield c
+
+
+@pytest.fixture()
+def entrar_como(app_de_teste):
+    """Fábrica de navegadores já logados: entrar_como("ana@exemplo.com") cria a conta e devolve o cliente dela.
+    Cada cliente tem os próprios cookies, então dá para simular dois usuários ao mesmo tempo."""
+    clientes = []
+
+    def fabricar(email: str, senha: str = "senha-forte-123") -> TestClient:
+        cliente = TestClient(app_de_teste)
+        clientes.append(cliente)
+        resposta = cliente.post("/api/auth/cadastro", json={"email": email, "senha": senha})
+        assert resposta.status_code == 201, resposta.text
+        return cliente
+
+    yield fabricar
+    for cliente in clientes:
+        cliente.close()

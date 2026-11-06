@@ -177,4 +177,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # "python -m app.migrar" carrega este arquivo como __main__, e as migrações importam app.migrar: seriam dois
+    # módulos com duas classes BancoIncompativel diferentes, e o except do main não pegaria o erro de uma
+    # migração. Rodando o main do módulo app.migrar, existe uma classe só.
+    from app.migrar import main as main_do_modulo
+
+    main_do_modulo()

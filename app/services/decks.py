@@ -10,10 +10,12 @@ DIAS_POR_DIFICULDADE = {"dificil": 1, "medio": 3, "facil": 7}
 INTERVALO_MAXIMO_DIAS = 180
 
 
-def nome_unico(session: Session, nome: str, ignorar_id: int | None = None) -> str:
-    """Evita nomes repetidos: "Baralho", "Baralho (2)", "Baralho (3)"... Nome vazio vira "Deck"."""
+def nome_unico(session: Session, usuario_id: int, nome: str, ignorar_id: int | None = None) -> str:
+    """Evita nomes repetidos entre os Decks do usuário: "Baralho", "Baralho (2)"... Nome vazio vira "Deck"."""
     base = nome.strip() or "Deck"
-    consulta = select(Deck.nome).where(col(Deck.nome).startswith(base, autoescape=True))
+    consulta = select(Deck.nome).where(
+        Deck.usuario_id == usuario_id, col(Deck.nome).startswith(base, autoescape=True),
+    )
     if ignorar_id is not None:
         consulta = consulta.where(Deck.id != ignorar_id)
     existentes = set(session.exec(consulta).all())
@@ -26,15 +28,16 @@ def nome_unico(session: Session, nome: str, ignorar_id: int | None = None) -> st
     return f"{base} ({contador})"
 
 
-def resumo_dos_decks(session: Session) -> list[dict]:
-    """Cada Deck com as contagens do dashboard: Cards novos, a revisar e total."""
+def resumo_dos_decks(session: Session, usuario_id: int) -> list[dict]:
+    """Cada Deck do usuário com as contagens do dashboard: Cards novos, a revisar e total."""
     momento = agora()
     cards_por_deck: dict[int, list[Card]] = {}
-    for card in session.exec(select(Card)).all():
+    cards_do_usuario = select(Card).join(Deck).where(Deck.usuario_id == usuario_id)
+    for card in session.exec(cards_do_usuario).all():
         cards_por_deck.setdefault(card.deck_id, []).append(card)
 
     resumo = []
-    for deck in session.exec(select(Deck).order_by(Deck.id)).all():
+    for deck in session.exec(select(Deck).where(Deck.usuario_id == usuario_id).order_by(Deck.id)).all():
         cards = cards_por_deck.get(deck.id, [])
         resumo.append({
             "id": deck.id,

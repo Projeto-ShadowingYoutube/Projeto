@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import NaiveDatetime
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 FUSO = ZoneInfo("America/Sao_Paulo")
@@ -20,6 +21,9 @@ class Usuario(SQLModel, table=True):
     senha_hash: str
     data_criacao: NaiveDatetime = Field(default_factory=agora)
 
+    # Usuário → Decks → Cards: tudo o que a pessoa estuda pertence a ela (os Cards, pelo Deck de cada um).
+    decks: list["Deck"] = Relationship(back_populates="usuario")
+
 
 class Sessao(SQLModel, table=True):
     """Um login ativo. O cookie leva o token; aqui fica só o SHA-256 dele (um vazamento do banco não dá acesso)."""
@@ -32,8 +36,14 @@ class Sessao(SQLModel, table=True):
 
 class Deck(SQLModel, table=True):
     """Baralho que agrupa os Cards criados pelo usuário."""
+    # O nome não se repete dentro da conta de um usuário (mas duas contas podem ter um Deck "Inglês").
+    __table_args__ = (UniqueConstraint("usuario_id", "nome", name="uq_deck_usuario_nome"),)
+
     id: int | None = Field(default=None, primary_key=True)
-    nome: str = Field(min_length=1, index=True, unique=True)
+    nome: str = Field(min_length=1, index=True)
+
+    usuario_id: int = Field(foreign_key="usuario.id", index=True)
+    usuario: Usuario | None = Relationship(back_populates="decks")
 
     # Ao deletar um Deck, todos os seus Cards são deletados junto.
     cards: list["Card"] = Relationship(back_populates="deck", cascade_delete=True)

@@ -1,3 +1,13 @@
+import pytest
+
+
+@pytest.fixture()
+def client(entrar_como):
+    """Desde o B5, as rotas de Decks exigem login. Esta fixture troca o client destes testes de agosto por um
+    navegador já logado; o corpo dos testes abaixo não mudou (é a prova de que o comportamento foi preservado)."""
+    return entrar_como("agosto@exemplo.com")
+
+
 def criar_deck(client, nome="Inglês"):
     resposta = client.post("/api/decks", json={"nome": nome})
     assert resposta.status_code == 201

@@ -189,8 +189,12 @@ O teste `tests/test_migracoes.py` falha se um modelo mudar sem a migração corr
 
 ## 🔐 Contas e login
 
-Cada pessoa tem uma conta (e-mail + senha). Por enquanto (bloco B4), a conta existe só na API (veja `/docs`, seção
-"autenticação"). As telas de login e a posse dos Decks por usuário vêm nos próximos blocos.
+Cada pessoa tem uma conta (e-mail + senha), e **cada Deck pertence a uma conta**. As rotas de Decks e Cards exigem
+login, e ninguém vê nem altera os Decks de outra pessoa.
+
+> **Até as telas de login chegarem (bloco B6):** as páginas de Decks e o botão "Salvar card" mostram "Faça login
+> para continuar". Para usar o app nesse intervalo, entre pelo `/docs` (`POST /api/auth/login`): o cookie vale para
+> o site todo, e é só voltar à página.
 
 | Rota | O que faz |
 |---|---|
@@ -207,7 +211,22 @@ Cada pessoa tem uma conta (e-mail + senha). Por enquanto (bloco B4), a conta exi
 - **Produção:** defina `AMBIENTE=producao` (no `.env` ou nas variáveis do servidor). Assim o cookie ganha `Secure` e
   só trafega por HTTPS.
 - **Para proteger uma rota:** `usuario: Usuario = Depends(usuario_atual)` (de `app/api/auth.py`). Sem sessão válida,
-  a resposta é 401.
+  a resposta é 401. Em `app/api/decks.py`, a dependência fica no router inteiro, então rotas novas já nascem
+  protegidas.
+
+**Isolamento entre contas (Decks e Cards):**
+- **Posse:** Usuário → Decks → Cards. O Deck tem `usuario_id`. O Card não tem: o dono dele é o dono do Deck.
+- **Onde é conferido:** só no backend, nas dependências `_deck` e `_card` de `app/api/decks.py`, que todas as rotas
+  usam. Esconder botões na tela não protege nada.
+- **Recurso de outra conta responde 404**, igual a um que não existe. Responder 403 confirmaria que aquele ID existe
+  (falha conhecida como IDOR).
+- **Nome do Deck:** único dentro de cada conta (garantido também pelo banco: `UNIQUE (usuario_id, nome)`). Duas
+  contas podem ter um Deck "Inglês".
+- **Testes:** `tests/test_isolamento.py` (duas contas tentando acessar os dados uma da outra).
+
+**Decks criados antes das contas (sem dono):** a migração `0003` não escolhe um dono por você. Se o banco tiver
+Decks antigos, `python -m app.migrar` para com `ERRO: Existem N Deck(s) ... sem dono` **sem alterar nada**. Decida
+o que fazer com eles (associar a um usuário ou apagar) e rode o comando de novo. Faça backup antes.
 
 ## 🎯 Avaliação da fala
 

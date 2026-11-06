@@ -1,25 +1,35 @@
-"""Rotas de Decks (baralhos) e Cards, incluindo a revisão espaçada."""
+"""Rotas de Decks (baralhos) e Cards, incluindo a revisão espaçada.
+
+Todas exigem login (dependência no router: rotas novas já nascem protegidas). Cada usuário só enxerga os
+próprios Decks e Cards: um recurso de outra conta responde 404, igual a um que não existe (não revela que ele
+existe). A conferência do dono fica num lugar só, em _deck e _card.
+"""
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session
 
+from app.api.auth import usuario_atual
 from app.db import get_session
-from app.models import Card, Deck, agora
+from app.models import Card, Deck, Usuario, agora
 from app.schemas import AvaliacaoCard, CardParaRevisar, DeckSalvo, NomeDeck, NovoCard, ResumoDeck, RevisaoSalva
 from app.services import decks
 
-router = APIRouter(prefix="/api", tags=["decks"])
+router = APIRouter(prefix="/api", tags=["decks"], dependencies=[Depends(usuario_atual)])
 
 
-def _deck(deck_id: int, session: Session = Depends(get_session)) -> Deck:
+def _deck(
+    deck_id: int, usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session),
+) -> Deck:
     deck = session.get(Deck, deck_id)
-    if not deck:
+    if not deck or deck.usuario_id != usuario.id:
         raise HTTPException(status_code=404, detail="Deck não encontrado.")
     return deck
 
 
-def _card(card_id: int, session: Session = Depends(get_session)) -> Card:
+def _card(
+    card_id: int, usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session),
+) -> Card:
     card = session.get(Card, card_id)
-    if not card:
+    if not card or card.deck.usuario_id != usuario.id:  # o dono do Card é o dono do Deck dele
         raise HTTPException(status_code=404, detail="Card não encontrado.")
     return card
 
@@ -32,18 +42,18 @@ def _salvar(session: Session, objeto):
 
 
 @router.get("/decks", response_model=list[ResumoDeck])
-def listar_decks(session: Session = Depends(get_session)):
-    return decks.resumo_dos_decks(session)
+def listar_decks(usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session)):
+    return decks.resumo_dos_decks(session, usuario.id)
 
 
 @router.post("/decks", response_model=DeckSalvo, status_code=status.HTTP_201_CREATED)
-def criar_deck(corpo: NomeDeck, session: Session = Depends(get_session)):
-    return _salvar(session, Deck(nome=decks.nome_unico(session, corpo.nome)))
+def criar_deck(corpo: NomeDeck, usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session)):
+    return _salvar(session, Deck(nome=decks.nome_unico(session, usuario.id, corpo.nome), usuario_id=usuario.id))
 
 
 @router.patch("/decks/{deck_id}", response_model=DeckSalvo)
 def renomear_deck(corpo: NomeDeck, deck: Deck = Depends(_deck), session: Session = Depends(get_session)):
-    deck.nome = decks.nome_unico(session, corpo.nome, ignorar_id=deck.id)
+    deck.nome = decks.nome_unico(session, deck.usuario_id, corpo.nome, ignorar_id=deck.id)
     return _salvar(session, deck)
 
 

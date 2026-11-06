@@ -144,6 +144,8 @@ def test_login_refaz_hash_criado_com_parametros_antigos(client, engine_teste):
     assert PasswordHasher().check_needs_rehash(novo) is False
 
 
-def test_rotas_de_decks_continuam_publicas_ate_o_b5(client):
-    """O B4 não muda o sistema de agosto: decks só passam a exigir login no B5."""
+def test_rotas_de_decks_exigem_login(client):
+    """Desde o B5 (antes, no B4, eram públicas). O isolamento completo está em test_isolamento.py."""
+    assert client.get("/api/decks").status_code == 401
+    cadastrar(client)
     assert client.get("/api/decks").status_code == 200
