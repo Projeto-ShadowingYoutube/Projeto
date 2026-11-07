@@ -103,8 +103,15 @@ def _nova_aba(navegador):
     return contexto, aba
 
 
+def _formulario_pronto(aba):
+    """Espera o JS da tela de login/cadastro assumir o formulário (o botão nasce desabilitado e só habilita no fim
+    da inicialização). Digitar antes disso compete com a inicialização da página, que pode mexer no foco."""
+    expect(aba.locator("button[type=submit]")).to_be_enabled()
+
+
 def _cadastrar(aba, base, email):
     aba.goto(f"{base}/cadastro")
+    _formulario_pronto(aba)
     aba.fill("#email", email)
     aba.fill("#senha", SENHA)
     aba.fill("#confirmacao", SENHA)
@@ -147,6 +154,7 @@ def test_fluxo_completo_login_decks_revisao_e_logout(servidor, navegador):
     # Cadastro: senhas diferentes mostram o erro na tela; depois, a conta é criada e o usuário volta para /decks.
     aba.click("text=Criar conta")
     expect(aba).to_have_url(f"{servidor}/cadastro?proximo=/decks")
+    _formulario_pronto(aba)
     aba.fill("#email", "ana@exemplo.com")
     aba.fill("#senha", SENHA)
     aba.fill("#confirmacao", "outra-senha-123")
@@ -191,6 +199,7 @@ def test_fluxo_completo_login_decks_revisao_e_logout(servidor, navegador):
     expect(aba.locator(".dashboard-tr-deck")).to_have_count(0)
 
     # Login com senha errada: mensagem na tela, sem sair da página. Com a certa, volta para /decks.
+    _formulario_pronto(aba)
     aba.fill("#email", "ana@exemplo.com")
     aba.fill("#senha", "senha-errada-1")
     aba.click("button[type=submit]")

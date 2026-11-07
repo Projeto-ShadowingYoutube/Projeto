@@ -3,7 +3,9 @@
     <h1 class="hero-title">SHADOWING</h1>
     <p class="hero-sub">Crie sua conta: seus Decks e Cards ficam só com você.</p>
 
-    <form class="input-card auth-form">
+    <!-- method="post": mesmo se enviado antes do JS (ou sem JS), a senha nunca vai na URL (histórico, logs).
+         O botão só é habilitado quando auth.js assume o envio. -->
+    <form class="input-card auth-form" method="post">
         <label for="email">E-mail</label>
         <input type="email" id="email" name="email" class="url-input" autocomplete="email" maxlength="254" required>
 
@@ -16,7 +18,7 @@
         <p class="auth-erro" role="alert" hidden></p>
 
         <div class="btn-row">
-            <button type="submit" class="main-btn btn-practice">CRIAR CONTA</button>
+            <button type="submit" class="main-btn btn-practice" disabled>CRIAR CONTA</button>
         </div>
 
         <p class="auth-alternativa">

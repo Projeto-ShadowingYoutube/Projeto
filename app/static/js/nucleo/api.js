@@ -18,15 +18,17 @@ export async function requisitarJSON(url, opcoes) {
     if (resposta.status === 204) return null;
     const dados = await resposta.json().catch(() => null);
     if (!resposta.ok) {
+        // Formato de erro da API (app/erros.py e README): {detail, codigo, ...extras}.
         const erro = new Error(mensagemDeErro(dados) || `Erro ${resposta.status} ao acessar ${url}`);
         erro.status = resposta.status;
-        erro.dados = dados;
+        erro.codigo = dados?.codigo ?? null; // estável: use para decidir o que fazer (o texto pode mudar)
+        erro.dados = dados;                  // o corpo inteiro, com os extras (ex.: tokens_restantes, erros)
         throw erro;
     }
     return dados;
 }
 
-// O FastAPI devolve "detail" como texto ou, em erros de validação, como lista de problemas.
+// "detail" é sempre texto na API atual. A lista só aparece em respostas no formato antigo do FastAPI.
 function mensagemDeErro(dados) {
     const detalhe = dados?.detail;
     if (Array.isArray(detalhe)) return detalhe.map((problema) => problema.msg).join("; ");

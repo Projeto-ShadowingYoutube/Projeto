@@ -2,12 +2,12 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
 from limits import parse
 from limits.storage import MemoryStorage
 from limits.strategies import FixedWindowRateLimiter
 
 from app import config
+from app.erros import ErroDaApi
 from app.schemas import Legendas
 from app.services import legendas, youtube
 
@@ -44,10 +44,9 @@ def obter_legendas(request: Request, url: str):
     dados = legendas.da_cache(video_id)
     if dados is None:
         if not limitador.hit(LIMITE_TOKENS, ip, "legenda"):
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "O limite de tokens foi atingido. Espere alguns minutos para ganhar mais.",
-                         "tokens_restantes": 0},
+            raise ErroDaApi(
+                429, "O limite de tokens foi atingido. Espere alguns minutos para ganhar mais.",
+                codigo="limite_de_tokens", tokens_restantes=0,
             )
         try:
             dados = legendas.do_youtube(video_id)

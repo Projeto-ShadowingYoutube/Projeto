@@ -200,6 +200,9 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 - Como funciona (`app/api/paginas.py`): sem sessão, quem abre a URL direto recebe um redirecionamento 303. Na
   navegação pelo HTMX, o servidor responde com o header `HX-Redirect`. No front, um 401 da API (`requisitarJSON`
   em `static/js/nucleo/api.js`) também leva ao login.
+- **A senha nunca vai na URL:** os formulários de login e cadastro são `method="post"`, e o botão só habilita quando
+  o JS assume o envio. Sem isso, um envio antes de o JS carregar usaria GET, e a senha iria para o histórico e
+  para os logs do servidor.
 - **Open redirect:** o `proximo` só aceita caminhos deste site. `?proximo=https://outro-site` vira `/`.
 - As páginas saem com `Cache-Control: no-store`: depois de **Sair**, o botão "voltar" do navegador não mostra cópias
   antigas.
@@ -240,6 +243,99 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 Decks antigos, `python -m app.migrar` para com `ERRO: Existem N Deck(s) ... sem dono` **sem alterar nada**. Decida
 o que fazer com eles (associar a um usuário ou apagar) e rode o comando de novo. Faça backup antes.
 
+## ⚠️ Formato dos erros da API
+
+**Toda** resposta de erro da API (status 4xx e 5xx) é um JSON com o mesmo formato:
+
+```json
+{
+  "detail": "Deck não encontrado.",
+  "codigo": "nao_encontrado"
+}
+```
+
+| Campo | Tipo | Para que serve |
+|---|---|---|
+| `detail` | texto, sempre | Mensagem para a **pessoa**, em português. É o que a interface mostra. A redação pode mudar. |
+| `codigo` | texto, sempre | Identificador para **programas** (o front, testes, integrações). Estável: use-o para decidir o que fazer. |
+| extras | opcional | Campos a mais, no mesmo nível, só quando o erro precisa (veja abaixo). |
+
+### Códigos
+
+| Status | `codigo` | Quando acontece (exemplos) | Extras |
+|---|---|---|---|
+| 400 | `requisicao_invalida` | URL do YouTube inválida, intervalo de áudio inválido, gravação ilegível | — |
+| 401 | `nao_autenticado` | Sem login ou sessão vencida; e-mail ou senha incorretos | — |
+| 403 | `origem_nao_permitida` | POST/PATCH/DELETE vindo de outro site (proteção contra CSRF) | — |
+| 403 | `acesso_negado` | Padrão para outros 403 (nenhuma rota usa hoje) | — |
+| 404 | `nao_encontrado` | Deck/Card inexistente **ou de outra conta**; palavra não encontrada; rota que não existe | — |
+| 405 | `metodo_nao_permitido` | Método HTTP errado para o endereço (ex.: `DELETE /api/decks`) | header `Allow` |
+| 409 | `conflito` | E-mail já cadastrado; Card repetido no mesmo Deck | — |
+| 413 | `conteudo_grande_demais` | Gravação maior que 10 MB | — |
+| 422 | `dados_invalidos` | Corpo, parâmetro da URL ou formulário fora do formato esperado | `erros` |
+| 429 | `limite_de_tokens` | Tokens de legenda acabaram | `tokens_restantes` |
+| 429 | `limite_atingido` | Padrão para outros 429 (nenhuma rota usa hoje) | — |
+| 500 | `erro_interno` | Qualquer erro **inesperado** (bug). A resposta nunca traz detalhes internos | — |
+| 500 | `erro_interno` | Erros conhecidos de processamento (ex.: FFmpeg falhou), com mensagem própria | — |
+| 502 | `servico_externo_indisponivel` | YouTube ou dicionário fora do ar / bloqueando | — |
+
+### Exemplos
+
+**422, dados inválidos.** O `detail` resume os problemas em uma frase. Em `erros`, vem um item por campo.
+O status continua 422, o padrão do FastAPI para dados fora do formato (decisão D5 do plano).
+```json
+{
+  "detail": "Dados inválidos: email: e-mail inválido; senha: mínimo de 8 caracteres.",
+  "codigo": "dados_invalidos",
+  "erros": [
+    {"campo": "email", "mensagem": "e-mail inválido"},
+    {"campo": "senha", "mensagem": "mínimo de 8 caracteres"}
+  ]
+}
+```
+`campo` é o nome do campo no corpo, na URL ou no formulário. É `"corpo"` quando o problema é o corpo inteiro (ex.:
+não foi enviado).
+
+**429, tokens esgotados:**
+```json
+{"detail": "O limite de tokens foi atingido. Espere alguns minutos para ganhar mais.", "codigo": "limite_de_tokens", "tokens_restantes": 0}
+```
+
+**500, erro inesperado.** É sempre esta mesma resposta, de propósito:
+```json
+{"detail": "Erro interno. Tente novamente em instantes.", "codigo": "erro_interno"}
+```
+A exceção, a rota e a stack completa vão para o **log do servidor** (`ERROR: Erro inesperado em GET /api/...`),
+em um único registro. Detalhes internos (caminhos, SQL, versões) numa resposta ajudariam um atacante.
+
+### No front-end
+
+`requisitarJSON` (`static/js/nucleo/api.js`) transforma qualquer erro numa exceção com:
+- `erro.message`: o `detail`, pronto para mostrar;
+- `erro.status`: o status HTTP;
+- `erro.codigo`: o `codigo` (**use este para decidir o que fazer**, ex.: `if (erro.codigo === "limite_de_tokens")`);
+- `erro.dados`: o corpo inteiro, com os extras (`erro.dados.tokens_restantes`, `erro.dados.erros`).
+
+O 401 fora de `/api/auth/` não chega a virar exceção: leva direto ao login.
+
+### Para quem cria rotas
+
+```python
+from fastapi import HTTPException
+from app.erros import ErroDaApi
+
+raise HTTPException(404, "Vídeo não encontrado.")      # codigo vem do status: "nao_encontrado"
+raise ErroDaApi(429, "Seus tokens acabaram.", codigo="limite_de_tokens", tokens_restantes=0)  # codigo/extras próprios
+```
+- **Não monte `JSONResponse` de erro à mão.** Os handlers de `app/erros.py` padronizam tudo. A única exceção são
+  os middlewares, que não passam pelos handlers e usam `resposta_de_erro(...)` do mesmo módulo.
+- **Não capture `Exception` só para devolver 500.** Deixe o erro subir: o capturador registra no log e responde no
+  formato padrão. Capture apenas erros **esperados** (ex.: `VideoIndisponivel` → 502) e dê a eles uma mensagem útil.
+- Código novo? Acrescente em `CODIGOS` (`app/erros.py`), nesta tabela e num teste em `tests/test_erros.py`.
+
+**Onde está:** `app/erros.py` (handlers e o capturador de erros inesperados) e `tests/test_erros.py` (um teste por
+status, mais um teste que prova que o 500 não vaza detalhes e registra a stack).
+
 ## 🎯 Avaliação da fala
 
 Cada gravação recebe uma nota, no modelo das provas automáticas de "repita a frase" (PTE, Versant):
@@ -261,6 +357,7 @@ app/
 ├── db.py, models.py  # conexão com o banco e modelos (Usuários, Sessões, Decks, Cards, cache do dicionário)
 ├── migrar.py         # python -m app.migrar: backup + migrações do Alembic
 ├── seguranca.py      # CSRF: recusa POST/PATCH/DELETE vindos de outros sites (verificação de Origin)
+├── erros.py          # formato único dos erros da API ({detail, codigo}) e captura de erros inesperados
 ├── schemas.py        # formatos de entrada/saída da API
 ├── api/              # camada HTTP: rotas finas, que validam e chamam os serviços
 │   ├── paginas.py      páginas HTML (navegação via HTMX)

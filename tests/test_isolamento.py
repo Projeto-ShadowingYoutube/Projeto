@@ -39,7 +39,7 @@ def test_sem_login_todas_as_rotas_de_decks_e_cards_respondem_401(client):
     for metodo, url, corpo in pedidos:
         resposta = client.request(metodo, url, json=corpo)
         assert resposta.status_code == 401, f"{metodo} {url}"
-        assert resposta.json() == {"detail": "Faça login para continuar."}
+        assert resposta.json() == {"detail": "Faça login para continuar.", "codigo": "nao_autenticado"}
 
 
 def test_cada_usuario_lista_so_os_proprios_decks(ana, bruno):

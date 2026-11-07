@@ -12,7 +12,8 @@ modernos sempre enviam Origin em POST/PUT/PATCH/DELETE vindos de outro site.
 from urllib.parse import urlsplit
 
 from fastapi import Request
-from fastapi.responses import JSONResponse
+
+from app.erros import resposta_de_erro
 
 METODOS_QUE_ALTERAM = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -28,5 +29,6 @@ def mesma_origem(origem: str, request: Request) -> bool:
 async def verificar_origem(request: Request, call_next):
     origem = request.headers.get("origin")
     if request.method in METODOS_QUE_ALTERAM and origem is not None and not mesma_origem(origem, request):
-        return JSONResponse(status_code=403, content={"detail": "Requisição bloqueada: origem não permitida."})
+        # Middleware não passa pelos handlers de app/erros.py: monta a resposta no mesmo formato diretamente.
+        return resposta_de_erro(403, "Requisição bloqueada: origem não permitida.", codigo="origem_nao_permitida")
     return await call_next(request)

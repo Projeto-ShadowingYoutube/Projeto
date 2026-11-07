@@ -82,7 +82,8 @@ def test_senha_errada_e_email_inexistente_tem_a_mesma_resposta(client):
     email_inexistente = entrar(client, email="ninguem@exemplo.com")
 
     assert senha_errada.status_code == email_inexistente.status_code == 401
-    assert senha_errada.json() == email_inexistente.json() == {"detail": "E-mail ou senha incorretos."}
+    esperado = {"detail": "E-mail ou senha incorretos.", "codigo": "nao_autenticado"}
+    assert senha_errada.json() == email_inexistente.json() == esperado
     assert "set-cookie" not in senha_errada.headers
 
 

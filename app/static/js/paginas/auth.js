@@ -14,9 +14,10 @@ function iniciarFormulario(raiz, enviar) {
     const erro = raiz.querySelector(".auth-erro");
     const botao = formulario.querySelector("button[type=submit]");
 
-    // Foco no e-mail aqui, e não com o atributo autofocus: em conteúdo inserido pelo HTMX, o navegador aplica o
-    // autofocus só no quadro seguinte, e ele pode roubar o foco de quem já começou a digitar na senha.
-    formulario.querySelector("input")?.focus();
+    // Foco no e-mail só se a pessoa ainda não clicou em nenhum campo. Esta função roda alguns milissegundos depois
+    // de o formulário aparecer (o HTMX inicia a página após o "settle"); focar sempre roubaria o foco de quem já
+    // começou a digitar (por isso também não usamos o atributo autofocus).
+    if (!formulario.contains(document.activeElement)) formulario.querySelector("input")?.focus();
 
     formulario.addEventListener("submit", async (evento) => {
         evento.preventDefault();
@@ -31,6 +32,7 @@ function iniciarFormulario(raiz, enviar) {
             botao.disabled = false;
         }
     });
+    botao.disabled = false; // o envio agora é pelo JS (o template deixa o botão desabilitado até aqui)
 }
 
 registrarPagina("login", (raiz) => {

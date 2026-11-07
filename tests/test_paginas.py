@@ -73,3 +73,13 @@ def test_proximo_e_escapado_no_html(client):
 
     assert "<script>alert(1)</script>" not in miolo.text
     assert "&lt;script&gt;" in miolo.text or "%3Cscript%3E" in miolo.text
+
+
+@pytest.mark.parametrize("caminho", ["/login", "/cadastro"])
+def test_formulario_com_senha_nunca_envia_pela_url(client, caminho):
+    """Se o formulário fosse enviado antes do JS assumir (ou sem JS), o padrão do navegador é GET: a senha iria
+    para a URL (histórico, logs do servidor). method="post" impede isso, e o botão só habilita com o JS pronto."""
+    miolo = client.get(caminho, headers=HTMX).text
+
+    assert '<form class="input-card auth-form" method="post">' in miolo
+    assert 'type="submit"' in miolo and " disabled>" in miolo

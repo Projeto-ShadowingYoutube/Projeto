@@ -11,7 +11,9 @@ def test_post_de_outro_site_e_recusado_antes_de_chegar_na_rota(entrar_como, orig
     resposta = ana.post("/api/decks", json={"nome": "Criado por outro site"}, headers={"Origin": origem})
 
     assert resposta.status_code == 403
-    assert resposta.json() == {"detail": "Requisição bloqueada: origem não permitida."}
+    assert resposta.json() == {
+        "detail": "Requisição bloqueada: origem não permitida.", "codigo": "origem_nao_permitida",
+    }
     assert ana.get("/api/decks").json() == []  # nada foi criado
 
 
