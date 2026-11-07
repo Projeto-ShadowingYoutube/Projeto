@@ -86,6 +86,31 @@ registrarPagina("estudo", (raiz) => {
         );
     }
 
+    // Com legenda manual: o modal de sempre (tipo e título). Sem legenda manual (B10): uma tela própria explicando o
+    // que muda com a legenda automática, com as opções de estudar mesmo assim ou escolher outro vídeo. O aviso de
+    // "último token" (B11) aparece nas duas.
+    function mostrarAvisoDaLegenda(dados) {
+        const textoUltimoToken = dados.tokens_restantes === 0 && dados.renova_em
+            ? `Este foi seu último token. Novos tokens em ${formatarTempo(dados.renova_em)}.`
+            : null;
+        const preencherUltimoToken = (id) => {
+            const aviso = elemento(id);
+            aviso.hidden = !textoUltimoToken;
+            if (textoUltimoToken) aviso.textContent = textoUltimoToken;
+        };
+
+        if (dados.legenda_manual) {
+            elemento("textologs").textContent = dados.aviso_legenda;
+            preencherUltimoToken("avisoUltimoToken");
+            elemento("modalLegendaTitulo").style.display = "flex";
+            return;
+        }
+        elemento("idiomaLegendaAutomatica").textContent = dados.idioma_legenda;
+        elemento("tituloLegendaAutomatica").textContent = dados.titulo_video;
+        preencherUltimoToken("avisoUltimoTokenAutomatica");
+        elemento("modalLegendaAutomatica").style.display = "flex";
+    }
+
     async function iniciarSessao(link) {
         if (!link) {
             mostrarErro("Nenhum link de vídeo foi informado.");
@@ -117,13 +142,7 @@ registrarPagina("estudo", (raiz) => {
             return;
         }
 
-        elemento("textologs").textContent = dados.aviso_legenda;
-        const ultimoToken = elemento("avisoUltimoToken");
-        ultimoToken.hidden = !(dados.tokens_restantes === 0 && dados.renova_em);
-        if (!ultimoToken.hidden) {
-            ultimoToken.textContent = `Este foi seu último token. Novos tokens em ${formatarTempo(dados.renova_em)}.`;
-        }
-        elemento("modalLegendaTitulo").style.display = "flex";
+        mostrarAvisoDaLegenda(dados);
 
         mostrarFrase(0);
         // O vídeo começa na velocidade salva do usuário (vem no HTML da página).
@@ -141,6 +160,8 @@ registrarPagina("estudo", (raiz) => {
     elemento("gravar").onclick = Gravador.alternar;
     elemento("ouvirGravacao").onclick = Gravador.reproduzir;
     elemento("botaoContinuar").onclick = () => { elemento("modalLegendaTitulo").style.display = "none"; };
+    elemento("estudarMesmoAssim").onclick = () => { elemento("modalLegendaAutomatica").style.display = "none"; };
+    elemento("escolherOutroVideo").onclick = () => navegarPara("/");
     elemento("semTokensDecks").onclick = () => navegarPara("/decks");
     elemento("semTokensInicio").onclick = () => navegarPara("/");
     elemento("semTokensTentar").onclick = () => location.reload(); // só aparece quando os tokens já renovaram

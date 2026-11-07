@@ -44,14 +44,19 @@ class FakeBloco:
 
 
 class FakeTranscript:
-    def __init__(self, blocos):
+    def __init__(self, blocos, language_code="en", is_generated=False):
         self._blocos = blocos
+        self.language_code = language_code
+        self.is_generated = is_generated
 
     def fetch(self):
         return self._blocos
 
 
 class FakeListaLegendasManual:
+    def __iter__(self):  # desde o B10, a escolha percorre a lista para ver os códigos de inglês disponíveis
+        return iter([FakeTranscript([], "en", is_generated=False)])
+
     def find_manually_created_transcript(self, idiomas):
         return FakeTranscript([
             FakeBloco("  Hello    world.  ", 0.0, 2.5),
@@ -65,13 +70,16 @@ class FakeListaLegendasManual:
 
 
 class FakeListaLegendasAutomatica:
+    def __iter__(self):
+        return iter([FakeTranscript([], "en", is_generated=True)])
+
     def find_manually_created_transcript(self, idiomas):
         raise NoTranscriptFound("abcdefghijk", ["en"], None)
 
     def find_generated_transcript(self, idiomas):
         return FakeTranscript([
             FakeBloco("Automatic caption", 10.0, 2.0),
-        ])
+        ], is_generated=True)
 
 
 class FakeYouTubeManual:
@@ -180,6 +188,9 @@ def test_api_legenda_url_invalida_retorna_400(client):
 
 def test_api_legenda_video_sem_legenda_retorna_404(client, monkeypatch):
     class ListaSemLegendas:
+        def __iter__(self):
+            return iter([])
+
         def find_manually_created_transcript(self, idiomas):
             raise NoTranscriptFound("abcdefghijk", ["en"], None)
 

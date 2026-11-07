@@ -23,6 +23,8 @@ class LegendasCompletas(BaseModel):
     legenda_manual: bool
     blocos: list[BlocoBruto]
     titulo_video: str = "Vídeo do YouTube"
+    # Caches anteriores ao B10 não guardavam o idioma: são lidas como "en" (sem invalidar, sem gastar token).
+    idioma_legenda: str = "en"
 
 
 class UltimoVideo(BaseModel):

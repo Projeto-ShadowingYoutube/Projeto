@@ -33,7 +33,7 @@ def youtube_simulado(monkeypatch):
         pedidos.append(video_id)
         if video_id.startswith("semlg"):
             raise youtube.SemLegenda(video_id)
-        return [{"text": "Hello world.", "start": 0.0, "duration": 2.0}], True
+        return [{"text": "Hello world.", "start": 0.0, "duration": 2.0}], True, "en"
 
     monkeypatch.setattr(youtube, "baixar_legendas", baixar_legendas)
     monkeypatch.setattr(youtube, "buscar_titulo", lambda video_id: "Vídeo simulado")

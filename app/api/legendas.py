@@ -97,6 +97,7 @@ def obter_legendas(url: str, usuario: Usuario = Depends(usuario_atual)):
         "tokens_restantes": situacao["tokens_restantes"],
         "renova_em": situacao["renova_em"],
         "legenda_manual": dados["legenda_manual"],
+        "idioma_legenda": dados.get("idioma_legenda", "en"),
         "titulo_video": dados["titulo_video"],
         "aviso_legenda": legendas.aviso(dados),
     }

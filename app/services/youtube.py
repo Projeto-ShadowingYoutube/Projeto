@@ -56,18 +56,34 @@ def buscar_titulo(video_id: str) -> str:
     return TITULO_PADRAO
 
 
-def baixar_legendas(video_id: str) -> tuple[list[dict], bool]:
-    """(blocos brutos, legenda_manual). Prefere a legenda manual em inglês; senão, a automática.
+def eh_ingles(codigo: str) -> bool:
+    """"en", "en-US", "en-GB", "en-orig"... (qualquer variante de inglês)."""
+    codigo = codigo.lower()
+    return codigo == "en" or codigo.startswith("en-")
 
-    Lança SemLegenda se não houver nenhuma.
+
+def codigos_em_ingles(lista, gerada: bool) -> list[str]:
+    """Códigos de inglês disponíveis do tipo pedido (manual ou automática), em ordem de preferência:
+    "en" primeiro, depois as variantes em ordem alfabética (ordem fixa: o mesmo vídeo sempre dá a mesma escolha)."""
+    codigos = {t.language_code for t in lista if t.is_generated == gerada and eh_ingles(t.language_code)}
+    return sorted(codigos, key=lambda codigo: (codigo.lower() != "en", codigo.lower()))
+
+
+def baixar_legendas(video_id: str) -> tuple[list[dict], bool, str]:
+    """(blocos brutos, legenda_manual, idioma). Prefere legenda MANUAL em qualquer variante de inglês ("en",
+    "en-US", "en-GB"...): escrita por uma pessoa, é mais precisa que a automática. Sem manual, usa a automática
+    em inglês. Lança SemLegenda se não houver nenhuma em inglês.
     """
     lista = YouTubeTranscriptApi(http_client=http_session).list(video_id)
-    try:
-        transcricao, manual = lista.find_manually_created_transcript(["en"]), True
-    except CouldNotRetrieveTranscript:
-        transcricao, manual = lista.find_generated_transcript(["en"]), False
+    manuais = codigos_em_ingles(lista, gerada=False)
+    if manuais:
+        transcricao, manual = lista.find_manually_created_transcript(manuais), True
+    else:
+        # Sem nenhuma automática em inglês, a própria biblioteca lança NoTranscriptFound (= SemLegenda).
+        transcricao = lista.find_generated_transcript(codigos_em_ingles(lista, gerada=True) or ["en"])
+        manual = False
     blocos = [{"text": b.text, "start": b.start, "duration": b.duration} for b in transcricao.fetch()]
-    return blocos, manual
+    return blocos, manual, transcricao.language_code
 
 
 # --- yt-dlp ---
@@ -116,7 +132,9 @@ def baixar_legenda_automatica_json3(video_id: str) -> dict | None:
     with yt_dlp.YoutubeDL(_opcoes_ytdlp(skip_download=True)) as ydl:
         info = ydl.extract_info(url_do_video(video_id), download=False)
         automaticas = info.get("automatic_captions") or {}
-        # "en-orig" é o reconhecimento de fala original; "en" pode ser uma tradução automática.
-        formatos = automaticas.get("en-orig") or automaticas.get("en") or []
+        # "en-orig" é o reconhecimento de fala original; "en" pode ser uma tradução automática. Sem os dois,
+        # qualquer outra variante de inglês ("en-US", "en-GB"...), em ordem alfabética.
+        variantes = sorted(codigo for codigo in automaticas if eh_ingles(codigo) and codigo not in ("en-orig", "en"))
+        formatos = next((automaticas[c] for c in ("en-orig", "en", *variantes) if automaticas.get(c)), [])
         url = next((f["url"] for f in formatos if f.get("ext") == "json3"), None)
         return json.loads(ydl.urlopen(url).read()) if url else None

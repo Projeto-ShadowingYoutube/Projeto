@@ -18,8 +18,11 @@ def da_cache(video_id: str) -> dict | None:
 
 def do_youtube(video_id: str) -> dict:
     """Baixa as legendas e guarda na cache. Lança youtube.SemLegenda se o vídeo não tiver legenda em inglês."""
-    blocos, manual = youtube.baixar_legendas(video_id)
-    dados = {"blocos": blocos, "legenda_manual": manual, "titulo_video": youtube.buscar_titulo(video_id)}
+    blocos, manual, idioma = youtube.baixar_legendas(video_id)
+    dados = {
+        "blocos": blocos, "legenda_manual": manual, "idioma_legenda": idioma,
+        "titulo_video": youtube.buscar_titulo(video_id),
+    }
     salvar_na_cache(video_id, dados)
     return dados
 
@@ -29,5 +32,7 @@ def frases(dados: dict) -> list[dict]:
 
 
 def aviso(dados: dict) -> str:
+    """Texto do modal de vídeo com legenda manual. Sem legenda manual, a página mostra uma tela de aviso própria
+    (templates/paginas/estudo.html, #modalLegendaAutomatica); o texto continua aqui para quem usa só a API."""
     tipo = "MANUAL" if dados["legenda_manual"] else "AUTOMÁTICA - Erros de transcrição são possíveis nesse caso."
-    return f"Tipo de legenda: {tipo} | Título: {dados['titulo_video']}"
+    return f"Tipo de legenda: {tipo} ({dados.get('idioma_legenda', 'en')}) | Título: {dados['titulo_video']}"

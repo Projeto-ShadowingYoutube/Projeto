@@ -82,6 +82,7 @@ class Legendas(BaseModel):
     tokens_restantes: int
     renova_em: int | None  # segundos até os tokens renovarem (None: nenhum gasto)
     legenda_manual: bool
+    idioma_legenda: str  # ex.: "en", "en-GB" (B10)
     titulo_video: str
     aviso_legenda: str
 

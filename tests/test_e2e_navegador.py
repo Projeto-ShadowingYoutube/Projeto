@@ -82,7 +82,7 @@ def servidor(tmp_path, monkeypatch, video_falso):
 
     # YouTube simulado: qualquer vídeo tem a legenda "Hello world." (0 a 2.5 s) e "baixa" o WebM falso.
     monkeypatch.setattr(youtube, "baixar_legendas", lambda video_id: (
-        [{"text": "Hello world.", "start": 0.0, "duration": 2.5}], True,
+        [{"text": "Hello world.", "start": 0.0, "duration": 2.5}], True, "en",
     ))
     monkeypatch.setattr(youtube, "buscar_titulo", lambda video_id: "Vídeo simulado")
     monkeypatch.setattr(youtube, "baixar_video", lambda video_id, pasta, ao_progredir: shutil.copy(
@@ -575,4 +575,41 @@ def test_controle_de_volume_ao_lado_da_velocidade_e_salvo_na_conta(servidor, nav
     expect(aba.locator("#velocidadeValor")).to_have_text("0.90x")
     _iniciar_estudos(aba)
     assert _volume_do_video(aba) == 0.6 and _velocidade_do_video(aba) == 0.9
+    contexto.close()
+
+
+def test_video_sem_legenda_manual_mostra_a_tela_de_aviso(servidor, navegador, monkeypatch):
+    """B10: só legenda automática (en-US) → tela de aviso própria; com manual → o modal de sempre."""
+    def legendas(video_id):
+        automatica = video_id.startswith("autom")
+        blocos = [{"text": "Hello world.", "start": 0.0, "duration": 2.5}]
+        return blocos, not automatica, "en-US" if automatica else "en"
+
+    monkeypatch.setattr(youtube, "baixar_legendas", legendas)
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+
+    # Sem legenda manual: a tela de aviso, com o idioma e o título; "Estudar mesmo assim" segue para o estudo.
+    aba.goto(f"{servidor}/estudo?link=https://youtu.be/autom000001")
+    expect(aba.locator("#modalLegendaAutomatica")).to_be_visible()
+    expect(aba.locator("#modalLegendaTitulo")).to_be_hidden()
+    expect(aba.locator("#idiomaLegendaAutomatica")).to_have_text("en-US")
+    expect(aba.locator("#tituloLegendaAutomatica")).to_have_text("Vídeo simulado")
+    aba.click("#estudarMesmoAssim")
+    expect(aba.locator("#modalLegendaAutomatica")).to_be_hidden()
+    expect(aba.locator("#legenda")).to_contain_text("Hello world.")
+    _iniciar_estudos(aba)
+
+    # "Escolher outro vídeo" volta para o início.
+    aba.goto(f"{servidor}/estudo?link=https://youtu.be/autom000002")
+    expect(aba.locator("#modalLegendaAutomatica")).to_be_visible()
+    aba.click("#escolherOutroVideo")
+    expect(aba).to_have_url(f"{servidor}/")
+    expect(aba.locator(".url-input")).to_be_visible()
+
+    # Com legenda manual: o modal de sempre (tipo e título), sem a tela de aviso.
+    _estudar(aba, servidor, 1)
+    expect(aba.locator("#modalLegendaTitulo")).to_be_visible()
+    expect(aba.locator("#textologs")).to_contain_text("MANUAL (en)")
+    expect(aba.locator("#modalLegendaAutomatica")).to_be_hidden()
     contexto.close()

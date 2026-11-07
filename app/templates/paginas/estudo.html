@@ -10,6 +10,28 @@
         </div>
     </div>
 
+    <!-- Vídeo SEM legenda manual (B10): no lugar do modal acima, avisa que a legenda é automática, o que isso muda,
+         e deixa a pessoa escolher. Controlado por static/js/paginas/estudo.js. -->
+    <div id="modalLegendaAutomatica" class="modal-legenda-titulo">
+        <div class="modal-legenda-titulo-content">
+            <h2 class="sem-tokens-titulo">⚠️ Este vídeo não tem legenda manual</h2>
+            <p class="sem-tokens-texto">
+                Vamos usar a legenda automática do YouTube (inglês, <strong id="idiomaLegendaAutomatica">en</strong>).
+                Ela é gerada por reconhecimento de fala, então:
+            </p>
+            <ul class="aviso-automatica-lista">
+                <li>pode ter palavras erradas ou faltando;</li>
+                <li>a divisão em frases e a pontuação são menos precisas.</li>
+            </ul>
+            <p class="sem-tokens-texto">Vídeo: <strong id="tituloLegendaAutomatica"></strong></p>
+            <p id="avisoUltimoTokenAutomatica" class="aviso-tokens" hidden></p>
+            <div class="sem-tokens-botoes">
+                <button type="button" id="estudarMesmoAssim" class="btn-sem-tokens btn-sem-tokens-principal">Estudar mesmo assim</button>
+                <button type="button" id="escolherOutroVideo" class="btn-sem-tokens">Escolher outro vídeo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Tokens acabaram (429 "limite_de_tokens"): quanto falta para renovar e o que dá para fazer enquanto isso.
          Controlado por static/js/paginas/estudo.js. -->
     <div id="modalSemTokens" class="modal-legenda-titulo">

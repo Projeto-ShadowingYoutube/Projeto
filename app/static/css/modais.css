@@ -301,3 +301,10 @@
 }
 .btn-sem-tokens[hidden] { display: none; }
 .btn-sem-tokens-principal { background: linear-gradient(90deg, #818cf8, #c084fc); color: #fff; border: none; }
+
+/* Vídeo sem legenda manual (B10): reaproveita o visual do modal de tokens (.sem-tokens-*). */
+.aviso-automatica-lista {
+    margin: 0 0 16px 0; padding-left: 22px; text-align: left;
+    color: var(--text-sub); line-height: 1.6;
+}
+#idiomaLegendaAutomatica { white-space: nowrap; } /* "en-US" não quebra no hífen */

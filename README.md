@@ -243,6 +243,33 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 Decks antigos, `python -m app.migrar` para com `ERRO: Existem N Deck(s) ... sem dono` **sem alterar nada**. Decida
 o que fazer com eles (associar a um usuário ou apagar) e rode o comando de novo. Faça backup antes.
 
+## 📝 Legendas (manuais e automáticas, em qualquer variante de inglês)
+
+O app estuda vídeos com legenda em **inglês**, em qualquer variante: `en`, `en-US`, `en-GB`, `en-CA`... (código
+`en` ou começando com `en-`; ver `app/services/youtube.py`).
+
+**Qual legenda é usada** (em ordem):
+1. **Manual** (escrita por uma pessoa), em qualquer variante de inglês: `en` primeiro, depois as variantes em ordem
+   alfabética. Uma manual `en-GB` vence uma automática `en`, porque é mais precisa.
+2. Sem manual: **automática** (gerada pelo YouTube), na mesma ordem.
+3. Nenhuma em inglês: erro 404 "O vídeo não possui nenhuma legenda em inglês disponível."
+
+A ordem é fixa, então o mesmo vídeo sempre dá a mesma escolha. A resposta de `GET /api/legendas` informa
+`legenda_manual` (true/false) e `idioma_legenda` (ex.: `"en-GB"`). O idioma também fica na cache. Caches antigas,
+sem esse campo, são lidas como `"en"`, sem invalidar nada e sem gastar token.
+
+**Vídeo sem legenda manual:** o estudo mostra a tela **"⚠️ Este vídeo não tem legenda manual"**. Ela explica que a
+legenda automática pode ter palavras erradas ou faltando e que a divisão em frases e a pontuação são menos
+precisas, e mostra o idioma e o título. Os botões são **Estudar mesmo assim** e **Escolher outro vídeo** (volta ao
+início). O token já foi gasto quando a tela aparece, porque a legenda já veio do YouTube. Com legenda manual,
+aparece o aviso de sempre (tipo, idioma e título).
+
+**Karaokê** (tempo de cada palavra): usa a legenda automática do YouTube em `en-orig` (o reconhecimento de fala
+original), senão `en`, senão qualquer outra variante `en-*` (ordem alfabética).
+
+**Testes:** `tests/test_legendas_ingles.py` (escolha da legenda, karaokê, cache antiga) e o teste de navegador
+`test_video_sem_legenda_manual_mostra_a_tela_de_aviso`.
+
 ## 🎟️ Tokens (limite de vídeos novos por conta)
 
 Buscar as legendas de um vídeo no YouTube custa: muitas consultas seguidas fazem o YouTube bloquear o servidor.
@@ -476,7 +503,7 @@ app/
 ├── services/         # regras de negócio, sem FastAPI (testáveis isoladamente)
 │   ├── auth.py         hash de senha (Argon2id), contas e sessões
 │   ├── configuracoes.py padrões e salvamento das configurações de estudo
-│   ├── youtube.py      tudo o que fala com o YouTube (legendas, título, download, legenda automática)
+│   ├── youtube.py      tudo o que fala com o YouTube (legendas em qualquer variante de inglês, título, download, legenda automática)
 │   ├── legendas.py     legendas da cache ou do YouTube
 │   ├── cache_legendas.py
 │   ├── frases.py       reagrupa os blocos do YouTube em frases e estima o tempo das palavras
