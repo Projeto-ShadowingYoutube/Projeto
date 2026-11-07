@@ -28,8 +28,9 @@ class AlteracaoConfiguracoes(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     velocidade: float | None = Field(default=None, ge=VELOCIDADE_MINIMA, le=VELOCIDADE_MAXIMA)
+    volume: float | None = Field(default=None, ge=0, le=1)  # 0 = mudo, 1 = 100%
 
-    @field_validator("velocidade")
+    @field_validator("velocidade", "volume")
     @classmethod
     def nao_nulo(cls, valor):
         # "Opcional" aqui é "pode não ser enviado", não "pode ser null" (o validador só roda se o campo vier).
@@ -93,6 +94,7 @@ class Tokens(BaseModel):
 
 class ConfiguracoesDeEstudo(BaseModel):
     velocidade: float
+    volume: float
 
 
 class ResumoDeck(BaseModel):

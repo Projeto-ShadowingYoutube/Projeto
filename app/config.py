@@ -49,6 +49,8 @@ MAX_VIDEOS_GUARDADOS = 5
 VELOCIDADE_MINIMA = 0.25
 VELOCIDADE_MAXIMA = 1.5
 VELOCIDADE_PADRAO = 1.0
+# Volume do vídeo (0 = mudo, 1 = 100%), ao lado da velocidade na barra do player. Também fica salvo por usuário.
+VOLUME_PADRAO = 1.0
 
 # Waveform (B9): a onda de cada frase é desenhada a partir de N "peaks" (0 a 1), calculados uma vez e guardados no
 # banco. 400 ≈ o máximo de barras visíveis no painel (barra de 2 px + espaço de 1 px). Mudou o cálculo? Aumente a

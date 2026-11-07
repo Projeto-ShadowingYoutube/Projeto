@@ -79,9 +79,11 @@ def inicio(request: Request, usuario: Usuario | None = Depends(usuario_opcional)
     return _pagina_protegida(request, usuario, "inicio.html")
 
 
-def _velocidade(session: Session, usuario: Usuario | None) -> float:
-    """Velocidade salva do usuário, entregue já no HTML: o vídeo começa nela, sem passar por 1x."""
-    return configuracoes.obter(session, usuario.id)["velocidade"] if usuario else config.VELOCIDADE_PADRAO
+def _preferencias_do_player(session: Session, usuario: Usuario | None) -> dict:
+    """Velocidade e volume salvos do usuário, entregues já no HTML: o vídeo começa neles (sem passar por 1x/100%)."""
+    if usuario is None:
+        return dict(configuracoes.PADROES)
+    return configuracoes.obter(session, usuario.id)
 
 
 @router.get("/estudo")
@@ -89,7 +91,7 @@ def estudo(
     request: Request, link: str = "", usuario: Usuario | None = Depends(usuario_opcional),
     session: Session = Depends(get_session),
 ):
-    return _pagina_protegida(request, usuario, "estudo.html", link=link, velocidade=_velocidade(session, usuario))
+    return _pagina_protegida(request, usuario, "estudo.html", link=link, **_preferencias_do_player(session, usuario))
 
 
 @router.get("/decks")
@@ -103,7 +105,7 @@ def revisao(
     session: Session = Depends(get_session),
 ):
     return _pagina_protegida(
-        request, usuario, "revisao.html", deck_id=deck_id, velocidade=_velocidade(session, usuario),
+        request, usuario, "revisao.html", deck_id=deck_id, **_preferencias_do_player(session, usuario),
     )
 
 

@@ -20,6 +20,9 @@ export const Player = (() => {
     let loopId = null;
     let aoAtualizarTempo = null;
     let aoMudarVelocidade = null; // avisado só quando o USUÁRIO muda a velocidade (a página salva a preferência)
+    let volume = 1;               // 0 (mudo) a 1 (100%)
+    let volumeAntesDoMudo = 1;    // para onde o volume volta ao desligar o mudo
+    let aoMudarVolume = null;     // avisado só quando o USUÁRIO muda o volume (a página salva a preferência)
 
     const elemento = (id) => document.getElementById(id);
     const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,10 +89,17 @@ export const Player = (() => {
         return Number.isFinite(valor) && valor > 0 ? Math.min(maxima, Math.max(minima, valor)) : 1;
     }
 
-    // opcoes.velocidade: velocidade salva do usuário (B8). Sem ela, começa em 1x, como sempre.
+    // Volume inicial entre 0 e 1; sem um valor válido, 100%.
+    function volumeInicial(valor) {
+        return Number.isFinite(valor) ? Math.min(1, Math.max(0, valor)) : 1;
+    }
+
+    // opcoes.velocidade / opcoes.volume: preferências salvas do usuário (B8 / B9.2). Sem elas, 1x e 100%.
     async function criar(elementoId, videoId, opcoes = {}) {
         destruir();
         velocidade = velocidadeInicial(opcoes.velocidade);
+        volume = volumeInicial(opcoes.volume);
+        volumeAntesDoMudo = volume || 1;
         video = document.createElement("video");
         video.playsInline = true;
         video.preload = "auto";
@@ -98,6 +108,7 @@ export const Player = (() => {
         video.setAttribute("controlsList", "nodownload noplaybackrate noremoteplayback");
         video.oncontextmenu = (evento) => evento.preventDefault();
         video.onplay = video.onpause = atualizarControles;
+        video.volume = volume;
         elemento(elementoId).replaceChildren(video);
         conectarControles();
         return carregarVideo(videoId);
@@ -109,6 +120,12 @@ export const Player = (() => {
         elemento("bloqueioPlayer").onclick = alternarPausa;
         slider.oninput = () => mudarVelocidadePeloUsuario(Number(slider.value));
         slider.ondblclick = () => mudarVelocidadePeloUsuario(1);
+        const sliderVolume = elemento("volume");
+        if (sliderVolume) {
+            sliderVolume.oninput = () => mudarVolumePeloUsuario(Number(sliderVolume.value));
+            sliderVolume.ondblclick = () => mudarVolumePeloUsuario(1);
+            elemento("mudo").onclick = alternarMudo;
+        }
         atualizarControles();
     }
 
@@ -128,6 +145,22 @@ export const Player = (() => {
         }
         const valor = elemento("velocidadeValor");
         if (valor) valor.textContent = `${velocidade.toFixed(2)}x`;
+        atualizarControlesDeVolume();
+    }
+
+    function atualizarControlesDeVolume() {
+        const slider = elemento("volume");
+        if (!slider) return;
+        slider.disabled = !liberado;
+        slider.value = volume;
+        slider.style.setProperty("--progresso", `${volume * 100}%`);
+        elemento("volumeValor").textContent = `${Math.round(volume * 100)}%`;
+        const mudo = elemento("mudo");
+        mudo.disabled = !liberado;
+        mudo.title = volume === 0 ? "Ativar o som" : "Silenciar";
+        mudo.setAttribute("aria-label", mudo.title);
+        // Ícone conforme o nível: sem som, baixo, alto.
+        mudo.querySelector("i").className = `fa ${volume === 0 ? "fa-volume-off" : volume < 0.5 ? "fa-volume-down" : "fa-volume-up"}`;
     }
 
     function destruir() {
@@ -143,6 +176,7 @@ export const Player = (() => {
         liberado = false;
         suspenso = false;
         velocidade = 1;
+        volume = 1;
     }
 
     function tocar() {
@@ -202,6 +236,24 @@ export const Player = (() => {
         aoMudarVelocidade?.(nova);
     }
 
+    function definirVolume(novo) {
+        volume = novo;
+        if (video) video.volume = novo;
+        atualizarControles();
+    }
+
+    function mudarVolumePeloUsuario(novo) {
+        if (novo > 0) volumeAntesDoMudo = novo;
+        definirVolume(novo);
+        aoMudarVolume?.(novo);
+    }
+
+    // Clique no alto-falante: silencia, ou volta ao volume de antes do mudo.
+    function alternarMudo() {
+        if (!liberado) return;
+        mudarVolumePeloUsuario(volume > 0 ? 0 : volumeAntesDoMudo || 1);
+    }
+
     function liberar() {
         liberado = true;
         atualizarControles();
@@ -241,6 +293,9 @@ export const Player = (() => {
         aoAtualizarTempo: (callback) => { aoAtualizarTempo = callback; },
         // Recebe a nova velocidade quando o usuário mexe no slider (ou dá duplo clique para voltar a 1x).
         aoMudarVelocidade: (callback) => { aoMudarVelocidade = callback; },
+        // Recebe o novo volume (0 a 1) quando o usuário mexe no controle de volume ou no botão de mudo.
+        aoMudarVolume: (callback) => { aoMudarVolume = callback; },
+        volume: () => volume,
         velocidade: () => velocidade,
     };
 })();

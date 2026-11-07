@@ -326,17 +326,24 @@ navegador e sobrevivem a F5, logout e reinício do servidor.
 | Preferência | Como muda | Faixa | Padrão |
 |---|---|---|---|
 | **Velocidade do vídeo** | Slider da barra do player (duplo clique volta para 1x), no estudo e na revisão | 0.25x a 1.5x | 1x |
+| **Volume do vídeo** | Controle ao lado da velocidade: slider (duplo clique volta para 100%) e o alto-falante, que liga e desliga o mudo | 0% a 100% | 100% |
 
-- **Na tela:** o estudo e a revisão já abrem na velocidade salva (ela vem no HTML da página, `data-velocidade`). O
-  vídeo, o slider e o timer do gravador começam nela, sem passar por 1x. Ao mexer no slider, a mudança vale na hora
-  e é salva cerca de meio segundo depois de parar (um arraste inteiro = um salvamento). Sair da página logo depois
+- **Na tela:** o estudo e a revisão já abrem na velocidade e no volume salvos (eles vêm no HTML da página,
+  `data-velocidade` e `data-volume`). O vídeo, os controles e o timer do gravador começam neles. Ao mexer num
+  controle, a mudança vale na hora e é salva cerca de meio segundo depois de parar (um arraste inteiro = um
+  salvamento; mexer na velocidade e no volume em seguida = um salvamento com os dois). Sair da página logo depois
   também salva.
-- **API:** `GET /api/configuracoes` → `{"velocidade": 1.0}` (os padrões, se a pessoa nunca salvou nada).
-  `PATCH /api/configuracoes` com `{"velocidade": 0.75}` altera **só os campos enviados** e devolve todas as
-  configurações. Valor fora da faixa, `null` ou campo desconhecido → 422 (veja o formato dos erros abaixo).
+- **Volume:** o ícone acompanha o nível (sem som, baixo, alto). Clicar nele silencia; clicar de novo volta ao volume
+  de antes. Os dois controles ficam travados até "Iniciar Estudos". O volume é só o do vídeo: ouvir a própria
+  gravação não é afetado. Em janelas mais estreitas, velocidade e volume descem juntos para uma segunda linha da
+  barra.
+- **API:** `GET /api/configuracoes` → `{"velocidade": 1.0, "volume": 1.0}` (os padrões, se a pessoa nunca salvou
+  nada). `PATCH /api/configuracoes` com `{"volume": 0.4}` (ou `velocidade`, ou os dois) altera **só os campos
+  enviados** e devolve todas as configurações. Valor fora da faixa, `null` ou campo desconhecido → 422 (veja o formato dos erros abaixo).
 - **Banco:** tabela `configuracaoestudo`, 1:1 com `usuario` (`usuario_id` é a chave primária, então há no máximo uma
   linha por usuário). A linha nasce no primeiro salvamento; até lá, valem os padrões
-  (`app/services/configuracoes.py`). Preferência nova = uma coluna com valor padrão, sem migração de dados.
+  (`app/services/configuracoes.py`). Preferência nova = uma coluna com valor padrão, sem migração de dados. Foi
+  assim com o volume (migração `0006`): as linhas que já existiam ganharam volume 100% sozinhas.
 - **Tolerância temporal** (o critério de "no ritmo" do gravador, 15%) continua fixa no código
   (`TOLERANCIA_RITMO` em `static/js/componentes/gravador.js`), por decisão do projeto.
 

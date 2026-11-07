@@ -6,7 +6,7 @@ from pydantic import NaiveDatetime
 from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
-from app.config import VELOCIDADE_PADRAO
+from app.config import VELOCIDADE_PADRAO, VOLUME_PADRAO
 
 FUSO = ZoneInfo("America/Sao_Paulo")
 
@@ -41,6 +41,7 @@ class ConfiguracaoEstudo(SQLModel, table=True):
     A linha só é criada quando o usuário salva algo; até lá, valem os padrões (services/configuracoes.py)."""
     usuario_id: int = Field(foreign_key="usuario.id", primary_key=True)
     velocidade: float = Field(default=VELOCIDADE_PADRAO)  # velocidade preferida do vídeo
+    volume: float = Field(default=VOLUME_PADRAO)  # 0 (mudo) a 1 (100%)
     data_atualizacao: NaiveDatetime = Field(default_factory=agora)
 
 

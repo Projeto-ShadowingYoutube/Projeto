@@ -74,7 +74,7 @@ main {
 }
 #avisoPlayer[hidden] { display: none; }
 
-/* Barra do player: transporte (anterior / play-pausa / próxima + contador) à esquerda, velocidade à direita. */
+/* Barra do player: transporte (anterior / play-pausa / próxima + contador) à esquerda; velocidade e volume à direita. */
 #barraPlayer {
     margin-top: 12px; padding: 8px 14px;
     display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
@@ -130,26 +130,57 @@ main {
     display: flex; align-items: center; gap: 10px; margin: 0;
     color: var(--text-sub); cursor: pointer;
 }
-#velocidadeValor {
+#velocidadeValor, #volumeValor {
     min-width: 48px; text-align: right; font-weight: bold;
     color: var(--text-main); font-variant-numeric: tabular-nums;
 }
 
-/* Slider de velocidade: trilha preenchida até o valor (--progresso, definida pelo player.js). */
-#velocidade {
+/* Velocidade e volume juntos, à direita da barra. */
+.grupo-ajustes { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+/* Volume: na barra fica só o alto-falante, com o mesmo visual do ícone de velocidade (o slider inteiro não cabe na
+   mesma linha: em 1280 px sobram ~60 px). O slider e o valor aparecem numa caixa logo acima, ao passar o mouse ou
+   focar pelo teclado, com o mesmo visual do slider de velocidade. O ícone é um botão (clique = mudo), sem aparência
+   de botão. */
+.controle-volume { position: relative; display: flex; align-items: center; color: var(--text-sub); }
+.volume-flutuante {
+    position: absolute; z-index: 20;
+    bottom: 100%; right: -14px; /* alinhada à direita do ícone: cresce para a esquerda, sem sair da barra */
+    padding-bottom: 12px; /* área invisível: o mouse vai do ícone até a caixa sem ela sumir */
+    visibility: hidden; opacity: 0; transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+.controle-volume:hover .volume-flutuante,
+.controle-volume:focus-within .volume-flutuante { visibility: visible; opacity: 1; }
+.volume-caixa {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 12px; white-space: nowrap;
+    background: var(--popup-bg); border: 1px solid var(--popup-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.volume-caixa #volumeValor { color: var(--popup-text); }
+.btn-mudo {
+    display: inline-flex; align-items: center;
+    width: 1em;            /* largura fixa: os 3 ícones (sem som, baixo, alto) têm larguras diferentes */
+    padding: 0; margin: 0; border: none; background: none;
+    font: inherit; color: inherit; line-height: 1; cursor: pointer;
+}
+.btn-mudo:disabled { cursor: not-allowed; } /* como o ícone de velocidade: não fica apagado antes de iniciar */
+.btn-mudo:focus-visible { outline: 2px solid #a78bfa; outline-offset: 3px; border-radius: 3px; } /* só no teclado */
+
+/* Sliders de velocidade e volume: trilha preenchida até o valor (--progresso, definida pelo player.js). */
+#velocidade, #volume {
     -webkit-appearance: none; appearance: none;
     width: 150px; height: 6px; margin: 0; border-radius: 999px; cursor: pointer;
     background: linear-gradient(90deg, #818cf8, #c084fc) 0 / var(--progresso, 50%) 100% no-repeat,
                 rgba(128, 128, 128, 0.3);
 }
-#velocidade:disabled { opacity: 0.4; cursor: not-allowed; }
-#velocidade::-webkit-slider-thumb {
+#velocidade:disabled, #volume:disabled { opacity: 0.4; cursor: not-allowed; }
+#velocidade::-webkit-slider-thumb, #volume::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 16px; height: 16px; border-radius: 50%;
     background: #fff; border: 3px solid #a78bfa;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
-#velocidade::-moz-range-thumb {
+#velocidade::-moz-range-thumb, #volume::-moz-range-thumb {
     width: 12px; height: 12px; border-radius: 50%;
     background: #fff; border: 3px solid #a78bfa;
 }

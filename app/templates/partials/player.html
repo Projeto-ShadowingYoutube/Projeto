@@ -30,9 +30,26 @@
         {% endif %}
     </div>
 
-    <label class="controle-velocidade" title="Velocidade do vídeo (duplo clique volta para 1x)">
-        <i class="fa fa-tachometer"></i>
-        <input type="range" id="velocidade" min="0.25" max="1.5" step="0.05" value="1" disabled>
-        <output id="velocidadeValor" for="velocidade">1.00x</output>
-    </label>
+    <div class="grupo-ajustes">
+        <label class="controle-velocidade" title="Velocidade do vídeo (duplo clique volta para 1x)">
+            <i class="fa fa-tachometer"></i>
+            <input type="range" id="velocidade" min="0.25" max="1.5" step="0.05" value="1" disabled>
+            <output id="velocidadeValor" for="velocidade">1.00x</output>
+        </label>
+
+        <!-- Volume do vídeo: na barra fica só o alto-falante (cabe na mesma linha do resto). Ao passar o mouse ou focar
+             pelo teclado, o controle aparece numa caixa logo acima. Clique no alto-falante: liga/desliga o mudo;
+             duplo clique no controle: volta para 100%. -->
+        <div class="controle-volume">
+            <button type="button" id="mudo" class="btn-mudo" title="Silenciar" aria-label="Silenciar" disabled>
+                <i class="fa fa-volume-up"></i>
+            </button>
+            <div class="volume-flutuante" role="group" aria-label="Volume do vídeo">
+                <div class="volume-caixa" title="Volume do vídeo (duplo clique volta para 100%)">
+                    <input type="range" id="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" disabled>
+                    <output id="volumeValor" for="volume">100%</output>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

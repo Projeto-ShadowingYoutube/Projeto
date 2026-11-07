@@ -338,7 +338,7 @@ def test_velocidade_funciona_como_antes_e_fica_salva_na_conta(servidor, navegado
         expect(aba.locator("#velocidadeValor")).to_have_text("0.75x")
         assert _velocidade_do_video(aba) == 0.75
         expect(aba.locator("#timerTexto")).to_have_text("0.0s / 3.3s")  # 2.5 s a 0.75x
-    assert salvo.value.json() == {"velocidade": 0.75}
+    assert salvo.value.json()["velocidade"] == 0.75
     aba.wait_for_timeout(700)
     assert len(salvamentos) == 1  # um arraste inteiro = um salvamento (o último valor)
 
@@ -355,7 +355,7 @@ def test_velocidade_funciona_como_antes_e_fica_salva_na_conta(servidor, navegado
         aba.dblclick("#velocidade")
     expect(aba.locator("#velocidadeValor")).to_have_text("1.00x")
     assert _velocidade_do_video(aba) == 1
-    assert aba.request.get(f"{servidor}/api/configuracoes").json() == {"velocidade": 1.0}
+    assert aba.request.get(f"{servidor}/api/configuracoes").json()["velocidade"] == 1.0
 
     # Sair da página logo depois de mexer (antes do atraso de 500 ms) não perde a mudança.
     _mover_slider(aba, 1.25)
@@ -363,6 +363,16 @@ def test_velocidade_funciona_como_antes_e_fica_salva_na_conta(servidor, navegado
     expect(aba.locator(".dashboard-tr-deck")).to_have_count(1)
     _esperar_velocidade_salva(aba, servidor, 1.25)
     contexto.close()
+
+
+def _barra_do_player_numa_linha(aba):
+    """Pedido do usuário (B9.2): a barra do player cabe numa linha só em 1280 px. Compara o centro vertical dos
+    PRÓPRIOS controles (um grupo que quebra por dentro continua centralizado). O mais largo é o do estudo, que tem
+    Anterior / Próxima / contador; na revisão esses botões não existem."""
+    aba.set_viewport_size({"width": 1280, "height": 900})
+    centros = aba.evaluate("""() => ['#pausar', '.controle-velocidade', '#mudo'].map(s => {
+        const r = document.querySelector(s).getBoundingClientRect(); return Math.round(r.top + r.height / 2); })""")
+    assert max(centros) - min(centros) <= 3, f"barra do player quebrou em mais de uma linha: centros {centros}"
 
 
 def _estudar(aba, base, numero):
@@ -382,6 +392,7 @@ def test_estudo_abre_na_velocidade_salva_e_avisa_quando_os_tokens_acabam(servido
     expect(aba.locator("#token-count")).to_have_text("1")
     aba.click("#botaoContinuar")
     expect(aba.locator("#legenda")).to_contain_text("Hello world.")
+    _barra_do_player_numa_linha(aba)  # o estudo tem a barra mais larga (Anterior / Próxima / contador)
     expect(aba.locator("#velocidadeValor")).to_have_text("0.75x")
     _iniciar_estudos(aba)
     assert _velocidade_do_video(aba) == 0.75
@@ -468,4 +479,100 @@ def test_onda_vem_pronta_do_servidor_e_clicar_nela_leva_o_video_ao_ponto(servido
         aba.reload()
     assert segunda.value.json()["cache"] is True
     assert segunda.value.json()["peaks"] == onda["peaks"]
+    contexto.close()
+
+
+def _mover_volume(aba, valor):
+    aba.eval_on_selector(
+        "#volume", "(s, v) => { s.value = v; s.dispatchEvent(new Event('input', {bubbles: true})); }", str(valor),
+    )
+
+
+def _volume_do_video(aba):
+    return round(aba.eval_on_selector("#player video", "v => v.volume"), 2)
+
+
+def _icone_do_volume(aba):
+    return aba.eval_on_selector("#mudo i", "i => i.className")
+
+
+def _aparencia(aba, seletor):
+    """Tamanho e estilo de um elemento, para comparar o visual dos controles. Espera as fontes carregarem: os ícones
+    são da fonte Font Awesome (CDN), e antes dela chegar o navegador mostra um caractere provisório mais estreito."""
+    aba.evaluate("() => document.fonts.ready.then(() => true)")
+    return aba.eval_on_selector(seletor, """e => { const r = e.getBoundingClientRect(), c = getComputedStyle(e);
+        return {largura: Math.round(r.width), altura: Math.round(r.height), fonte: c.fontSize, cor: c.color,
+                fundo: c.backgroundColor, opacidade: c.opacity}; }""")
+
+
+def test_controle_de_volume_ao_lado_da_velocidade_e_salvo_na_conta(servidor, navegador):
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+    aba.goto(f"{servidor}/decks")
+    _criar_deck_pela_tela(aba, "Volume")
+    deck_id = int(_linha(aba, "Volume").get_attribute("data-id"))
+    _salvar_card(aba, servidor, deck_id, "Volume test")
+    aba.goto(f"{servidor}/decks/{deck_id}/revisao")
+
+    # Fica na barra do player, logo depois da velocidade, e travado até "Iniciar Estudos" (como a velocidade).
+    assert aba.eval_on_selector(".grupo-ajustes", "g => [...g.children].map(c => c.className)") == [
+        "controle-velocidade", "controle-volume",
+    ]
+    # Na barra fica só o alto-falante; o slider aparece numa caixa acima ao passar o mouse (verificado mais abaixo).
+    _barra_do_player_numa_linha(aba)
+    expect(aba.locator(".volume-flutuante")).to_be_hidden()
+    expect(aba.locator("#volume")).to_be_disabled()
+    expect(aba.locator("#mudo")).to_be_disabled()
+    # Mesmo visual da velocidade (pedido do usuário): ícone, barra e valor iguais, travado ou liberado.
+    for _ in ("travado", "liberado"):
+        assert _aparencia(aba, "#mudo") == _aparencia(aba, ".controle-velocidade > i")
+        assert _aparencia(aba, "#volume") == _aparencia(aba, "#velocidade")
+        assert _aparencia(aba, "#volumeValor") == _aparencia(aba, "#velocidadeValor")
+        if _ == "travado":
+            _iniciar_estudos(aba)
+    # Depois de "Iniciar Estudos" (antes, a proteção do player cobre a barra): a caixa aparece ao passar o mouse.
+    aba.hover("#mudo")
+    expect(aba.locator(".volume-flutuante")).to_be_visible()
+    caixa, painel = aba.locator(".volume-flutuante").bounding_box(), aba.locator("#painelPrincipal").bounding_box()
+    assert painel["x"] <= caixa["x"] and caixa["x"] + caixa["width"] <= painel["x"] + painel["width"]
+    aba.mouse.move(0, 0)
+    expect(aba.locator(".volume-flutuante")).to_be_hidden()
+    expect(aba.locator("#volume")).to_be_enabled()
+    expect(aba.locator("#volumeValor")).to_have_text("100%")
+    assert _volume_do_video(aba) == 1 and _icone_do_volume(aba) == "fa fa-volume-up"
+
+    # Arrastar muda o volume do vídeo na hora (rótulo e ícone acompanham) e salva na conta.
+    with aba.expect_response(lambda r: _eh_salvamento(r.request)) as salvo:
+        _mover_volume(aba, 0.3)
+        expect(aba.locator("#volumeValor")).to_have_text("30%")
+        assert _volume_do_video(aba) == 0.3 and _icone_do_volume(aba) == "fa fa-volume-down"
+    assert salvo.value.json() == {"velocidade": 1.0, "volume": 0.3}
+
+    # Clique no alto-falante: mudo; outro clique: volta para onde estava.
+    aba.click("#mudo")
+    expect(aba.locator("#volumeValor")).to_have_text("0%")
+    assert _volume_do_video(aba) == 0 and _icone_do_volume(aba) == "fa fa-volume-off"
+    expect(aba.locator("#mudo")).to_have_attribute("title", "Ativar o som")
+    aba.click("#mudo")
+    expect(aba.locator("#volumeValor")).to_have_text("30%")
+    assert _volume_do_video(aba) == 0.3
+
+    # Duplo clique no controle volta para 100% (como a velocidade volta para 1x).
+    aba.hover("#mudo")
+    aba.dblclick("#volume")
+    expect(aba.locator("#volumeValor")).to_have_text("100%")
+    assert _volume_do_video(aba) == 1
+
+    # Mexer em velocidade e volume em seguida: um único salvamento com os dois.
+    with aba.expect_response(lambda r: _eh_salvamento(r.request) and "volume" in (r.request.post_data or "")) as junto:
+        _mover_slider(aba, 0.9)
+        _mover_volume(aba, 0.6)
+    assert junto.value.json() == {"velocidade": 0.9, "volume": 0.6}
+
+    # Recarregar: o volume salvo volta (vídeo, controle e rótulo), junto com a velocidade.
+    aba.reload()
+    expect(aba.locator("#volumeValor")).to_have_text("60%")
+    expect(aba.locator("#velocidadeValor")).to_have_text("0.90x")
+    _iniciar_estudos(aba)
+    assert _volume_do_video(aba) == 0.6 and _velocidade_do_video(aba) == 0.9
     contexto.close()
