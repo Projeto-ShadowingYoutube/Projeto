@@ -11,6 +11,14 @@ from app.models import Waveform
 from app.services import midia
 from app.services.waveform import calcular_peaks
 
+
+@pytest.fixture()
+def client(entrar_como):
+    """Desde o B13, as rotas de conteúdo (vídeos, onda, karaokê, avaliação, dicionário) exigem login. Esta fixture
+    troca o client destes testes por um navegador já logado; o corpo dos testes não mudou."""
+    return entrar_como("conteudo@exemplo.com")
+
+
 N = config.WAVEFORM_QUANTIDADE_PEAKS
 URL = "/api/videos/abcdefghijk/waveform"
 

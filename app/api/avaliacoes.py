@@ -2,14 +2,16 @@
 import logging
 import subprocess
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app import config
+from app.api.auth import usuario_atual
 from app.schemas import ResultadoAvaliacao
 from app.services import avaliacao, midia
 
 logger = logging.getLogger("uvicorn.error")
-router = APIRouter(prefix="/api", tags=["avaliação"])
+# Exige login (B13): estas rotas são as mais caras do servidor (YouTube, FFmpeg, Vosk, Wiktionary).
+router = APIRouter(prefix="/api", tags=["avaliação"], dependencies=[Depends(usuario_atual)])
 
 TAMANHO_MAXIMO_GRAVACAO = 10 * 1024 * 1024  # bytes
 

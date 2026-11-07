@@ -62,10 +62,10 @@ def test_409_conflito(client):
     _formato_padrao(resposta, 409, "conflito")
 
 
-def test_413_conteudo_grande_demais(client):
+def test_413_conteudo_grande_demais(ana):
     dados = {"video_id": "abcdefghijk", "inicio": "0", "fim": "2", "texto": "Hello", "duracao": "2"}
     gravacao = {"gravacao": ("g.webm", b"0" * (10 * 1024 * 1024 + 1), "audio/webm")}
-    _formato_padrao(client.post("/api/avaliacoes", data=dados, files=gravacao), 413, "conteudo_grande_demais")
+    _formato_padrao(ana.post("/api/avaliacoes", data=dados, files=gravacao), 413, "conteudo_grande_demais")
 
 
 def test_422_detail_em_texto_e_lista_de_erros_por_campo(client):
@@ -112,13 +112,13 @@ def test_429_limite_de_tokens_informa_quando_tentar_de_novo(ana, monkeypatch):
     assert resposta.headers["retry-after"] == str(corpo["tentar_novamente_em"])
 
 
-def test_502_servico_externo_indisponivel(client, monkeypatch):
+def test_502_servico_externo_indisponivel(ana, monkeypatch):
     def fora_do_ar(*args, **kwargs):
         raise dicionario.DicionarioIndisponivel
 
     monkeypatch.setattr(dicionario, "buscar", fora_do_ar)
 
-    _formato_padrao(client.get("/api/dicionario", params={"palavra": "hello"}), 502, "servico_externo_indisponivel")
+    _formato_padrao(ana.get("/api/dicionario", params={"palavra": "hello"}), 502, "servico_externo_indisponivel")
 
 
 def test_500_inesperado_nao_vaza_detalhes_e_registra_a_stack_no_log(app_de_teste, monkeypatch, caplog):
@@ -128,6 +128,7 @@ def test_500_inesperado_nao_vaza_detalhes_e_registra_a_stack_no_log(app_de_teste
     monkeypatch.setattr(dicionario, "buscar", com_bug)
     # raise_server_exceptions=False: garante que vemos a resposta que o navegador veria, e não uma exceção.
     with TestClient(app_de_teste, raise_server_exceptions=False) as cliente, caplog.at_level(logging.ERROR):
+        cliente.post("/api/auth/cadastro", json={"email": "erro@exemplo.com", "senha": "senha-forte-123"})  # B13
         resposta = cliente.get("/api/dicionario", params={"palavra": "hello"})
 
     corpo = _formato_padrao(resposta, 500, "erro_interno")

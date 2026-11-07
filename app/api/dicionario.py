@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
+from app.api.auth import usuario_atual
 from app.db import get_session
 from app.services import dicionario
 
-router = APIRouter(prefix="/api", tags=["dicionário"])
+# Exige login (B13): estas rotas são as mais caras do servidor (YouTube, FFmpeg, Vosk, Wiktionary).
+router = APIRouter(prefix="/api", tags=["dicionário"], dependencies=[Depends(usuario_atual)])
 
 
 # "def" de propósito: as consultas externas e o spaCy são bloqueantes (o FastAPI roda numa thread).

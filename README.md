@@ -189,14 +189,23 @@ O teste `tests/test_migracoes.py` falha se um modelo mudar sem a migração corr
 
 ## 🔐 Contas e login
 
-Cada pessoa tem uma conta (e-mail + senha), e **cada Deck pertence a uma conta**. As rotas de Decks e Cards exigem
-login, e ninguém vê nem altera os Decks de outra pessoa.
+Cada pessoa tem uma conta (e-mail + senha), e **cada Deck pertence a uma conta**. Ninguém vê nem altera os Decks
+de outra pessoa.
+
+**A API inteira exige login** (desde o B13). Sem sessão, toda rota `/api/...` responde 401 (`nao_autenticado`). Ficam
+abertos só: `/api/auth/*` (cadastro, login, logout, me), as páginas `/login` e `/cadastro`, os arquivos `/static` e a
+documentação `/docs`. Isso inclui as rotas mais caras do servidor: vídeo (o `/status` **inicia download** no
+YouTube), onda, áudio, karaokê (FFmpeg/Vosk), avaliação da fala e dicionário (Wiktionary). O teste
+`tests/test_protecao_api.py` percorre **todas as rotas registradas** e exige o 401. Uma rota nova criada sem
+proteção quebra o teste, a menos que seja incluída de propósito em `ROTAS_PUBLICAS`.
 
 **Na interface:**
 - **Todas as páginas exigem login**, menos `/login` e `/cadastro`. Quem abre uma página sem estar logado vai para
   `/login?proximo=<página>` e, depois de entrar, volta para ela.
 - A navbar mostra o e-mail da conta e o botão **Sair**.
-- Se a sessão vencer no meio do uso, a próxima ação leva ao login e depois de volta à mesma página.
+- Se a sessão vencer no meio do uso, a próxima ação leva ao login e depois de volta à mesma página. Isso vale
+  também para os dois caminhos que não passam pelo `api.js`: a onda (agora via `requisitarJSON`) e o arquivo do
+  vídeo (no erro do `<video>`, o player reconsulta o `/status`, que leva ao login se a sessão venceu).
 - Como funciona (`app/api/paginas.py`): sem sessão, quem abre a URL direto recebe um redirecionamento 303. Na
   navegação pelo HTMX, o servidor responde com o header `HX-Redirect`. No front, um 401 da API (`requisitarJSON`
   em `static/js/nucleo/api.js`) também leva ao login.

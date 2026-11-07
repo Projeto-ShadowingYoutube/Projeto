@@ -66,6 +66,10 @@ export const Player = (() => {
             });
         } catch (erro) {
             if (minhaCarga === carga) {
+                // O <video> não informa o status HTTP do erro. Se a sessão venceu (B13: o vídeo exige login), esta
+                // consulta passa pelo api.js e leva ao login; senão, segue a mensagem de sempre.
+                await api.videos.status(videoId).catch(() => {});
+                if (minhaCarga !== carga) return false;
                 mostrarAviso("Vídeo indisponível.");
                 mostrarErro(erro.message);
             }

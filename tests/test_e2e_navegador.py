@@ -712,3 +712,27 @@ def test_roteiro_integrado_de_outubro(servidor, navegador, monkeypatch):
     _linha(aba, "Outubro").dblclick()
     expect(aba.locator("#revisaoVazia")).to_contain_text("Tudo revisado!")
     contexto.close()
+
+
+def test_sessao_que_vence_no_estudo_leva_ao_login_pela_onda(servidor, navegador, monkeypatch):
+    """B13: a onda é buscada fora das chamadas comuns da página; com a sessão vencida, ir para a próxima frase pede
+    a onda dela, recebe 401 e leva ao login (antes, só mostraria "onda indisponível")."""
+    monkeypatch.setattr(youtube, "baixar_legendas", lambda video_id: ([
+        {"text": "Hello world.", "start": 0.0, "duration": 1.2},
+        {"text": "Second line here.", "start": 1.3, "duration": 1.2},
+    ], True, "en"))
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+    _estudar(aba, servidor, 1)
+    aba.click("#botaoContinuar")
+    expect(aba.locator("#contadorFrase")).to_have_text("1 / 2")
+    _iniciar_estudos(aba)
+
+    # Isola a onda: o karaokê da nova frase também consulta a API (e já levava ao login antes do B13). Aqui ele é
+    # respondido pelo próprio navegador, então só a busca da onda chega ao servidor sem sessão.
+    aba.route("**/palavras?**", lambda rota: rota.fulfill(json={"tempos": None, "fonte": "estimativa"}))
+    contexto.clear_cookies()  # a sessão vence com a página aberta
+    aba.click("#proximo")
+
+    expect(aba).to_have_url(re.compile(re.escape(f"{servidor}/login?proximo=") + r"%2Festudo"))
+    contexto.close()

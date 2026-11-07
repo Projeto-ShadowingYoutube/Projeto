@@ -2,6 +2,14 @@ import pytest
 
 from app.services import alinhamento, karaoke
 
+
+@pytest.fixture()
+def client(entrar_como):
+    """Desde o B13, as rotas de conteúdo (vídeos, onda, karaokê, avaliação, dicionário) exigem login. Esta fixture
+    troca o client destes testes por um navegador já logado; o corpo dos testes não mudou."""
+    return entrar_como("conteudo@exemplo.com")
+
+
 VIDEO_ID = "fNk_zzaMoSs"
 
 

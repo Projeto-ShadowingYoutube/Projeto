@@ -8,12 +8,14 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session
 
 from app import config
+from app.api.auth import usuario_atual
 from app.db import get_session
 from app.schemas import StatusVideo, TemposPalavras, WaveformDoTrecho
 from app.services import karaoke, midia, waveform
 
 logger = logging.getLogger("uvicorn.error")
-router = APIRouter(prefix="/api/videos/{video_id}", tags=["vídeos"])
+# Exige login (B13): estas rotas são as mais caras do servidor (YouTube, FFmpeg, Vosk, Wiktionary).
+router = APIRouter(prefix="/api/videos/{video_id}", tags=["vídeos"], dependencies=[Depends(usuario_atual)])
 
 VideoId = Path(pattern=config.PADRAO_VIDEO_ID)
 

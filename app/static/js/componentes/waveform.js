@@ -3,6 +3,8 @@
 // WaveSurfer só a desenha: o navegador não baixa nem decodifica mais o áudio da frase.
 // A onda do microfone (voice.js) usa a mesma escala: a largura toda corresponde à duração da frase.
 // Clicar na onda, ou arrastar o cursor vermelho, avisa a página (que leva o vídeo para aquele instante).
+import { requisitarJSON } from "../nucleo/api.js";
+
 export const Waveform = (() => {
     let wavesurfer = null;
     let cargaAtual = 0;
@@ -18,12 +20,10 @@ export const Waveform = (() => {
         atualizarCursor(0);
 
         try {
-            // Busca a onda nova antes de apagar a antiga, para a troca não piscar.
-            const resposta = await fetch(url);
-            const dados = await resposta.json().catch(() => null);
-            if (!resposta.ok || !dados?.peaks) {
-                throw new Error(dados?.detail || "Erro ao buscar a onda da frase.");
-            }
+            // Busca a onda nova antes de apagar a antiga, para a troca não piscar. requisitarJSON (B13): sessão
+            // vencida leva ao login; outros erros chegam aqui com a mensagem do servidor.
+            const dados = await requisitarJSON(url);
+            if (!dados?.peaks) throw new Error("Erro ao buscar a onda da frase.");
             if (carga !== cargaAtual) return; // O usuário já mudou de frase.
 
             destruir();
