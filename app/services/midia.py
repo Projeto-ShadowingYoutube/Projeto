@@ -73,9 +73,12 @@ async def _executar_download(video_id: str) -> None:
 
 
 def iniciar_download(video_id: str) -> asyncio.Task:
-    """Começa o download (se ainda não começou, ou se o anterior falhou) e devolve a tarefa."""
+    """Começa o download e devolve a tarefa. Baixa de novo se ainda não começou, se o anterior falhou, ou se ele
+    terminou mas o arquivo não existe mais (a limpeza de _limpar_antigos o apagou). Um download em andamento nunca
+    é duplicado."""
     tarefa = _downloads.get(video_id)
-    if tarefa is None or (tarefa.done() and tarefa.exception()):
+    terminou_sem_arquivo = tarefa is not None and tarefa.done() and arquivo_do_video(video_id) is None
+    if tarefa is None or (tarefa.done() and tarefa.exception()) or terminou_sem_arquivo:
         _progresso[video_id] = 0.0
         tarefa = asyncio.create_task(_executar_download(video_id))
         _downloads[video_id] = tarefa

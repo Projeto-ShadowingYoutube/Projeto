@@ -1,9 +1,11 @@
+import asyncio
 import os
+import threading
 
 import pytest
 
 from app import config
-from app.services import midia
+from app.services import midia, youtube
 
 VIDEO_ID = "fNk_zzaMoSs"
 
@@ -66,3 +68,48 @@ def test_limpa_videos_antigos(monkeypatch):
     assert restantes == [
         "bbbbbbbbbbb.webm", "bbbbbbbbbbb_1.00_2.00.wav", "ccccccccccc.webm", "ccccccccccc_1.00_2.00.wav",
     ]
+
+
+def _youtube_que_baixa(monkeypatch, downloads, liberar=None):
+    """baixar_video falso: registra a chamada e cria o arquivo (se liberar for um Event, espera por ele antes)."""
+    def baixar_video(video_id, pasta, ao_progredir):
+        downloads.append(video_id)
+        if liberar is not None:
+            liberar.wait(5)
+        (pasta / f"{video_id}.webm").write_bytes(b"x")
+
+    monkeypatch.setattr(youtube, "baixar_video", baixar_video)
+
+
+def test_video_apagado_pela_limpeza_e_baixado_de_novo(monkeypatch):
+    """B9.1 (bug anterior a este trabalho): a limpeza apaga os vídeos antigos, mas o registro em memória dizia "já
+    baixado" e o download nunca era refeito: o player ficava em "Baixando o vídeo... 0%" até reiniciar o servidor."""
+    downloads = []
+    _youtube_que_baixa(monkeypatch, downloads)
+
+    async def cenario():
+        await midia.garantir_video(VIDEO_ID)
+        midia.arquivo_do_video(VIDEO_ID).unlink()  # a limpeza (_limpar_antigos) apagou o vídeo
+        assert not midia.download_falhou(VIDEO_ID)
+        return await asyncio.wait_for(midia.garantir_video(VIDEO_ID), 5)
+
+    caminho = asyncio.run(cenario())
+
+    assert caminho.exists()
+    assert downloads == [VIDEO_ID, VIDEO_ID]  # baixou de novo
+
+
+def test_download_em_andamento_nao_e_iniciado_duas_vezes(monkeypatch):
+    downloads, liberar = [], threading.Event()
+    _youtube_que_baixa(monkeypatch, downloads, liberar)
+
+    async def cenario():
+        primeira = midia.iniciar_download(VIDEO_ID)
+        await asyncio.sleep(0.05)  # o download começou e ainda não terminou (sem arquivo)
+        segunda = midia.iniciar_download(VIDEO_ID)
+        liberar.set()
+        await primeira
+        return primeira is segunda
+
+    assert asyncio.run(cenario()) is True
+    assert downloads == [VIDEO_ID]
