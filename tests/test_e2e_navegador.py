@@ -10,6 +10,7 @@ teste não depender do YouTube nem do modelo de fala.
 """
 import http.server
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -23,12 +24,16 @@ if not os.environ.get("E2E"):
 
 playwright_sync = pytest.importorskip("playwright.sync_api")
 import uvicorn  # noqa: E402
+from limits import parse  # noqa: E402
+from limits.storage import MemoryStorage  # noqa: E402
+from limits.strategies import FixedWindowRateLimiter  # noqa: E402
 from playwright.sync_api import expect, sync_playwright  # noqa: E402
 from sqlmodel import Session, create_engine  # noqa: E402
 
 from app import config, db, migrar  # noqa: E402
+from app.api import legendas as rota_legendas  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services import karaoke  # noqa: E402
+from app.services import karaoke, youtube  # noqa: E402
 
 VIDEO_ID = "abcdefghijk"
 SENHA = "senha-forte-123"
@@ -74,6 +79,17 @@ def servidor(tmp_path, monkeypatch, video_falso):
         return {"tempos": None, "fonte": "estimativa"}
 
     monkeypatch.setattr(karaoke, "_calcular", sem_karaoke)
+
+    # YouTube simulado: qualquer vídeo tem a legenda "Hello world." (0 a 2.5 s) e "baixa" o WebM falso.
+    monkeypatch.setattr(youtube, "baixar_legendas", lambda video_id: (
+        [{"text": "Hello world.", "start": 0.0, "duration": 2.5}], True,
+    ))
+    monkeypatch.setattr(youtube, "buscar_titulo", lambda video_id: "Vídeo simulado")
+    monkeypatch.setattr(youtube, "baixar_video", lambda video_id, pasta, ao_progredir: shutil.copy(
+        video_falso, pasta / f"{video_id}.webm",
+    ))
+    # Tokens: limitador novo a cada teste (o do app é global ao processo).
+    monkeypatch.setattr(rota_legendas, "limitador", FixedWindowRateLimiter(MemoryStorage()))
 
     porta = _porta_livre()
     servidor = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=porta, log_level="warning"))
@@ -342,4 +358,60 @@ def test_velocidade_funciona_como_antes_e_fica_salva_na_conta(servidor, navegado
     aba.click(".nav-btn:has-text('Revisar')")
     expect(aba.locator(".dashboard-tr-deck")).to_have_count(1)
     _esperar_velocidade_salva(aba, servidor, 1.25)
+    contexto.close()
+
+
+def _estudar(aba, base, numero):
+    aba.goto(f"{base}/estudo?link=https://youtu.be/video{numero:06d}")
+
+
+def test_estudo_abre_na_velocidade_salva_e_avisa_quando_os_tokens_acabam(servidor, navegador, monkeypatch):
+    monkeypatch.setattr(rota_legendas, "LIMITE_TOKENS", parse("2/5 minute"))
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+    assert aba.request.patch(f"{servidor}/api/configuracoes", data={"velocidade": 0.75}).ok
+
+    # 1º vídeo: legenda, velocidade salva (B8) e 1 token gasto.
+    _estudar(aba, servidor, 1)
+    expect(aba.locator("#textologs")).to_contain_text("Vídeo simulado")
+    expect(aba.locator("#avisoUltimoToken")).to_be_hidden()
+    expect(aba.locator("#token-count")).to_have_text("1")
+    aba.click("#botaoContinuar")
+    expect(aba.locator("#legenda")).to_contain_text("Hello world.")
+    expect(aba.locator("#velocidadeValor")).to_have_text("0.75x")
+    _iniciar_estudos(aba)
+    assert _velocidade_do_video(aba) == 0.75
+    botao_tokens = aba.locator("#token-count").locator("xpath=..")
+    expect(botao_tokens).to_have_attribute("title", re.compile(r"Tokens renovam em \d:\d\d"))
+
+    # 2º vídeo: o último token. Aviso no modal da legenda e contador vermelho.
+    _estudar(aba, servidor, 2)
+    expect(aba.locator("#avisoUltimoToken")).to_be_visible()
+    expect(aba.locator("#avisoUltimoToken")).to_contain_text("Este foi seu último token. Novos tokens em ")
+    expect(aba.locator("#token-count")).to_have_text("0")
+    expect(aba.locator("#token-count")).to_have_class(re.compile("token-low"))
+
+    # 3º vídeo: sem tokens. Mensagem específica com contagem (e não o modal de erro genérico).
+    _estudar(aba, servidor, 3)
+    expect(aba.locator("#modalSemTokens")).to_be_visible()
+    expect(aba.locator("#contagemTokens")).to_have_text(re.compile(r"^[0-5]:\d\d$"))
+    expect(aba.locator("#erroModal")).to_be_hidden()
+    expect(aba.locator("#semTokensTentar")).to_be_hidden()  # só aparece quando renovar: nada de contornar
+    aba.click("#semTokensDecks")
+    expect(aba).to_have_url(f"{servidor}/decks")
+    contexto.close()
+
+
+def test_quando_os_tokens_renovam_da_para_carregar_o_video(servidor, navegador, monkeypatch):
+    monkeypatch.setattr(rota_legendas, "LIMITE_TOKENS", parse("1/6 second"))  # janela curta, só para o teste
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+    assert aba.request.get(f"{servidor}/api/legendas", params={"url": "https://youtu.be/video000001"}).ok
+
+    _estudar(aba, servidor, 2)
+    expect(aba.locator("#modalSemTokens")).to_be_visible()
+    expect(aba.locator("#semTokensTentar")).to_be_visible(timeout=10000)  # contagem chegou a zero
+    expect(aba.locator("#contagemTokens")).to_contain_text("renovados")
+    aba.click("#semTokensTentar")
+    expect(aba.locator("#textologs")).to_contain_text("Vídeo simulado")  # agora carregou, com token novo
     contexto.close()

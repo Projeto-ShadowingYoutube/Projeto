@@ -272,3 +272,32 @@
 .submodal-texto-orientacao { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-sub); }
 .submodal-input-largura { width: 100%; flex: none; }
 .submodal-decks .submodal-btn-largura { min-width: 110px; }
+
+/* ====================================================================================
+    TOKENS (B11): aviso de último token no modal da legenda e o modal "Seus tokens acabaram"
+   ==================================================================================== */
+.aviso-tokens {
+    margin: -14px 0 24px 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid rgba(250, 204, 21, 0.5);
+    font-size: 0.95rem;
+}
+.aviso-tokens[hidden] { display: none; }
+
+.sem-tokens-titulo { margin: 0 0 16px 0; font-size: 1.5rem; }
+.sem-tokens-texto { margin: 0 0 14px 0; line-height: 1.5; color: var(--text-sub); }
+.sem-tokens-texto strong { color: var(--text-main); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.sem-tokens-botoes { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+.btn-sem-tokens {
+    padding: 12px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    background: rgba(125, 125, 125, 0.12);
+    color: var(--text-main);
+    font-weight: bold;
+    cursor: pointer;
+}
+.btn-sem-tokens[hidden] { display: none; }
+.btn-sem-tokens-principal { background: linear-gradient(90deg, #818cf8, #c084fc); color: #fff; border: none; }

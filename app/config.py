@@ -40,7 +40,7 @@ AMBIENTE = configuracoes.ambiente
 COOKIE_SESSAO = "sessao"
 DURACAO_SESSAO_DIAS = 14
 
-# Limite de vídeos novos por usuário (IP): cada vídeo que não está na cache gasta um token.
+# Limite de vídeos novos por CONTA: cada vídeo que não está na cache gasta um token (ver api/legendas.py).
 LIMITE_TOKENS = "5/5 minute"
 
 # Vídeos guardados em PASTA_MIDIA; os usados há mais tempo são apagados.

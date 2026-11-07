@@ -79,9 +79,16 @@ class Legendas(BaseModel):
     video_id: str
     dados: list[Frase]
     tokens_restantes: int
+    renova_em: int | None  # segundos até os tokens renovarem (None: nenhum gasto)
     legenda_manual: bool
     titulo_video: str
     aviso_legenda: str
+
+
+class Tokens(BaseModel):
+    tokens_restantes: int
+    limite: int
+    renova_em: int | None  # segundos até os tokens renovarem (None: nenhum gasto na janela atual)
 
 
 class ConfiguracoesDeEstudo(BaseModel):

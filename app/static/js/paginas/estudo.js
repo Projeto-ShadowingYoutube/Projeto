@@ -6,12 +6,14 @@ import { Legenda } from "../componentes/legenda.js";
 import { Player } from "../componentes/player.js";
 import { Waveform } from "../componentes/waveform.js";
 import { api } from "../nucleo/api.js";
-import { atualizarTokens, esconderCarregamento, mostrarCarregamento, mostrarErro } from "../nucleo/interface.js";
+import {
+    atualizarTokens, contagemRegressiva, esconderCarregamento, formatarTempo, mostrarCarregamento, mostrarErro,
+} from "../nucleo/interface.js";
 import { salvarPendentes, salvarVelocidade } from "../nucleo/configuracoes.js";
-import { registrarPagina } from "../nucleo/paginas.js";
+import { navegarPara, registrarPagina } from "../nucleo/paginas.js";
 
 registrarPagina("estudo", (raiz) => {
-    const estado = { ativa: true, videoId: null, frases: [], indice: 0, salvas: new Set() };
+    const estado = { ativa: true, videoId: null, frases: [], indice: 0, salvas: new Set(), cancelarContagem: null };
     const elemento = (id) => document.getElementById(id);
 
     const urlDoAudio = (frase) => api.videos.urlAudio(estado.videoId, frase.tempo_inicio, frase.tempo_fim);
@@ -66,6 +68,24 @@ registrarPagina("estudo", (raiz) => {
         }
     }
 
+    // 429 "limite_de_tokens": mostra quanto falta para renovar e o que dá para fazer enquanto isso (revisar Decks).
+    // O limite só é informado: nada é tentado de novo sozinho. Quando a contagem termina, a pessoa pode carregar.
+    function mostrarSemTokens(segundos) {
+        const contagem = elemento("contagemTokens");
+        const tentar = elemento("semTokensTentar");
+        tentar.hidden = true;
+        elemento("modalSemTokens").style.display = "flex";
+        estado.cancelarContagem?.();
+        estado.cancelarContagem = contagemRegressiva(
+            segundos,
+            (restante) => { contagem.textContent = formatarTempo(restante); },
+            () => {
+                contagem.textContent = "0:00 (renovados!)";
+                tentar.hidden = false;
+            },
+        );
+    }
+
     async function iniciarSessao(link) {
         if (!link) {
             mostrarErro("Nenhum link de vídeo foi informado.");
@@ -77,7 +97,11 @@ registrarPagina("estudo", (raiz) => {
         try {
             dados = await api.legendas(link);
         } catch (erro) {
-            if (erro.dados?.tokens_restantes !== undefined) atualizarTokens(erro.dados.tokens_restantes);
+            if (erro.codigo === "limite_de_tokens") {
+                atualizarTokens(0, erro.dados.tentar_novamente_em);
+                mostrarSemTokens(erro.dados.tentar_novamente_em);
+                return;
+            }
             mostrarErro(erro.message);
             return;
         } finally {
@@ -85,7 +109,7 @@ registrarPagina("estudo", (raiz) => {
         }
         if (!estado.ativa) return;
 
-        atualizarTokens(dados.tokens_restantes);
+        atualizarTokens(dados.tokens_restantes, dados.renova_em);
         estado.videoId = dados.video_id;
         estado.frases = dados.dados;
         if (!estado.frases.length) {
@@ -94,6 +118,11 @@ registrarPagina("estudo", (raiz) => {
         }
 
         elemento("textologs").textContent = dados.aviso_legenda;
+        const ultimoToken = elemento("avisoUltimoToken");
+        ultimoToken.hidden = !(dados.tokens_restantes === 0 && dados.renova_em);
+        if (!ultimoToken.hidden) {
+            ultimoToken.textContent = `Este foi seu último token. Novos tokens em ${formatarTempo(dados.renova_em)}.`;
+        }
         elemento("modalLegendaTitulo").style.display = "flex";
 
         mostrarFrase(0);
@@ -110,6 +139,9 @@ registrarPagina("estudo", (raiz) => {
     elemento("gravar").onclick = Gravador.alternar;
     elemento("ouvirGravacao").onclick = Gravador.reproduzir;
     elemento("botaoContinuar").onclick = () => { elemento("modalLegendaTitulo").style.display = "none"; };
+    elemento("semTokensDecks").onclick = () => navegarPara("/decks");
+    elemento("semTokensInicio").onclick = () => navegarPara("/");
+    elemento("semTokensTentar").onclick = () => location.reload(); // só aparece quando os tokens já renovaram
     elemento("protecaoButton").onclick = () => {
         elemento("protecaoPlayer").style.display = "none";
         Player.liberar();
@@ -137,6 +169,7 @@ registrarPagina("estudo", (raiz) => {
 
     return () => {
         estado.ativa = false;
+        estado.cancelarContagem?.();
         Player.destruir();
         Player.aoAtualizarTempo(null);
         Player.aoMudarVelocidade(null);

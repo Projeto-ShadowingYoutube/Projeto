@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -8,12 +9,19 @@ from app.services import legendas as servico
 from app.services import youtube
 
 
+@pytest.fixture()
+def client(entrar_como):
+    """Desde o B11, as legendas exigem login (o limite de tokens é por conta). Esta fixture troca o client destes
+    testes por um navegador já logado; o corpo dos testes não mudou."""
+    return entrar_como("legendas@exemplo.com")
+
+
 class FakeLimitador:
     def hit(self, *args, **kwargs):
         return True
 
     def get_window_stats(self, *args, **kwargs):
-        return SimpleNamespace(remaining=4)
+        return SimpleNamespace(remaining=4, reset_time=time.time() + 120)
 
 
 class FakeOEmbedResponse:

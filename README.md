@@ -243,6 +243,38 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 Decks antigos, `python -m app.migrar` para com `ERRO: Existem N Deck(s) ... sem dono` **sem alterar nada**. Decida
 o que fazer com eles (associar a um usuário ou apagar) e rode o comando de novo. Faça backup antes.
 
+## 🎟️ Tokens (limite de vídeos novos por conta)
+
+Buscar as legendas de um vídeo no YouTube custa: muitas consultas seguidas fazem o YouTube bloquear o servidor.
+Por isso, cada **conta** pode carregar um número limitado de vídeos **novos** por janela de tempo.
+
+| | |
+|---|---|
+| **Limite** | 5 tokens a cada 5 minutos, por conta (`LIMITE_TOKENS` em `app/config.py`) |
+| **Gasta 1 token** | Carregar um vídeo que não está na cache. Inclui vídeo **sem legenda**: a consulta ao YouTube aconteceu, e é ela que o limite protege. Devolver o token permitiria consultar o YouTube sem limite usando vídeos sem legenda. |
+| **Não gasta** | Vídeo que está na cache (hoje, o último vídeo carregado no app), URL inválida, navegar entre frases, revisar Decks |
+| **De quem é** | Da conta logada (chave `usuario:<id>`), e não do IP. Pessoas na mesma rede (casa, laboratório) não dividem tokens, e trocar de rede não dá tokens novos. |
+| **Algoritmo** | Janela fixa (`FixedWindowRateLimiter`, biblioteca `limits`). No primeiro uso, começa uma janela de 5 minutos. Quando ela termina, os 5 tokens voltam todos juntos. O requisito chama isso de "Token Bucket": para quem usa, o comportamento é o de tokens que se renovam. |
+| **Onde fica** | Em memória do processo: zera quando o servidor reinicia e exige um único processo (worker) em produção (pendência registrada no plano). |
+
+**Na tela:**
+- A navbar mostra os tokens restantes. Em zero, o contador fica vermelho. Ao passar o mouse aparece "Tokens renovam
+  em 4:12", e ao fim da contagem o contador se atualiza sozinho.
+- Ao carregar o vídeo que gasta o **último** token, o aviso da legenda avisa: "Este foi seu último token. Novos
+  tokens em 4:12."
+- **Sem tokens**, o estudo mostra a tela "Seus tokens acabaram", com contagem regressiva, botão **Ir para os Decks**
+  (a revisão não gasta tokens) e **Voltar ao início**. O botão **Carregar o vídeo** só aparece quando a contagem
+  termina. O limite é informado, **nunca contornado**: nada é tentado de novo sozinho.
+
+**API** (ambas exigem login):
+- `GET /api/tokens` → `{"tokens_restantes": 3, "limite": 5, "renova_em": 252}`. `renova_em` é o número de
+  segundos até a janela recomeçar, ou `null` se nenhum token foi gasto.
+- `GET /api/legendas?url=...` → além das legendas, traz `tokens_restantes` e `renova_em`. Sem tokens, responde
+  **429** (formato abaixo) com o header **`Retry-After`** (segundos), o padrão HTTP para "tente de novo depois".
+
+**Testes:** `tests/test_tokens.py` usa o limitador real, com contas independentes, 429 com o tempo, cache e vídeo
+sem legenda. Os testes de navegador cobrem a tela "Seus tokens acabaram" e a renovação, numa janela curta.
+
 ## ⚙️ Configurações de estudo
 
 Cada conta tem as próprias preferências de estudo, salvas no banco. Por isso elas acompanham a pessoa em qualquer
@@ -295,7 +327,7 @@ navegador e sobrevivem a F5, logout e reinício do servidor.
 | 409 | `conflito` | E-mail já cadastrado; Card repetido no mesmo Deck | — |
 | 413 | `conteudo_grande_demais` | Gravação maior que 10 MB | — |
 | 422 | `dados_invalidos` | Corpo, parâmetro da URL ou formulário fora do formato esperado | `erros` |
-| 429 | `limite_de_tokens` | Tokens de legenda acabaram | `tokens_restantes` |
+| 429 | `limite_de_tokens` | Tokens de legenda acabaram (veja "Tokens") | `tokens_restantes`, `limite`, `tentar_novamente_em`; header `Retry-After` |
 | 429 | `limite_atingido` | Padrão para outros 429 (nenhuma rota usa hoje) | — |
 | 500 | `erro_interno` | Qualquer erro **inesperado** (bug). A resposta nunca traz detalhes internos | — |
 | 500 | `erro_interno` | Erros conhecidos de processamento (ex.: FFmpeg falhou), com mensagem própria | — |
@@ -318,9 +350,10 @@ O status continua 422, o padrão do FastAPI para dados fora do formato (decisão
 `campo` é o nome do campo no corpo, na URL ou no formulário. É `"corpo"` quando o problema é o corpo inteiro (ex.:
 não foi enviado).
 
-**429, tokens esgotados:**
+**429, tokens esgotados** (com o header `Retry-After: 252`; `tentar_novamente_em` é o mesmo valor, em segundos):
 ```json
-{"detail": "O limite de tokens foi atingido. Espere alguns minutos para ganhar mais.", "codigo": "limite_de_tokens", "tokens_restantes": 0}
+{"detail": "Seus tokens acabaram. Novos tokens em 4 min 12 s. Enquanto isso, você pode revisar seus Decks (a revisão não gasta tokens).",
+ "codigo": "limite_de_tokens", "tokens_restantes": 0, "limite": 5, "tentar_novamente_em": 252}
 ```
 
 **500, erro inesperado.** É sempre esta mesma resposta, de propósito:
@@ -385,7 +418,7 @@ app/
 │   ├── paginas.py      páginas HTML (navegação via HTMX)
 │   ├── auth.py         cadastro, login, logout, /me e as dependências usuario_atual / usuario_opcional
 │   ├── configuracoes.py configurações de estudo do usuário (velocidade)
-│   ├── legendas.py     legendas + limite de tokens
+│   ├── legendas.py     legendas + limite de tokens por conta (429 com Retry-After)
 │   ├── videos.py       vídeo, áudio de cada frase e tempo das palavras
 │   ├── avaliacoes.py   avaliação da fala gravada
 │   ├── decks.py        Decks, Cards e revisão espaçada (REST)

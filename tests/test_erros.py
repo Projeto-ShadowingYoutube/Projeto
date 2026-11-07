@@ -1,5 +1,6 @@
 """Formato único dos erros da API (B7): {"detail": texto, "codigo": identificador, ...extras}."""
 import logging
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -27,8 +28,8 @@ def ana(entrar_como):
     return entrar_como("ana@exemplo.com")
 
 
-def test_400_requisicao_invalida(client):
-    corpo = _formato_padrao(client.get("/api/legendas", params={"url": "nao-e-youtube"}), 400, "requisicao_invalida")
+def test_400_requisicao_invalida(ana):
+    corpo = _formato_padrao(ana.get("/api/legendas", params={"url": "nao-e-youtube"}), 400, "requisicao_invalida")
     assert corpo["detail"] == "URL do YouTube inválida."
 
 
@@ -91,21 +92,24 @@ def test_422_tambem_para_parametros_da_url_e_validadores_proprios(ana):
     assert corpo["erros"] == [{"campo": "corpo", "mensagem": "campo obrigatório"}]
 
 
-def test_429_limite_de_tokens_mantem_tokens_restantes(client, monkeypatch):
+def test_429_limite_de_tokens_informa_quando_tentar_de_novo(ana, monkeypatch):
     class LimitadorEsgotado:
         def hit(self, *args, **kwargs):
             return False
 
         def get_window_stats(self, *args, **kwargs):
-            return SimpleNamespace(remaining=0)
+            return SimpleNamespace(remaining=0, reset_time=time.time() + 252)
 
     monkeypatch.setattr(rota_legendas, "limitador", LimitadorEsgotado())
     monkeypatch.setattr(rota_legendas.legendas, "da_cache", lambda video_id: None)
 
-    resposta = client.get("/api/legendas", params={"url": "https://youtu.be/abcdefghijk"})
+    resposta = ana.get("/api/legendas", params={"url": "https://youtu.be/abcdefghijk"})
 
     corpo = _formato_padrao(resposta, 429, "limite_de_tokens")
     assert corpo["tokens_restantes"] == 0
+    assert corpo["limite"] == 5
+    assert corpo["tentar_novamente_em"] in (252, 253)
+    assert resposta.headers["retry-after"] == str(corpo["tentar_novamente_em"])
 
 
 def test_502_servico_externo_indisponivel(client, monkeypatch):

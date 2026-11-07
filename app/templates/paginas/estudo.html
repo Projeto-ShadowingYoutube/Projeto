@@ -5,7 +5,26 @@
     <div id="modalLegendaTitulo" class="modal-legenda-titulo">
         <div class="modal-legenda-titulo-content">
             <p id="textologs"></p>
+            <p id="avisoUltimoToken" class="aviso-tokens" hidden></p>
             <button id="botaoContinuar">Continuar</button>
+        </div>
+    </div>
+
+    <!-- Tokens acabaram (429 "limite_de_tokens"): quanto falta para renovar e o que dá para fazer enquanto isso.
+         Controlado por static/js/paginas/estudo.js. -->
+    <div id="modalSemTokens" class="modal-legenda-titulo">
+        <div class="modal-legenda-titulo-content">
+            <h2 class="sem-tokens-titulo">Seus tokens acabaram</h2>
+            <p class="sem-tokens-texto">
+                Cada vídeo novo gasta 1 token. Novos tokens em
+                <strong id="contagemTokens">–</strong>.
+            </p>
+            <p class="sem-tokens-texto">Enquanto isso, revise seus Decks: a revisão não gasta tokens.</p>
+            <div class="sem-tokens-botoes">
+                <button type="button" id="semTokensDecks" class="btn-sem-tokens btn-sem-tokens-principal">Ir para os Decks</button>
+                <button type="button" id="semTokensTentar" class="btn-sem-tokens" hidden>Carregar o vídeo</button>
+                <button type="button" id="semTokensInicio" class="btn-sem-tokens">Voltar ao início</button>
+            </div>
         </div>
     </div>
 
