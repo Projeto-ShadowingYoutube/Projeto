@@ -64,7 +64,8 @@ export const api = {
     videos: {
         status: (videoId) => requisitarJSON(`/api/videos/${videoId}/status`),
         url: (videoId) => `/api/videos/${videoId}`,
-        urlAudio: (videoId, inicio, fim) => `/api/videos/${videoId}/audio?${consulta({ inicio, fim })}`,
+        urlAudio: (videoId, inicio, fim) => `/api/videos/${videoId}/audio?${consulta({ inicio, fim })}`, // sem uso desde o B9
+        urlWaveform: (videoId, inicio, fim) => `/api/videos/${videoId}/waveform?${consulta({ inicio, fim })}`,
         temposPalavras: (videoId, inicio, fim, texto) =>
             requisitarJSON(`/api/videos/${videoId}/palavras?${consulta({ inicio, fim, texto })}`),
     },

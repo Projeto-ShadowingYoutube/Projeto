@@ -50,6 +50,13 @@ VELOCIDADE_MINIMA = 0.25
 VELOCIDADE_MAXIMA = 1.5
 VELOCIDADE_PADRAO = 1.0
 
+# Waveform (B9): a onda de cada frase é desenhada a partir de N "peaks" (0 a 1), calculados uma vez e guardados no
+# banco. 400 ≈ o máximo de barras visíveis no painel (barra de 2 px + espaço de 1 px). Mudou o cálculo? Aumente a
+# versão: os registros antigos deixam de valer e cada onda é recalculada na próxima vez (ver services/waveform.py).
+WAVEFORM_QUANTIDADE_PEAKS = 400
+WAVEFORM_TAXA_AMOSTRAGEM = 8000  # Hz: o suficiente para o contorno da onda (não é para ouvir)
+WAVEFORM_VERSAO_ALGORITMO = 1
+
 # Duração máxima de um trecho de áudio pedido à API (segundos).
 DURACAO_MAXIMA_TRECHO = 120
 

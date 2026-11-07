@@ -33,7 +33,7 @@ from sqlmodel import Session, create_engine  # noqa: E402
 from app import config, db, migrar  # noqa: E402
 from app.api import legendas as rota_legendas  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services import karaoke, youtube  # noqa: E402
+from app.services import karaoke, midia, youtube  # noqa: E402
 
 VIDEO_ID = "abcdefghijk"
 SENHA = "senha-forte-123"
@@ -88,6 +88,10 @@ def servidor(tmp_path, monkeypatch, video_falso):
     monkeypatch.setattr(youtube, "baixar_video", lambda video_id, pasta, ao_progredir: shutil.copy(
         video_falso, pasta / f"{video_id}.webm",
     ))
+    # Estado em memória do processo, zerado a cada teste (como um servidor recém-iniciado): o registro de downloads
+    # lembra vídeos "já baixados" em pastas de testes anteriores, que não existem mais.
+    monkeypatch.setattr(midia, "_downloads", {})
+    monkeypatch.setattr(midia, "_progresso", {})
     # Tokens: limitador novo a cada teste (o do app é global ao processo).
     monkeypatch.setattr(rota_legendas, "limitador", FixedWindowRateLimiter(MemoryStorage()))
 
@@ -414,4 +418,54 @@ def test_quando_os_tokens_renovam_da_para_carregar_o_video(servidor, navegador, 
     expect(aba.locator("#contagemTokens")).to_contain_text("renovados")
     aba.click("#semTokensTentar")
     expect(aba.locator("#textologs")).to_contain_text("Vídeo simulado")  # agora carregou, com token novo
+    contexto.close()
+
+
+def _progresso_da_onda(aba):
+    """Largura da parte "já tocada" (cor de progresso) desenhada pelo WaveSurfer, em % (fica no shadow DOM dele)."""
+    return aba.evaluate("""() => {
+        const raiz = document.querySelector('#waveform > div')?.shadowRoot;
+        const progresso = raiz?.querySelector('[part~="progress"]') || raiz?.querySelector('.progress');
+        return progresso ? parseFloat(progresso.style.width) : null;
+    }""")
+
+
+def test_onda_vem_pronta_do_servidor_e_clicar_nela_leva_o_video_ao_ponto(servidor, navegador):
+    contexto, aba = _nova_aba(navegador)
+    pedidos = []
+    aba.on("request", lambda r: pedidos.append(r.url.replace(servidor, "")) if "/api/videos/" in r.url else None)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+
+    with aba.expect_response(lambda r: "/waveform?" in r.url) as primeira:
+        _estudar(aba, servidor, 1)
+    onda = primeira.value.json()  # lido agora: o navegador descarta o corpo quando a página recarrega
+    assert onda["cache"] is False and len(onda["peaks"]) == 400
+    aba.click("#botaoContinuar")
+    _iniciar_estudos(aba)
+    expect(aba.locator("#waveform > div")).to_be_attached()  # o WaveSurfer desenhou
+    expect(aba.locator(".waveform-falha")).to_have_count(0)
+    assert not any("/audio?" in pedido for pedido in pedidos)  # o navegador não baixa mais o WAV
+
+    # Comportamento existente (mesmo resultado da referência de antes do B9): clicar a 60% da onda leva o vídeo a
+    # 60% da frase (2.5 s → 1.5 s), move o cursor vermelho e pinta o progresso da onda até ali.
+    aba.click("#pausar")
+    caixa = aba.locator("#waveformContainer").bounding_box()
+    aba.mouse.click(caixa["x"] + caixa["width"] * 0.6, caixa["y"] + caixa["height"] / 2)
+    assert abs(aba.eval_on_selector("#player video", "v => v.currentTime") - 1.5) < 0.05
+    expect(aba.locator("#waveCursor")).to_have_attribute("style", re.compile(r"left: 60%"))
+    progresso = _progresso_da_onda(aba)
+    assert progresso is not None and abs(progresso - 60) < 2, progresso
+
+    # Arrastar o cursor (comportamento existente) também leva o vídeo junto.
+    aba.mouse.move(caixa["x"] + caixa["width"] * 0.6, caixa["y"] + caixa["height"] / 2)
+    aba.mouse.down()
+    aba.mouse.move(caixa["x"] + caixa["width"] * 0.2, caixa["y"] + caixa["height"] / 2, steps=5)
+    aba.mouse.up()
+    assert abs(aba.eval_on_selector("#player video", "v => v.currentTime") - 0.5) < 0.05
+
+    # Segunda visita à mesma frase: a onda vem do banco (sem FFmpeg).
+    with aba.expect_response(lambda r: "/waveform?" in r.url) as segunda:
+        aba.reload()
+    assert segunda.value.json()["cache"] is True
+    assert segunda.value.json()["peaks"] == onda["peaks"]
     contexto.close()

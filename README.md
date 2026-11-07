@@ -275,6 +275,49 @@ Por isso, cada **conta** pode carregar um número limitado de vídeos **novos** 
 **Testes:** `tests/test_tokens.py` usa o limitador real, com contas independentes, 429 com o tempo, cache e vídeo
 sem legenda. Os testes de navegador cobrem a tela "Seus tokens acabaram" e a renovação, numa janela curta.
 
+## 🌊 Waveform (onda da frase)
+
+A onda azul acima do microfone é o áudio original da frase. Ela é desenhada a partir de **peaks**: uma lista de
+números de 0 a 1 (o volume de cada pedacinho da frase), calculada **uma vez** no servidor e guardada no banco.
+
+```
+1ª vez:  GET /api/videos/{id}/waveform?inicio&fim → vídeo + FFmpeg (8 kHz) → numpy: 400 peaks → grava no banco
+depois:  GET /api/videos/{id}/waveform?inicio&fim → lê do banco ("cache": true), sem vídeo e sem FFmpeg
+tela:    WaveSurfer.create({peaks, duration, ...}) → desenha; o progresso e o cursor acompanham o vídeo
+```
+
+| | Antes (até o B8) | Agora (B9) |
+|---|---|---|
+| O que o navegador baixa por frase | O WAV inteiro (~88 KB por segundo) | ~3 KB de JSON (400 números) |
+| Quem calcula a onda | O navegador, a cada visita | O servidor, uma vez por frase |
+| Onde fica | WAV em `dados/midia`, apagado junto com o vídeo | Tabela `waveform` no banco: sobrevive à limpeza dos vídeos |
+| Segunda visita | Baixa e decodifica de novo | Vem pronta, sem FFmpeg |
+
+**Como os peaks são calculados** (`app/services/waveform.py`): o áudio do trecho (mono, 8 kHz) é dividido em 400
+blocos iguais, e cada peak é o maior volume do bloco, normalizado pelo maior volume do trecho (silêncio = só zeros).
+400 é aproximadamente o máximo de barras que cabem no painel (barra de 2 px + espaço de 1 px).
+
+**Banco: tabela `waveform`.** Colunas `video_id`, `inicio`, `fim` (2 casas), `versao`, `duracao`, `quantidade`,
+`peaks` (JSON) e `data_criacao`. O índice único é `(video_id, inicio, fim, versao)`. A onda não pertence a um
+usuário: a de um trecho é a mesma para todos.
+
+**Compatibilidade do cache:**
+- A **versão do algoritmo** (`WAVEFORM_VERSAO_ALGORITMO` em `app/config.py`) faz parte da chave. Mudou o cálculo
+  (quantidade de peaks, taxa, fórmula)? **Aumente a versão**: as ondas antigas deixam de ser usadas e cada uma é
+  recalculada na próxima visita, sem migração de dados.
+- Ao ler, o servidor confere se `quantidade` bate com o tamanho de `peaks`. Um registro incompleto é recalculado.
+- Duas requisições da mesma frase ao mesmo tempo: o índice único recusa a segunda gravação, e ela usa a da primeira.
+
+**O que não mudou:** o visual da onda (cores, barras, altura), **clicar ou arrastar na onda leva o vídeo àquele
+ponto**, o cursor vermelho e a cor de progresso acompanham o vídeo, e a mensagem aparece no lugar da onda se ela
+não carregar. O karaokê, o gravador e a avaliação da fala não usam a onda e não foram alterados.
+
+**Rota antiga:** `GET /api/videos/{id}/audio` (o WAV) continua existindo, mas ficou sem uso interno. É candidata a
+remoção.
+
+**Testes:** `tests/test_waveform.py` (cálculo, cache sem FFmpeg, versão, registro corrompido, concorrência e
+erros) e o teste de navegador `test_onda_vem_pronta_do_servidor_e_clicar_nela_leva_o_video_ao_ponto`.
+
 ## ⚙️ Configurações de estudo
 
 Cada conta tem as próprias preferências de estudo, salvas no banco. Por isso elas acompanham a pessoa em qualquer
@@ -419,7 +462,7 @@ app/
 │   ├── auth.py         cadastro, login, logout, /me e as dependências usuario_atual / usuario_opcional
 │   ├── configuracoes.py configurações de estudo do usuário (velocidade)
 │   ├── legendas.py     legendas + limite de tokens por conta (429 com Retry-After)
-│   ├── videos.py       vídeo, áudio de cada frase e tempo das palavras
+│   ├── videos.py       vídeo, onda (waveform) e áudio de cada frase e tempo das palavras
 │   ├── avaliacoes.py   avaliação da fala gravada
 │   ├── decks.py        Decks, Cards e revisão espaçada (REST)
 │   └── dicionario.py   popup de dicionário
@@ -431,6 +474,7 @@ app/
 │   ├── cache_legendas.py
 │   ├── frases.py       reagrupa os blocos do YouTube em frases e estima o tempo das palavras
 │   ├── midia.py        download do vídeo em segundo plano e corte do áudio (FFmpeg)
+│   ├── waveform.py     peaks da onda de cada frase (numpy) e cache no banco
 │   ├── karaoke.py      escolhe a melhor fonte de tempo das palavras
 │   ├── alinhamento.py  legenda automática / Vosk → tempo de cada palavra
 │   ├── avaliacao.py    notas de palavras, ritmo e entonação da fala do usuário

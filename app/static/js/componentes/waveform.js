@@ -1,4 +1,6 @@
 // Waveform de referência: desenha o áudio original da frase com o WaveSurfer, ocupando toda a largura.
+// Desde o B9, a onda vem pronta do servidor (GET /api/videos/{id}/waveform: peaks de 0 a 1, guardados no banco) e o
+// WaveSurfer só a desenha: o navegador não baixa nem decodifica mais o áudio da frase.
 // A onda do microfone (voice.js) usa a mesma escala: a largura toda corresponde à duração da frase.
 // Clicar na onda, ou arrastar o cursor vermelho, avisa a página (que leva o vídeo para aquele instante).
 export const Waveform = (() => {
@@ -8,20 +10,20 @@ export const Waveform = (() => {
     let acoes = null; // { buscar(segundos), inicioArraste(), fimArraste() }, definidas pela página
     let arrastando = false;
 
-    // Nunca lança erro: se o áudio não carregar, mostra o aviso no lugar da onda.
+    // Nunca lança erro: se a onda não carregar, mostra o aviso no lugar dela.
+    // url: a da rota /waveform (api.videos.urlWaveform).
     async function carregar(url, duracaoFrase) {
         const carga = ++cargaAtual;
         duracao = duracaoFrase;
         atualizarCursor(0);
 
         try {
-            // Baixa o áudio novo antes de apagar a onda antiga, para a troca não piscar.
+            // Busca a onda nova antes de apagar a antiga, para a troca não piscar.
             const resposta = await fetch(url);
-            if (!resposta.ok) {
-                const dados = await resposta.json().catch(() => null);
-                throw new Error(dados?.detail || "Erro ao buscar o áudio da frase.");
+            const dados = await resposta.json().catch(() => null);
+            if (!resposta.ok || !dados?.peaks) {
+                throw new Error(dados?.detail || "Erro ao buscar a onda da frase.");
             }
-            const audio = await resposta.blob();
             if (carga !== cargaAtual) return; // O usuário já mudou de frase.
 
             destruir();
@@ -39,12 +41,16 @@ export const Waveform = (() => {
                 height: 140,
                 normalize: true,
                 interact: false,
+                // A onda pronta: com peaks + duration, o WaveSurfer desenha sem áudio (e setTime continua pintando
+                // o progresso, que acompanha o vídeo em atualizarCursor).
+                peaks: [dados.peaks],
+                duration: dados.duracao,
             });
-            await wavesurfer.loadBlob(audio);
+            await new Promise((pronto) => wavesurfer.once("ready", pronto));
         } catch (erro) {
             if (carga !== cargaAtual) return;
             console.error("Erro ao carregar o waveform:", erro);
-            mostrarFalha(`Áudio da frase indisponível: ${erro.message}`);
+            mostrarFalha(`Onda da frase indisponível: ${erro.message}`);
         }
     }
 

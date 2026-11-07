@@ -16,7 +16,7 @@ registrarPagina("estudo", (raiz) => {
     const estado = { ativa: true, videoId: null, frases: [], indice: 0, salvas: new Set(), cancelarContagem: null };
     const elemento = (id) => document.getElementById(id);
 
-    const urlDoAudio = (frase) => api.videos.urlAudio(estado.videoId, frase.tempo_inicio, frase.tempo_fim);
+    const urlDaOnda = (frase) => api.videos.urlWaveform(estado.videoId, frase.tempo_inicio, frase.tempo_fim);
 
     function mostrarFrase(indice) {
         estado.indice = indice;
@@ -35,10 +35,10 @@ registrarPagina("estudo", (raiz) => {
         Gravador.prepararFrase(`frase-${indice}`, duracao, {
             videoId: estado.videoId, inicio: frase.tempo_inicio, fim: frase.tempo_fim, texto: frase.texto_limpo,
         });
-        Waveform.carregar(urlDoAudio(frase), duracao);
+        Waveform.carregar(urlDaOnda(frase), duracao);
 
-        // Pré-carrega o áudio das próximas 2 frases, para a troca ser instantânea.
-        estado.frases.slice(indice + 1, indice + 3).forEach((proxima) => fetch(urlDoAudio(proxima)).catch(() => {}));
+        // Pré-calcula a onda das próximas 2 frases no servidor (fica no banco), para a troca ser instantânea.
+        estado.frases.slice(indice + 1, indice + 3).forEach((proxima) => fetch(urlDaOnda(proxima)).catch(() => {}));
     }
 
     function marcarSalvo(salvo) {

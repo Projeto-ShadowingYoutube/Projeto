@@ -3,7 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import NaiveDatetime
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.config import VELOCIDADE_PADRAO
@@ -77,6 +77,24 @@ class Card(SQLModel, table=True):
 
     deck_id: int = Field(foreign_key="deck.id", index=True)
     deck: Deck | None = Relationship(back_populates="cards")
+
+
+class Waveform(SQLModel, table=True):
+    """Onda de um trecho de vídeo, pronta para desenhar: os peaks (0 a 1) em JSON, com os metadados do cálculo.
+    Não pertence a um usuário: a onda de um trecho é a mesma para todos. A versão do algoritmo faz parte da chave."""
+    __table_args__ = (
+        UniqueConstraint("video_id", "inicio", "fim", "versao", name="uq_waveform_trecho_versao"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    video_id: str = Field(index=True)
+    inicio: float  # segundos, arredondados em 2 casas (como o resto do app identifica trechos)
+    fim: float
+    versao: int    # config.WAVEFORM_VERSAO_ALGORITMO usada no cálculo
+    duracao: float
+    quantidade: int  # quantos peaks: conferido ao ler (registro incompleto é recalculado)
+    peaks: list[float] = Field(sa_column=Column(JSON, nullable=False))
+    data_criacao: NaiveDatetime = Field(default_factory=agora)
 
 
 class EntradaDicionario(SQLModel, table=True):

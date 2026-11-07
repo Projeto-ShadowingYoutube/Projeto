@@ -122,6 +122,16 @@ class RevisaoSalva(BaseModel):
     numero_revisoes: int
 
 
+class WaveformDoTrecho(BaseModel):
+    video_id: str
+    inicio: float
+    fim: float
+    duracao: float
+    versao: int
+    peaks: list[float]
+    cache: bool  # True: veio pronta do banco (sem FFmpeg); False: calculada agora
+
+
 class StatusVideo(BaseModel):
     pronto: bool
     progresso: float

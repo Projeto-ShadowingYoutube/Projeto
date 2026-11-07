@@ -1,13 +1,16 @@
-"""Rotas do vídeo baixado: progresso do download, o arquivo, o áudio de uma frase e o tempo das palavras."""
+"""Rotas do vídeo baixado: progresso do download, o arquivo, a onda (waveform) e o áudio de uma frase e o tempo
+das palavras."""
 import logging
 import subprocess
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import FileResponse
+from sqlmodel import Session
 
 from app import config
-from app.schemas import StatusVideo, TemposPalavras
-from app.services import karaoke, midia
+from app.db import get_session
+from app.schemas import StatusVideo, TemposPalavras, WaveformDoTrecho
+from app.services import karaoke, midia, waveform
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/api/videos/{video_id}", tags=["vídeos"])
@@ -40,9 +43,26 @@ async def obter_video(video_id: str = VideoId):
     return FileResponse(caminho, media_type=midia.tipo_do_video(caminho))
 
 
+@router.get("/waveform", response_model=WaveformDoTrecho)
+async def onda_do_trecho(
+    video_id: str = VideoId, inicio: float = Query(ge=0), fim: float = Query(gt=0),
+    session: Session = Depends(get_session),
+):
+    """Peaks (0 a 1) para desenhar a onda da frase. Calculados uma vez e guardados no banco (services/waveform.py):
+    da segunda vez em diante, vêm prontos, sem FFmpeg e sem precisar do vídeo."""
+    _validar_trecho(inicio, fim)
+    try:
+        return await waveform.obter(session, video_id, inicio, fim)
+    except midia.VideoIndisponivel:
+        raise HTTPException(status_code=502, detail="Não foi possível baixar o vídeo do YouTube.") from None
+    except (OSError, subprocess.CalledProcessError):
+        logger.exception("Erro ao calcular a onda do vídeo %s", video_id)
+        raise HTTPException(status_code=500, detail="Erro ao gerar a onda da frase. O FFmpeg está instalado?") from None
+
+
 @router.get("/audio", response_class=FileResponse)
 async def obter_audio(video_id: str = VideoId, inicio: float = Query(ge=0), fim: float = Query(gt=0)):
-    """WAV de uma frase, usado para desenhar o waveform de referência."""
+    """WAV de uma frase. Desde o B9 a onda usa /waveform; esta rota ficou sem uso interno (candidata a remoção)."""
     _validar_trecho(inicio, fim)
     try:
         audio = await midia.audio_da_frase(video_id, inicio, fim)
