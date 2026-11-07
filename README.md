@@ -192,9 +192,17 @@ O teste `tests/test_migracoes.py` falha se um modelo mudar sem a migração corr
 Cada pessoa tem uma conta (e-mail + senha), e **cada Deck pertence a uma conta**. As rotas de Decks e Cards exigem
 login, e ninguém vê nem altera os Decks de outra pessoa.
 
-> **Até as telas de login chegarem (bloco B6):** as páginas de Decks e o botão "Salvar card" mostram "Faça login
-> para continuar". Para usar o app nesse intervalo, entre pelo `/docs` (`POST /api/auth/login`): o cookie vale para
-> o site todo, e é só voltar à página.
+**Na interface:**
+- **Todas as páginas exigem login**, menos `/login` e `/cadastro`. Quem abre uma página sem estar logado vai para
+  `/login?proximo=<página>` e, depois de entrar, volta para ela.
+- A navbar mostra o e-mail da conta e o botão **Sair**.
+- Se a sessão vencer no meio do uso, a próxima ação leva ao login e depois de volta à mesma página.
+- Como funciona (`app/api/paginas.py`): sem sessão, quem abre a URL direto recebe um redirecionamento 303. Na
+  navegação pelo HTMX, o servidor responde com o header `HX-Redirect`. No front, um 401 da API (`requisitarJSON`
+  em `static/js/nucleo/api.js`) também leva ao login.
+- **Open redirect:** o `proximo` só aceita caminhos deste site. `?proximo=https://outro-site` vira `/`.
+- As páginas saem com `Cache-Control: no-store`: depois de **Sair**, o botão "voltar" do navegador não mostra cópias
+  antigas.
 
 | Rota | O que faz |
 |---|---|
@@ -208,6 +216,10 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 - **Sessão:** ao entrar, o servidor gera um token aleatório de 256 bits. Ele vai num cookie `sessao` com
   `HttpOnly` (o JavaScript não o lê) e `SameSite=Lax` (não é enviado em POSTs vindos de outros sites). No banco
   (tabela `sessao`) fica só o SHA-256 do token. A sessão vale 14 dias (`DURACAO_SESSAO_DIAS` em `app/config.py`).
+- **CSRF** (um site malicioso usando a sessão de quem o visita). São duas barreiras. (1) O cookie é `SameSite=Lax`.
+  (2) Em `POST`/`PUT`/`PATCH`/`DELETE`, o middleware `app/seguranca.py` recusa com 403 quando o navegador informa
+  uma origem (`Origin`) diferente do próprio app. Clientes sem `Origin` (curl, scripts, testes) passam. A segunda
+  barreira importa porque o `SameSite` trata outra **porta** do mesmo host como o mesmo "site".
 - **Produção:** defina `AMBIENTE=producao` (no `.env` ou nas variáveis do servidor). Assim o cookie ganha `Secure` e
   só trafega por HTTPS.
 - **Para proteger uma rota:** `usuario: Usuario = Depends(usuario_atual)` (de `app/api/auth.py`). Sem sessão válida,
@@ -248,10 +260,11 @@ app/
 ├── config.py         # caminhos, constantes e configuração por ambiente (DATABASE_URL / .env)
 ├── db.py, models.py  # conexão com o banco e modelos (Usuários, Sessões, Decks, Cards, cache do dicionário)
 ├── migrar.py         # python -m app.migrar: backup + migrações do Alembic
+├── seguranca.py      # CSRF: recusa POST/PATCH/DELETE vindos de outros sites (verificação de Origin)
 ├── schemas.py        # formatos de entrada/saída da API
 ├── api/              # camada HTTP: rotas finas, que validam e chamam os serviços
 │   ├── paginas.py      páginas HTML (navegação via HTMX)
-│   ├── auth.py         cadastro, login, logout, /me e a dependência usuario_atual
+│   ├── auth.py         cadastro, login, logout, /me e as dependências usuario_atual / usuario_opcional
 │   ├── legendas.py     legendas + limite de tokens
 │   ├── videos.py       vídeo, áudio de cada frase e tempo das palavras
 │   ├── avaliacoes.py   avaliação da fala gravada
@@ -276,7 +289,7 @@ app/
         ├── main.js       ponto de entrada
         ├── nucleo/       cliente da API, interface global, ciclo de vida das páginas, tema
         ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck
-        └── paginas/      estudo, decks, revisao
+        └── paginas/      auth (login e cadastro), estudo, decks, revisao
 migrations/           # Alembic: env.py e versions/ (uma migração por mudança no esquema)
 docker/postgres/      # init.sql: cria o banco de testes no container do Postgres
 docker-compose.yml    # PostgreSQL local para desenvolvimento (docker compose up -d db)
@@ -290,4 +303,14 @@ docs/                 # plano de implementação (IMPLEMENTATION_PLAN.md) e mét
 pip install -r requirements-dev.txt
 pytest          # testes + cobertura
 ruff check .    # lint (regras em pyproject.toml)
+```
+
+**Testes de navegador (opcionais).** `tests/test_e2e_navegador.py` abre o app num Chromium de verdade (Playwright):
+cadastro, login, criar Deck, revisar, excluir Card, sair, isolamento entre contas, sessão vencida e CSRF. Eles usam
+um banco temporário e um vídeo falso gerado pelo FFmpeg, então não precisam de rede nem gastam tokens. São mais
+lentos, por isso ficam desligados no `pytest` comum:
+```bash
+python -m playwright install chromium     # uma vez (~150 MB)
+# cmd: set E2E=1 | PowerShell: $env:E2E="1" | bash: export E2E=1
+pytest tests/test_e2e_navegador.py
 ```

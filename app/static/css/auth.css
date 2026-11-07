@@ -1,0 +1,51 @@
+/* Telas de login e cadastro (templates/paginas/login.html e cadastro.html) e o usuário na navbar.
+   Reaproveitam o visual da página inicial: .hero-title, .input-card, .url-input e .main-btn (inicio.css). */
+.pagina-auth {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.auth-form {
+    max-width: 460px;
+    text-align: left;
+}
+.auth-form label {
+    display: block;
+    margin: 0 0 6px 4px;
+    font-size: 0.95rem;
+    color: var(--text-sub);
+}
+.auth-form .url-input { height: 52px; }
+
+.auth-erro {
+    margin: -6px 0 16px 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(231, 76, 60, 0.15);
+    border: 1px solid rgba(231, 76, 60, 0.5);
+    color: #e74c3c;
+    font-size: 0.95rem;
+}
+.auth-erro[hidden] { display: none; }
+
+.auth-alternativa {
+    margin: 18px 0 0 0;
+    text-align: center;
+    color: var(--text-sub);
+}
+.auth-alternativa a { color: #c084fc; font-weight: bold; }
+
+.nav-usuario {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-sub);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .nav-usuario { display: none; }
+}

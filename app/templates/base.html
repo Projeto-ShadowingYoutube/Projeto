@@ -17,6 +17,7 @@
         <link rel="stylesheet" href="/static/css/legenda.css">
         <link rel="stylesheet" href="/static/css/modais.css">
         <link rel="stylesheet" href="/static/css/decks.css">
+        <link rel="stylesheet" href="/static/css/auth.css">
 
         <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" crossorigin="anonymous"></script>
         <script src="https://unpkg.com/wavesurfer.js@8.0.4/dist/wavesurfer.min.js"></script>
@@ -48,8 +49,12 @@
         <header class="navbar">
             <div class="logo"><a href="/" style="color: inherit;">Shadowing</a></div>
             <div class="nav-right">
+                {% if usuario %}
                 <button class="nav-btn">🔗 <span class="btn-text-mobile">Token</span> <span id="token-count">–</span></button>
                 <button class="nav-btn" hx-get="/decks" hx-target="main" hx-push-url="true">↺ <span class="btn-text-mobile">Revisar</span></button>
+                <span class="nav-usuario" title="Conta conectada">{{ usuario.email }}</span>
+                <button class="nav-btn" id="sair" title="Sair da conta">Sair</button>
+                {% endif %}
                 <button class="nav-btn theme-toggle" id="mode">☀️</button>
             </div>
         </header>

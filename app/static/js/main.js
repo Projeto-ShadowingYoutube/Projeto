@@ -5,6 +5,7 @@ import { iniciarCicloDeVida } from "./nucleo/paginas.js";
 import { iniciarTema } from "./nucleo/tema.js";
 
 // Cada página se registra ao ser importada.
+import "./paginas/auth.js";
 import "./paginas/decks.js";
 import "./paginas/estudo.js";
 import "./paginas/revisao.js";
@@ -13,6 +14,18 @@ iniciarTema();
 iniciarModalErro();
 iniciarCicloDeVida();
 
-api.tokens()
-    .then((dados) => atualizarTokens(dados.tokens_restantes))
-    .catch(() => {});
+// Contador de tokens e botão "Sair" só existem na navbar de quem está logado.
+if (document.getElementById("token-count")) {
+    api.tokens()
+        .then((dados) => atualizarTokens(dados.tokens_restantes))
+        .catch(() => {});
+}
+
+document.getElementById("sair")?.addEventListener("click", async () => {
+    try {
+        await api.auth.logout();
+    } finally {
+        // Carga completa: a navbar volta ao estado "sem usuário" e nenhuma página antiga fica na tela.
+        location.assign("/login");
+    }
+});

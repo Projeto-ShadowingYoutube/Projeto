@@ -21,6 +21,7 @@ export function esconderCarregamento() {
 
 export function atualizarTokens(valor) {
     const contador = elemento("token-count");
+    if (!contador) return; // navbar sem usuário (telas de login/cadastro)
     contador.textContent = valor;
     contador.classList.toggle("token-low", Number(valor) === 0);
 }

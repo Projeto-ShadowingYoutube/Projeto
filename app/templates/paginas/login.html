@@ -1,0 +1,24 @@
+<!-- Tela de login: o JavaScript dela está em static/js/paginas/auth.js. -->
+<div class="pagina pagina-auth" data-pagina="login" data-proximo="{{ proximo }}">
+    <h1 class="hero-title">SHADOWING</h1>
+    <p class="hero-sub">Entre na sua conta para estudar e revisar os seus Decks.</p>
+
+    <form class="input-card auth-form">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email" class="url-input" autocomplete="email" maxlength="254" required>
+
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" name="senha" class="url-input" autocomplete="current-password" maxlength="128" required>
+
+        <p class="auth-erro" role="alert" hidden></p>
+
+        <div class="btn-row">
+            <button type="submit" class="main-btn btn-load">ENTRAR</button>
+        </div>
+
+        <p class="auth-alternativa">
+            Não tem conta?
+            <a href="/cadastro{% if proximo != '/' %}?proximo={{ proximo | urlencode }}{% endif %}">Criar conta</a>
+        </p>
+    </form>
+</div>

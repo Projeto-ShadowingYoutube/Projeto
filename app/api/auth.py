@@ -32,9 +32,16 @@ def _gravar_cookie(resposta: Response, token: str) -> None:
     )
 
 
-def usuario_atual(token: str | None = Depends(cookie_sessao), session: Session = Depends(get_session)) -> Usuario:
+def usuario_opcional(
+    token: str | None = Depends(cookie_sessao), session: Session = Depends(get_session),
+) -> Usuario | None:
+    """Dependência: o usuário dono da sessão do cookie, ou None (para quem decide sozinho o que fazer sem login,
+    como as páginas, que mandam para a tela de login)."""
+    return auth.usuario_da_sessao(session, token) if token else None
+
+
+def usuario_atual(usuario: Usuario | None = Depends(usuario_opcional)) -> Usuario:
     """Dependência: o usuário dono da sessão do cookie. Sem sessão válida, responde 401."""
-    usuario = auth.usuario_da_sessao(session, token) if token else None
     if usuario is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Faça login para continuar.")
     return usuario

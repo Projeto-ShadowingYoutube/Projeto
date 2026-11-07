@@ -2,3 +2,4 @@
 pytest==9.2.0
 pytest-cov==7.1.0
 ruff==0.17.3
+playwright==1.64.1 # testes de navegador (opcionais): python -m playwright install chromium; E2E=1 pytest tests/test_e2e_navegador.py

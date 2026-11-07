@@ -1,8 +1,20 @@
 // Cliente da API do servidor: todas as URLs do app ficam aqui.
 
+// Leva para o login e, depois de entrar, de volta para a página atual.
+export function irParaLogin() {
+    const aqui = location.pathname + location.search;
+    location.assign(`/login?${new URLSearchParams({ proximo: aqui })}`);
+}
+
 // fetch que converte a resposta em JSON e transforma respostas de erro em exceções com a mensagem do servidor.
 export async function requisitarJSON(url, opcoes) {
     const resposta = await fetch(url, opcoes);
+    // Sessão ausente ou vencida (ex.: expirou no meio do estudo): vai para o login. As rotas /api/auth/ ficam de
+    // fora: lá o 401 é "senha errada", e quem chamou mostra a mensagem na tela.
+    if (resposta.status === 401 && !url.startsWith("/api/auth/")) {
+        irParaLogin();
+        return new Promise(() => {}); // a página vai ser trocada: quem chamou não deve mostrar erro
+    }
     if (resposta.status === 204) return null;
     const dados = await resposta.json().catch(() => null);
     if (!resposta.ok) {
@@ -32,6 +44,12 @@ function enviarJSON(url, metodo, corpo) {
 const consulta = (parametros) => new URLSearchParams(parametros).toString();
 
 export const api = {
+    auth: {
+        login: (email, senha) => enviarJSON("/api/auth/login", "POST", { email, senha }),
+        cadastro: (email, senha) => enviarJSON("/api/auth/cadastro", "POST", { email, senha }),
+        logout: () => enviarJSON("/api/auth/logout", "POST"),
+    },
+
     tokens: () => requisitarJSON("/api/tokens"),
     legendas: (link) => requisitarJSON(`/api/legendas?${consulta({ url: link })}`),
     dicionario: (palavra, frase, indice) => requisitarJSON(`/api/dicionario?${consulta({ palavra, frase, indice })}`),
