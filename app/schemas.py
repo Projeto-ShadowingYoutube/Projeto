@@ -1,4 +1,5 @@
 """Formatos de entrada e saída da API (validados pelo FastAPI e documentados em /docs)."""
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -104,6 +105,7 @@ class ResumoDeck(BaseModel):
     novos: int
     revisar: int
     quantidade_total: int
+    proxima_revisao: datetime | None  # a mais próxima entre os Cards já revisados (horário de Brasília, sem fuso)
 
 
 class DeckSalvo(BaseModel):

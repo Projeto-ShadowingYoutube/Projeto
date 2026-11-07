@@ -70,9 +70,17 @@ export function escolherDeck() {
 
     function filtrar() {
         const termo = filtro.value.toLowerCase().trim();
-        lista.querySelectorAll(".modal-deck-item:not(.apenas-texto)").forEach((item) => {
+        const itens = [...lista.querySelectorAll(".modal-deck-item:not(.apenas-texto)")];
+        itens.forEach((item) => {
             item.style.display = item.textContent.toLowerCase().includes(termo) ? "" : "none";
         });
+        // Filtro sem resultado: diz isso, em vez de mostrar uma lista vazia (B12).
+        lista.querySelector(".sem-resultado")?.remove();
+        if (itens.length && itens.every((item) => item.style.display === "none")) {
+            const aviso = itemDeTexto(`Nenhum Deck com “${filtro.value.trim()}”.`);
+            aviso.classList.add("sem-resultado");
+            lista.append(aviso);
+        }
     }
 
     async function recarregar() {
@@ -85,7 +93,7 @@ export function escolherDeck() {
             return;
         }
         if (!decks.length) {
-            lista.replaceChildren(itemDeTexto("Nenhum Deck encontrado."));
+            lista.replaceChildren(itemDeTexto("Você ainda não tem Decks. Use “Criar Deck” abaixo."));
             return;
         }
         lista.replaceChildren(...decks.map((deck) => {

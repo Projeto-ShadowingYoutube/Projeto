@@ -184,7 +184,7 @@ def test_fluxo_completo_login_decks_revisao_e_logout(servidor, navegador):
     aba.click("button[type=submit]")
     expect(aba).to_have_url(f"{servidor}/decks")
     expect(aba.locator(".nav-usuario")).to_have_text("ana@exemplo.com")
-    expect(aba.locator(".dashboard-aviso")).to_contain_text("Nenhum deck cadastrado")
+    expect(aba.locator(".dashboard-aviso")).to_contain_text("Você ainda não tem Decks")
 
     # Agosto: criar Deck pelo modal, salvar Card, revisar com "Fácil".
     _criar_deck_pela_tela(aba, "Inglês")
@@ -241,7 +241,7 @@ def test_outra_conta_nao_ve_nem_abre_os_decks_da_primeira(servidor, navegador):
     contexto_bruno, bruno = _nova_aba(navegador)
     _cadastrar(bruno, servidor, "bruno@exemplo.com")
     bruno.goto(f"{servidor}/decks")
-    expect(bruno.locator(".dashboard-aviso")).to_contain_text("Nenhum deck cadastrado")
+    expect(bruno.locator(".dashboard-aviso")).to_contain_text("Você ainda não tem Decks")
 
     bruno.goto(f"{servidor}/decks/{deck_da_ana}/revisao")
     expect(bruno.locator("#erro")).to_have_text("Deck não encontrado.")
@@ -612,4 +612,103 @@ def test_video_sem_legenda_manual_mostra_a_tela_de_aviso(servidor, navegador, mo
     expect(aba.locator("#modalLegendaTitulo")).to_be_visible()
     expect(aba.locator("#textologs")).to_contain_text("MANUAL (en)")
     expect(aba.locator("#modalLegendaAutomatica")).to_be_hidden()
+    contexto.close()
+
+
+def test_estados_vazios_explicam_e_oferecem_a_proxima_acao(servidor, navegador):
+    """B12: dashboard sem Decks, modal de salvar Card sem Decks / filtro sem resultado, revisão de Deck vazio e de
+    Deck em dia."""
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+
+    # Dashboard de conta nova: motivo + "Estudar um vídeo" (vai ao início) + "Criar Deck" (abre o modal de sempre).
+    aba.goto(f"{servidor}/decks")
+    vazio = aba.locator(".dashboard-aviso .estado-vazio")
+    expect(vazio).to_contain_text("Você ainda não tem Decks")
+    expect(vazio).to_contain_text("marcador")
+    vazio.get_by_role("button", name="Estudar um vídeo").click()
+    expect(aba).to_have_url(f"{servidor}/")
+    aba.goto(f"{servidor}/decks")
+    aba.locator(".dashboard-aviso").get_by_role("button", name="Criar Deck").click()
+    expect(aba.locator("#subModalCriarDeck")).to_be_visible()
+    aba.click("#btnCancelarSubModal")
+
+    # Modal "Salvar Card" no estudo: sem Decks, e filtro sem resultado.
+    _estudar(aba, servidor, 1)
+    aba.click("#botaoContinuar")
+    aba.click("#salvar")
+    expect(aba.locator("#listaDecks")).to_contain_text("Você ainda não tem Decks")
+    aba.click("#btnCriarDeckModal")
+    aba.fill("#novoNomeDeckInput", "Inglês")
+    aba.click("#btnConfirmarCriarDeck")
+    expect(aba.locator("#listaDecks .modal-deck-item", has_text="Inglês")).to_be_visible()
+    aba.fill("#filtroInput", "xyz")
+    expect(aba.locator("#listaDecks .sem-resultado")).to_have_text("Nenhum Deck com “xyz”.")
+    aba.fill("#filtroInput", "ing")
+    expect(aba.locator("#listaDecks .sem-resultado")).to_have_count(0)
+    aba.click("#btnCancelarRodape")
+
+    # Revisão de um Deck sem Cards.
+    aba.goto(f"{servidor}/decks")
+    deck_id = int(_linha(aba, "Inglês").get_attribute("data-id"))
+    aba.goto(f"{servidor}/decks/{deck_id}/revisao")
+    expect(aba.locator("#revisaoVazia")).to_be_visible()
+    expect(aba.locator("#revisaoVazia")).to_contain_text("Este Deck ainda não tem Cards")
+
+    # Revisão de um Deck todo revisado: "Tudo revisado" com a data da próxima ("Fácil" = 7 dias, no 1º Card).
+    _salvar_card(aba, servidor, deck_id, "Review me")
+    card_id = aba.request.get(f"{servidor}/api/decks/{deck_id}/revisao").json()[0]["id"]
+    assert aba.request.post(f"{servidor}/api/cards/{card_id}/avaliacao", data={"dificuldade": "facil"}).ok
+    aba.goto(f"{servidor}/decks/{deck_id}/revisao")
+    expect(aba.locator("#revisaoVazia")).to_contain_text("Tudo revisado!")
+    proxima = re.compile(r"Próxima revisão deste Deck: em 7 dias \(\d\d/\d\d\)")
+    expect(aba.locator("#revisaoVazia")).to_contain_text(proxima)
+    aba.locator("#revisaoVazia").get_by_role("button", name="Voltar aos Decks").click()
+    expect(aba).to_have_url(f"{servidor}/decks")
+    contexto.close()
+
+
+def test_roteiro_integrado_de_outubro(servidor, navegador, monkeypatch):
+    """Out-12: os blocos de outubro juntos, como um usuário usaria. Legenda automática (B10) → onda pronta do
+    servidor (B9) → velocidade e volume salvos (B8, B9.2) → salvar Card no Deck (agosto) → revisar na velocidade e
+    no volume salvos → "Fácil" → revisão em dia (B12). Tokens (B11) e erros (B7) aparecem ao longo do caminho."""
+    def legendas(video_id):
+        return [{"text": "Hello world.", "start": 0.0, "duration": 2.5}], False, "en-US"
+
+    monkeypatch.setattr(youtube, "baixar_legendas", legendas)
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+
+    with aba.expect_response(lambda r: "/waveform?" in r.url) as onda:
+        aba.goto(f"{servidor}/estudo?link=https://youtu.be/autom000001")
+    expect(aba.locator("#modalLegendaAutomatica")).to_be_visible()
+    expect(aba.locator("#token-count")).to_have_text("4")
+    aba.click("#estudarMesmoAssim")
+    assert onda.value.json()["cache"] is False and len(onda.value.json()["peaks"]) == 400
+    _iniciar_estudos(aba)
+
+    with aba.expect_response(lambda r: _eh_salvamento(r.request) and "volume" in (r.request.post_data or "")):
+        _mover_slider(aba, 0.8)
+        _mover_volume(aba, 0.5)
+
+    aba.click("#salvar")
+    aba.click("#btnCriarDeckModal")
+    aba.fill("#novoNomeDeckInput", "Outubro")
+    aba.click("#btnConfirmarCriarDeck")
+    aba.locator("#listaDecks .modal-deck-item", has_text="Outubro").click()
+    aba.click("#btnSalvar")
+    expect(aba.locator("#salvar")).to_have_class(re.compile("salvo"))
+
+    aba.click(".nav-btn:has-text('Revisar')")
+    expect(_linha(aba, "Outubro").locator(".td-novos")).to_have_text("1")
+    _linha(aba, "Outubro").dblclick()
+    expect(aba.locator("#legenda")).to_contain_text("Hello world.")
+    expect(aba.locator("#velocidadeValor")).to_have_text("0.80x")
+    expect(aba.locator("#volumeValor")).to_have_text("50%")
+    _iniciar_estudos(aba)
+    assert _velocidade_do_video(aba) == 0.8 and _volume_do_video(aba) == 0.5
+    aba.click("#facil")
+    expect(aba).to_have_url(f"{servidor}/decks")
+    _linha(aba, "Outubro").dblclick()
+    expect(aba.locator("#revisaoVazia")).to_contain_text("Tudo revisado!")
     contexto.close()

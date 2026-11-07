@@ -1,5 +1,6 @@
 // Página de Decks (templates/paginas/decks.html): dashboard com Novos / Revisar / Total de cada Deck.
 import { executar, pedirNome } from "../componentes/escolha-deck.js";
+import { criarEstadoVazio } from "../componentes/estado-vazio.js";
 import { api } from "../nucleo/api.js";
 import { navegarPara, registrarPagina } from "../nucleo/paginas.js";
 
@@ -18,12 +19,13 @@ registrarPagina("decks", () => {
         });
     }
 
-    function linhaDeAviso(texto) {
+    // Linha que ocupa a tabela inteira com um estado vazio (B12): o motivo e o que fazer.
+    function linhaDeAviso(estado) {
         const linha = document.createElement("tr");
         const celula = document.createElement("td");
         celula.colSpan = 4;
         celula.className = "dashboard-aviso";
-        celula.textContent = texto;
+        celula.append(criarEstadoVazio(estado));
         linha.append(celula);
         return linha;
     }
@@ -54,12 +56,22 @@ registrarPagina("decks", () => {
         try {
             decks = await api.decks.listar();
         } catch (erro) {
-            corpo.replaceChildren(linhaDeAviso("Erro ao carregar os decks."));
+            corpo.replaceChildren(linhaDeAviso({
+                titulo: "Não foi possível carregar os seus Decks.",
+                texto: erro.message,
+                acoes: [{ rotulo: "Tentar de novo", principal: true, aoClicar: recarregar }],
+            }));
             return;
         }
-        corpo.replaceChildren(...(decks.length
-            ? decks.map(linhaDoDeck)
-            : [linhaDeAviso("Nenhum deck cadastrado. Clique em CRIAR DECK para começar a povoar.")]));
+        corpo.replaceChildren(...(decks.length ? decks.map(linhaDoDeck) : [linhaDeAviso({
+            titulo: "Você ainda não tem Decks",
+            texto: "Os Cards nascem no estudo: carregue um vídeo e salve as frases com o marcador 🔖. "
+                + "Eles ficam guardados num Deck para você revisar depois.",
+            acoes: [
+                { rotulo: "Estudar um vídeo", principal: true, aoClicar: () => navegarPara("/") },
+                { rotulo: "Criar Deck", aoClicar: () => elemento("btnCriarDeckRevisao").click() },
+            ],
+        })]));
     }
 
     function revisar(deckId) {

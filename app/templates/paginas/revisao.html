@@ -1,5 +1,10 @@
 <!-- Revisão dos Cards de um Deck: o JavaScript dela está em static/js/paginas/revisao.js. -->
 <div class="pagina" data-pagina="revisao" data-deck-id="{{ deck_id }}" data-velocidade="{{ velocidade }}" data-volume="{{ volume }}">
+    <!-- Nada para revisar agora (B12): Deck vazio, ou tudo em dia com a data da próxima revisão. revisao.js preenche. -->
+    <div id="revisaoVazia" class="modal-legenda-titulo">
+        <div class="modal-legenda-titulo-content" id="revisaoVaziaConteudo"></div>
+    </div>
+
     <div id="painelPrincipal">
         {% include "partials/player.html" %}
 

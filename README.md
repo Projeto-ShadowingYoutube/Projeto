@@ -243,6 +243,25 @@ login, e ninguém vê nem altera os Decks de outra pessoa.
 Decks antigos, `python -m app.migrar` para com `ERRO: Existem N Deck(s) ... sem dono` **sem alterar nada**. Decida
 o que fazer com eles (associar a um usuário ou apagar) e rode o comando de novo. Faça backup antes.
 
+## 🗒️ Telas vazias (empty states)
+
+Quando uma área não tem nada para mostrar, ela diz **por quê** e oferece **a próxima ação**. O componente é
+`static/js/componentes/estado-vazio.js`.
+
+| Onde | Mensagem | Ações |
+|---|---|---|
+| Dashboard de Decks, conta sem Decks | "Você ainda não tem Decks" e como os Cards nascem (marcador 🔖 no estudo) | **Estudar um vídeo** · **Criar Deck** |
+| Dashboard, erro ao carregar | "Não foi possível carregar os seus Decks." | **Tentar de novo** |
+| Revisão de um Deck sem Cards | "Este Deck ainda não tem Cards" | **Estudar um vídeo** · **Voltar aos Decks** |
+| Revisão de um Deck em dia | "Tudo revisado! 🎉 Próxima revisão deste Deck: em 3 dias (10/11)" | **Voltar aos Decks** · **Estudar um vídeo** |
+| Modal "Escolher Deck" (salvar Card), sem Decks | "Você ainda não tem Decks. Use “Criar Deck” abaixo." | (botão do próprio modal) |
+| Modal "Escolher Deck", filtro sem resultado | "Nenhum Deck com “xyz”." | — |
+| Estudo, legenda sem frases | Explica o motivo provável e sugere outro vídeo | (botão "início" do modal) |
+
+A data da próxima revisão vem do resumo dos Decks: `GET /api/decks` traz `proxima_revisao`, a data mais próxima
+entre os Cards já revisados, ou `null`. A página de revisão só consulta o resumo quando não há Cards para revisar.
+O fim de uma revisão continua como no sistema de agosto (aviso "Você finalizou a revisão…" e volta ao dashboard).
+
 ## 📝 Legendas (manuais e automáticas, em qualquer variante de inglês)
 
 O app estuda vídeos com legenda em **inglês**, em qualquer variante: `en`, `en-US`, `en-GB`, `en-CA`... (código
@@ -520,7 +539,7 @@ app/
     └── js/             ES modules
         ├── main.js       ponto de entrada
         ├── nucleo/       cliente da API, interface global, ciclo de vida das páginas, tema, configurações
-        ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck
+        ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck, estado vazio
         └── paginas/      auth (login e cadastro), estudo, decks, revisao
 migrations/           # Alembic: env.py e versions/ (uma migração por mudança no esquema)
 docker/postgres/      # init.sql: cria o banco de testes no container do Postgres

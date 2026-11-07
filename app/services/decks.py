@@ -29,7 +29,9 @@ def nome_unico(session: Session, usuario_id: int, nome: str, ignorar_id: int | N
 
 
 def resumo_dos_decks(session: Session, usuario_id: int) -> list[dict]:
-    """Cada Deck do usuário com as contagens do dashboard: Cards novos, a revisar e total."""
+    """Cada Deck do usuário com as contagens do dashboard (Cards novos, a revisar e total) e a data da próxima
+    revisão agendada (a mais próxima entre os Cards já revisados; None se nenhum foi revisado). Ela permite à página
+    de revisão dizer "tudo revisado, próxima em 2 dias" em vez de uma tela vazia (B12)."""
     momento = agora()
     cards_por_deck: dict[int, list[Card]] = {}
     cards_do_usuario = select(Card).join(Deck).where(Deck.usuario_id == usuario_id)
@@ -39,12 +41,14 @@ def resumo_dos_decks(session: Session, usuario_id: int) -> list[dict]:
     resumo = []
     for deck in session.exec(select(Deck).where(Deck.usuario_id == usuario_id).order_by(Deck.id)).all():
         cards = cards_por_deck.get(deck.id, [])
+        agendadas = [c.data_proxima_revisao for c in cards if c.revisao > 0]
         resumo.append({
             "id": deck.id,
             "nome": deck.nome,
             "novos": sum(1 for c in cards if c.revisao == 0),
             "revisar": sum(1 for c in cards if c.revisao > 0 and c.data_proxima_revisao <= momento),
             "quantidade_total": len(cards),
+            "proxima_revisao": min(agendadas) if agendadas else None,
         })
     return resumo
 

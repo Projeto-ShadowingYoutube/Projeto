@@ -138,7 +138,8 @@ registrarPagina("estudo", (raiz) => {
         estado.videoId = dados.video_id;
         estado.frases = dados.dados;
         if (!estado.frases.length) {
-            mostrarErro("Não foi encontrada nenhuma frase nas legendas desse vídeo.");
+            mostrarErro("As legendas deste vídeo não têm frases para estudar (podem estar vazias ou ter só música "
+                + "e efeitos sonoros). Escolha outro vídeo.");
             return;
         }
 

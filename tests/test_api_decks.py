@@ -136,3 +136,19 @@ def test_deletar_deck_apaga_os_cards_dele(client):
 
     novo = criar_deck(client)
     assert client.get(f"/api/decks/{novo['id']}/revisao").json() == []
+
+
+def test_resumo_informa_a_proxima_revisao_agendada(client):
+    """B12: a página de revisão usa este campo para dizer "tudo revisado, próxima em N dias"."""
+    deck = criar_deck(client, "Agenda")
+    assert client.get("/api/decks").json()[0]["proxima_revisao"] is None  # sem Cards
+
+    salvar_card(client, deck["id"], texto="Primeiro")
+    assert client.get("/api/decks").json()[0]["proxima_revisao"] is None  # Card novo ainda não tem agenda
+
+    card_id = client.get(f"/api/decks/{deck['id']}/revisao").json()[0]["id"]
+    agendada = client.post(f"/api/cards/{card_id}/avaliacao", json={"dificuldade": "facil"}).json()["nova_revisao"]
+
+    resumo = client.get("/api/decks").json()[0]
+    assert resumo["proxima_revisao"] == agendada
+    assert (resumo["novos"], resumo["revisar"], resumo["quantidade_total"]) == (0, 0, 1)  # contagens de agosto
