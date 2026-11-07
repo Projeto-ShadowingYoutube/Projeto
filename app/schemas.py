@@ -1,9 +1,9 @@
 """Formatos de entrada e saída da API (validados pelo FastAPI e documentados em /docs)."""
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.config import PADRAO_VIDEO_ID
+from app.config import PADRAO_VIDEO_ID, VELOCIDADE_MAXIMA, VELOCIDADE_MINIMA
 
 Dificuldade = Literal["dificil", "medio", "facil"]
 
@@ -20,6 +20,22 @@ class Credenciais(BaseModel):
     # No login não se valida o formato: qualquer erro vira o mesmo 401 genérico.
     email: str = Field(max_length=254)
     senha: str = Field(max_length=128)
+
+
+class AlteracaoConfiguracoes(BaseModel):
+    """PATCH parcial: só os campos enviados mudam. Campos desconhecidos são recusados (422), para um erro de
+    digitação ("velocidad") não passar em silêncio."""
+    model_config = ConfigDict(extra="forbid")
+
+    velocidade: float | None = Field(default=None, ge=VELOCIDADE_MINIMA, le=VELOCIDADE_MAXIMA)
+
+    @field_validator("velocidade")
+    @classmethod
+    def nao_nulo(cls, valor):
+        # "Opcional" aqui é "pode não ser enviado", não "pode ser null" (o validador só roda se o campo vier).
+        if valor is None:
+            raise ValueError("não pode ser nulo")
+        return valor
 
 
 class NomeDeck(BaseModel):
@@ -66,6 +82,10 @@ class Legendas(BaseModel):
     legenda_manual: bool
     titulo_video: str
     aviso_legenda: str
+
+
+class ConfiguracoesDeEstudo(BaseModel):
+    velocidade: float
 
 
 class ResumoDeck(BaseModel):

@@ -5,6 +5,7 @@ import { Legenda } from "../componentes/legenda.js";
 import { Player } from "../componentes/player.js";
 import { api } from "../nucleo/api.js";
 import { mostrarErro } from "../nucleo/interface.js";
+import { salvarPendentes, salvarVelocidade } from "../nucleo/configuracoes.js";
 import { navegarPara, registrarPagina } from "../nucleo/paginas.js";
 
 registrarPagina("revisao", (raiz) => {
@@ -86,7 +87,10 @@ registrarPagina("revisao", (raiz) => {
 
         estado.cards = cards;
         mostrarCard(0);
-        await Player.criar("player", cards[0].video_id);
+        // O vídeo começa na velocidade salva do usuário (vem no HTML da página).
+        const carregandoVideo = Player.criar("player", cards[0].video_id, { velocidade: Number(raiz.dataset.velocidade) });
+        Gravador.atualizarTempoEsperado(); // o timer do primeiro Card já usa a velocidade salva
+        await carregandoVideo;
         if (!estado.ativa) return;
         elemento("protecaoButton").disabled = false;
         habilitarBotoes(true);
@@ -111,12 +115,18 @@ registrarPagina("revisao", (raiz) => {
 
     Legenda.reiniciar();
     Player.aoAtualizarTempo(Legenda.destacar);
+    Player.aoMudarVelocidade((velocidade) => {
+        Gravador.atualizarTempoEsperado();
+        salvarVelocidade(velocidade);
+    });
     iniciar(raiz.dataset.deckId);
 
     return () => {
         estado.ativa = false;
         Player.destruir();
         Player.aoAtualizarTempo(null);
+        Player.aoMudarVelocidade(null);
+        salvarPendentes();
         Gravador.encerrar();
         Legenda.fecharPopup();
     };

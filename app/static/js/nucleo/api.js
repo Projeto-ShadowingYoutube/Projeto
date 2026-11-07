@@ -52,6 +52,11 @@ export const api = {
         logout: () => enviarJSON("/api/auth/logout", "POST"),
     },
 
+    configuracoes: {
+        obter: () => requisitarJSON("/api/configuracoes"),
+        alterar: (mudancas) => enviarJSON("/api/configuracoes", "PATCH", mudancas),
+    },
+
     tokens: () => requisitarJSON("/api/tokens"),
     legendas: (link) => requisitarJSON(`/api/legendas?${consulta({ url: link })}`),
     dicionario: (palavra, frase, indice) => requisitarJSON(`/api/dicionario?${consulta({ palavra, frase, indice })}`),

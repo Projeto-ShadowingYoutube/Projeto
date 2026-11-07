@@ -19,6 +19,7 @@ export const Player = (() => {
     let suspenso = false;     // pausado por suspender() (ex.: enquanto o usuário ouve a própria gravação)
     let loopId = null;
     let aoAtualizarTempo = null;
+    let aoMudarVelocidade = null; // avisado só quando o USUÁRIO muda a velocidade (a página salva a preferência)
 
     const elemento = (id) => document.getElementById(id);
     const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,8 +79,17 @@ export const Player = (() => {
         return true;
     }
 
-    async function criar(elementoId, videoId) {
+    // Velocidade inicial válida dentro da faixa do slider (templates/partials/player.html); senão, 1x.
+    function velocidadeInicial(valor) {
+        const slider = elemento("velocidade");
+        const [minima, maxima] = slider ? [Number(slider.min), Number(slider.max)] : [0.25, 1.5];
+        return Number.isFinite(valor) && valor > 0 ? Math.min(maxima, Math.max(minima, valor)) : 1;
+    }
+
+    // opcoes.velocidade: velocidade salva do usuário (B8). Sem ela, começa em 1x, como sempre.
+    async function criar(elementoId, videoId, opcoes = {}) {
         destruir();
+        velocidade = velocidadeInicial(opcoes.velocidade);
         video = document.createElement("video");
         video.playsInline = true;
         video.preload = "auto";
@@ -97,8 +107,8 @@ export const Player = (() => {
         const slider = elemento("velocidade");
         elemento("pausar").onclick = alternarPausa;
         elemento("bloqueioPlayer").onclick = alternarPausa;
-        slider.oninput = () => definirVelocidade(Number(slider.value));
-        slider.ondblclick = () => definirVelocidade(1);
+        slider.oninput = () => mudarVelocidadePeloUsuario(Number(slider.value));
+        slider.ondblclick = () => mudarVelocidadePeloUsuario(1);
         atualizarControles();
     }
 
@@ -187,6 +197,11 @@ export const Player = (() => {
         atualizarControles();
     }
 
+    function mudarVelocidadePeloUsuario(nova) {
+        definirVelocidade(nova);
+        aoMudarVelocidade?.(nova);
+    }
+
     function liberar() {
         liberado = true;
         atualizarControles();
@@ -224,6 +239,8 @@ export const Player = (() => {
         liberar,
         // Recebe a cada frame quantos segundos se passaram desde o início do trecho.
         aoAtualizarTempo: (callback) => { aoAtualizarTempo = callback; },
+        // Recebe a nova velocidade quando o usuário mexe no slider (ou dá duplo clique para voltar a 1x).
+        aoMudarVelocidade: (callback) => { aoMudarVelocidade = callback; },
         velocidade: () => velocidade,
     };
 })();

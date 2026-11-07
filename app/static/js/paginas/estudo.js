@@ -7,6 +7,7 @@ import { Player } from "../componentes/player.js";
 import { Waveform } from "../componentes/waveform.js";
 import { api } from "../nucleo/api.js";
 import { atualizarTokens, esconderCarregamento, mostrarCarregamento, mostrarErro } from "../nucleo/interface.js";
+import { salvarPendentes, salvarVelocidade } from "../nucleo/configuracoes.js";
 import { registrarPagina } from "../nucleo/paginas.js";
 
 registrarPagina("estudo", (raiz) => {
@@ -96,7 +97,10 @@ registrarPagina("estudo", (raiz) => {
         elemento("modalLegendaTitulo").style.display = "flex";
 
         mostrarFrase(0);
-        await Player.criar("player", estado.videoId);
+        // O vídeo começa na velocidade salva do usuário (vem no HTML da página).
+        const carregandoVideo = Player.criar("player", estado.videoId, { velocidade: Number(raiz.dataset.velocidade) });
+        Gravador.atualizarTempoEsperado(); // o timer da primeira frase já usa a velocidade salva
+        await carregandoVideo;
         if (estado.ativa) elemento("protecaoButton").disabled = false;
     }
 
@@ -112,6 +116,10 @@ registrarPagina("estudo", (raiz) => {
     };
 
     Legenda.reiniciar();
+    Player.aoMudarVelocidade((velocidade) => {
+        Gravador.atualizarTempoEsperado();
+        salvarVelocidade(velocidade); // fica salva na conta (com atraso, para não salvar a cada passo do slider)
+    });
     Player.aoAtualizarTempo((decorrido) => {
         Waveform.atualizarCursor(decorrido);
         Legenda.destacar(decorrido);
@@ -131,6 +139,8 @@ registrarPagina("estudo", (raiz) => {
         estado.ativa = false;
         Player.destruir();
         Player.aoAtualizarTempo(null);
+        Player.aoMudarVelocidade(null);
+        salvarPendentes(); // saiu da página logo depois de mexer no slider: salva agora
         Waveform.conectar(null);
         Gravador.encerrar();
         Waveform.destruir();

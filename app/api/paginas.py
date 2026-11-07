@@ -12,10 +12,13 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlmodel import Session
 
 from app import config
 from app.api.auth import usuario_opcional
+from app.db import get_session
 from app.models import Usuario
+from app.services import configuracoes
 
 router = APIRouter(default_response_class=HTMLResponse, include_in_schema=False)
 templates = Jinja2Templates(directory=config.PASTA_TEMPLATES)
@@ -76,9 +79,17 @@ def inicio(request: Request, usuario: Usuario | None = Depends(usuario_opcional)
     return _pagina_protegida(request, usuario, "inicio.html")
 
 
+def _velocidade(session: Session, usuario: Usuario | None) -> float:
+    """Velocidade salva do usuário, entregue já no HTML: o vídeo começa nela, sem passar por 1x."""
+    return configuracoes.obter(session, usuario.id)["velocidade"] if usuario else config.VELOCIDADE_PADRAO
+
+
 @router.get("/estudo")
-def estudo(request: Request, link: str = "", usuario: Usuario | None = Depends(usuario_opcional)):
-    return _pagina_protegida(request, usuario, "estudo.html", link=link)
+def estudo(
+    request: Request, link: str = "", usuario: Usuario | None = Depends(usuario_opcional),
+    session: Session = Depends(get_session),
+):
+    return _pagina_protegida(request, usuario, "estudo.html", link=link, velocidade=_velocidade(session, usuario))
 
 
 @router.get("/decks")
@@ -87,8 +98,13 @@ def decks(request: Request, usuario: Usuario | None = Depends(usuario_opcional))
 
 
 @router.get("/decks/{deck_id}/revisao")
-def revisao(request: Request, deck_id: int, usuario: Usuario | None = Depends(usuario_opcional)):
-    return _pagina_protegida(request, usuario, "revisao.html", deck_id=deck_id)
+def revisao(
+    request: Request, deck_id: int, usuario: Usuario | None = Depends(usuario_opcional),
+    session: Session = Depends(get_session),
+):
+    return _pagina_protegida(
+        request, usuario, "revisao.html", deck_id=deck_id, velocidade=_velocidade(session, usuario),
+    )
 
 
 @router.get("/login")

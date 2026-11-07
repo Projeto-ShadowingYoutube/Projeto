@@ -6,6 +6,8 @@ from pydantic import NaiveDatetime
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
+from app.config import VELOCIDADE_PADRAO
+
 FUSO = ZoneInfo("America/Sao_Paulo")
 
 
@@ -32,6 +34,14 @@ class Sessao(SQLModel, table=True):
     usuario_id: int = Field(foreign_key="usuario.id", index=True)
     data_criacao: NaiveDatetime = Field(default_factory=agora)
     expira_em: NaiveDatetime
+
+
+class ConfiguracaoEstudo(SQLModel, table=True):
+    """Preferências de estudo de um usuário (no máximo uma linha por usuário: usuario_id é a chave primária).
+    A linha só é criada quando o usuário salva algo; até lá, valem os padrões (services/configuracoes.py)."""
+    usuario_id: int = Field(foreign_key="usuario.id", primary_key=True)
+    velocidade: float = Field(default=VELOCIDADE_PADRAO)  # velocidade preferida do vídeo
+    data_atualizacao: NaiveDatetime = Field(default_factory=agora)
 
 
 class Deck(SQLModel, table=True):

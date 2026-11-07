@@ -86,6 +86,12 @@ export const Gravador = (() => {
         opcoes.mostrarAvaliacao(atual.avaliacao);
     }
 
+    // A velocidade do vídeo mudou (slider, ou a velocidade salva aplicada ao abrir a página): com o gravador
+    // parado, o timer da frase atual passa a mostrar o tempo esperado na velocidade nova.
+    function atualizarTempoEsperado() {
+        if (atual && estado === "parado" && !reproducao) mostrarEstado();
+    }
+
     function mostrarTranscricao(texto) {
         const transcricao = elemento("transcript");
         if (transcricao) transcricao.textContent = texto;
@@ -470,6 +476,7 @@ export const Gravador = (() => {
         // mostrarAvaliacao(avaliacao): exibe a avaliação da frase atual.
         configurar: (novasOpcoes) => { opcoes = { ...opcoes, ...novasOpcoes }; },
         prepararFrase,
+        atualizarTempoEsperado,
         alternar,
         reproduzir,
         encerrar,

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import config, erros, migrar, seguranca
-from app.api import auth, avaliacoes, decks, dicionario, legendas, paginas, videos
+from app.api import auth, avaliacoes, configuracoes, decks, dicionario, legendas, paginas, videos
 
 
 @asynccontextmanager
@@ -25,7 +25,7 @@ def criar_app() -> FastAPI:
     # inclusive dos middlewares acima. Todo erro da API sai como {"detail", "codigo", ...} (ver app/erros.py).
     erros.registrar(app)
     app.mount("/static", StaticFiles(directory=config.PASTA_STATIC), name="static")
-    for modulo in (paginas, auth, legendas, videos, avaliacoes, decks, dicionario):
+    for modulo in (paginas, auth, configuracoes, legendas, videos, avaliacoes, decks, dicionario):
         app.include_router(modulo.router)
     return app
 

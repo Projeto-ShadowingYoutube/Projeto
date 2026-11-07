@@ -45,6 +45,11 @@ LIMITE_TOKENS = "5/5 minute"
 
 # Vídeos guardados em PASTA_MIDIA; os usados há mais tempo são apagados.
 MAX_VIDEOS_GUARDADOS = 5
+# Velocidade do vídeo: a mesma faixa do slider (templates/partials/player.html). A escolhida fica salva por usuário.
+VELOCIDADE_MINIMA = 0.25
+VELOCIDADE_MAXIMA = 1.5
+VELOCIDADE_PADRAO = 1.0
+
 # Duração máxima de um trecho de áudio pedido à API (segundos).
 DURACAO_MAXIMA_TRECHO = 120
 

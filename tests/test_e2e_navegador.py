@@ -269,3 +269,77 @@ def test_outro_site_nao_consegue_deslogar_o_usuario(servidor, navegador, tmp_pat
     expect(aba).to_have_url(f"{servidor}/decks")  # continua logada
     expect(aba.locator(".nav-usuario")).to_have_text("ana@exemplo.com")
     contexto.close()
+
+
+def _mover_slider(aba, valor):
+    """Como arrastar o slider: muda o valor e dispara o evento "input" (o mesmo que o navegador dispara)."""
+    aba.eval_on_selector(
+        "#velocidade", "(s, v) => { s.value = v; s.dispatchEvent(new Event('input', {bubbles: true})); }", str(valor),
+    )
+
+
+def _eh_salvamento(requisicao):
+    return requisicao.method == "PATCH" and "/api/configuracoes" in requisicao.url
+
+
+def _esperar_velocidade_salva(aba, base, esperada, limite_s=5):
+    """Consulta a API até a velocidade salva ser a esperada (sem depender de um tempo fixo)."""
+    fim = time.monotonic() + limite_s
+    while (atual := aba.request.get(f"{base}/api/configuracoes").json()["velocidade"]) != esperada:
+        assert time.monotonic() < fim, f"velocidade salva continua {atual}, esperada {esperada}"
+        aba.wait_for_timeout(100)
+
+
+def _velocidade_do_video(aba):
+    return aba.eval_on_selector("#player video", "v => v.playbackRate")
+
+
+def test_velocidade_funciona_como_antes_e_fica_salva_na_conta(servidor, navegador):
+    contexto, aba = _nova_aba(navegador)
+    _cadastrar(aba, servidor, "ana@exemplo.com")
+    aba.goto(f"{servidor}/decks")
+    _criar_deck_pela_tela(aba, "Velocidade")
+    deck_id = int(_linha(aba, "Velocidade").get_attribute("data-id"))
+    _salvar_card(aba, servidor, deck_id, "Speed test")  # frase de 2.5 s
+    salvamentos = []
+    aba.on("request", lambda r: salvamentos.append(r) if _eh_salvamento(r) else None)
+
+    # Primeira vez: 1x, como sempre.
+    aba.goto(f"{servidor}/decks/{deck_id}/revisao")
+    _iniciar_estudos(aba)
+    expect(aba.locator("#velocidadeValor")).to_have_text("1.00x")
+    expect(aba.locator("#timerTexto")).to_have_text("0.0s / 2.5s")
+    assert _velocidade_do_video(aba) == 1
+
+    # Comportamento existente: arrastar o slider muda o vídeo, o rótulo e o timer na hora.
+    with aba.expect_response(lambda r: _eh_salvamento(r.request)) as salvo:
+        for valor in (0.95, 0.9, 0.85, 0.8, 0.75):  # vários passos seguidos, como um arraste
+            _mover_slider(aba, valor)
+        expect(aba.locator("#velocidadeValor")).to_have_text("0.75x")
+        assert _velocidade_do_video(aba) == 0.75
+        expect(aba.locator("#timerTexto")).to_have_text("0.0s / 3.3s")  # 2.5 s a 0.75x
+    assert salvo.value.json() == {"velocidade": 0.75}
+    aba.wait_for_timeout(700)
+    assert len(salvamentos) == 1  # um arraste inteiro = um salvamento (o último valor)
+
+    # Novo: recarregar a página mantém a velocidade (vídeo, slider, rótulo e timer do gravador).
+    aba.reload()
+    expect(aba.locator("#velocidadeValor")).to_have_text("0.75x")
+    expect(aba.locator("#timerTexto")).to_have_text("0.0s / 3.3s")
+    _iniciar_estudos(aba)
+    assert aba.eval_on_selector("#velocidade", "s => s.value") == "0.75"
+    assert _velocidade_do_video(aba) == 0.75
+
+    # Comportamento existente: duplo clique volta para 1x (e isso também fica salvo).
+    with aba.expect_response(lambda r: _eh_salvamento(r.request)):
+        aba.dblclick("#velocidade")
+    expect(aba.locator("#velocidadeValor")).to_have_text("1.00x")
+    assert _velocidade_do_video(aba) == 1
+    assert aba.request.get(f"{servidor}/api/configuracoes").json() == {"velocidade": 1.0}
+
+    # Sair da página logo depois de mexer (antes do atraso de 500 ms) não perde a mudança.
+    _mover_slider(aba, 1.25)
+    aba.click(".nav-btn:has-text('Revisar')")
+    expect(aba.locator(".dashboard-tr-deck")).to_have_count(1)
+    _esperar_velocidade_salva(aba, servidor, 1.25)
+    contexto.close()

@@ -113,6 +113,8 @@ def _mensagem(problema: dict) -> str:
         return f"valor não permitido (use {contexto.get('expected')})"
     if tipo == "json_invalid":
         return "JSON inválido"
+    if tipo == "extra_forbidden":
+        return "campo desconhecido"
     if tipo == "value_error" and "email address" in original:
         return "e-mail inválido"
     if tipo == "value_error":
