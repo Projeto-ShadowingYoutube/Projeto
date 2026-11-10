@@ -94,6 +94,18 @@ class Tokens(BaseModel):
     renova_em: int | None  # segundos até os tokens renovarem (None: nenhum gasto na janela atual)
 
 
+class CotaDeDesafios(BaseModel):
+    restantes: int
+    limite: int
+    renova_em: int | None  # segundos até a cota renovar (None: nenhum desafio feito na janela atual)
+
+
+class SituacaoLLM(BaseModel):
+    configurada: bool  # há provedor e chave no servidor? (sem isso, os desafios respondem 503)
+    aviso: str  # aviso de privacidade, para mostrar antes de enviar o texto/áudio
+    cotas: dict[str, CotaDeDesafios]  # uma por feature: reading, writing, speaking
+
+
 class ConfiguracoesDeEstudo(BaseModel):
     velocidade: float
     volume: float

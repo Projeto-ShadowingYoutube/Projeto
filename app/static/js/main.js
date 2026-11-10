@@ -10,6 +10,13 @@ import "./paginas/decks.js";
 import "./paginas/estudo.js";
 import "./paginas/revisao.js";
 
+// Pontos de encaixe das features novas (ver CLAUDE.md): cada membro altera SÓ a própria linha.
+// Membro 1 (Reading): import "./paginas/reading.js";
+
+// Membro 2 (Speaking): import "./paginas/speaking.js";
+
+// Membro 3 (Writing): import "./paginas/writing.js";
+
 iniciarTema();
 iniciarModalErro();
 iniciarCicloDeVida();

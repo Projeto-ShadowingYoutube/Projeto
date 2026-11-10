@@ -35,7 +35,8 @@ function mensagemDeErro(dados) {
     return detalhe;
 }
 
-function enviarJSON(url, metodo, corpo) {
+// Exportada para as features novas criarem o próprio cliente (ex.: nucleo/api-reading.js), sem alterar este arquivo.
+export function enviarJSON(url, metodo, corpo) {
     return requisitarJSON(url, {
         method: metodo,
         headers: corpo === undefined ? {} : { "Content-Type": "application/json" },
@@ -58,6 +59,8 @@ export const api = {
     },
 
     tokens: () => requisitarJSON("/api/tokens"),
+    // Desafios com IA: se a IA está configurada, aviso de privacidade e cota diária de cada feature.
+    situacaoLLM: () => requisitarJSON("/api/llm/situacao"),
     legendas: (link) => requisitarJSON(`/api/legendas?${consulta({ url: link })}`),
     dicionario: (palavra, frase, indice) => requisitarJSON(`/api/dicionario?${consulta({ palavra, frase, indice })}`),
 

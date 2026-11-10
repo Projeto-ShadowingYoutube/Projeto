@@ -24,3 +24,11 @@ en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_
 
 # Vosk: alinha o áudio com o texto para o modo karaokê (o modelo de ~40 MB é baixado no primeiro uso).
 vosk==0.3.45
+
+# --- Pontos de encaixe: dependências das features novas (ver CLAUDE.md, seção 4) ---
+# Sempre com versão fixa (==). Cada membro altera SÓ o próprio bloco, sem remover as linhas em branco.
+# Membro 1 (Reading)
+
+# Membro 2 (Speaking)
+
+# Membro 3 (Writing)

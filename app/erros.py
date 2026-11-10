@@ -18,6 +18,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.services.llm import ErroLLM
+
 logger = logging.getLogger("uvicorn.error")
 
 # codigo padrão de cada status (quando a rota não informa um próprio).
@@ -33,6 +35,8 @@ CODIGOS = {
     429: "limite_atingido",
     500: "erro_interno",
     502: "servico_externo_indisponivel",
+    503: "servico_indisponivel",
+    504: "tempo_esgotado",
 }
 
 # Mensagens no lugar das padrão do Starlette/FastAPI, que vêm em inglês ("Not Found").
@@ -78,6 +82,12 @@ async def _erro_http(request: Request, erro: StarletteHTTPException) -> JSONResp
         erro.status_code, detail, getattr(erro, "codigo", None), getattr(erro, "headers", None),
         **getattr(erro, "extras", {}),
     )
+
+
+# --- Falhas da LLM (app/services/llm.py): cada subclasse de ErroLLM traz o próprio status e codigo ---
+
+async def _erro_llm(request: Request, erro: ErroLLM) -> JSONResponse:
+    return resposta_de_erro(erro.status, erro.mensagem, erro.codigo)
 
 
 # --- 422: validação dos dados de entrada (Pydantic) ---
@@ -145,6 +155,7 @@ async def capturar_erros_inesperados(request: Request, call_next):
 def registrar(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _erro_http)
     app.add_exception_handler(RequestValidationError, _erro_de_validacao)
+    app.add_exception_handler(ErroLLM, _erro_llm)
     # Chame registrar() DEPOIS de adicionar os outros middlewares (o último adicionado é o mais externo):
     # assim o capturador envolve todos eles.
     app.middleware("http")(capturar_erros_inesperados)

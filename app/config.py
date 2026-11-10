@@ -7,6 +7,7 @@ arquivo .env na raiz do projeto (ver .env.example); sem elas, valem os padrões 
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 RAIZ_APP = Path(__file__).resolve().parent
@@ -31,10 +32,28 @@ class Configuracoes(BaseSettings):
     # Em "producao", o cookie de sessão só trafega por HTTPS (atributo Secure).
     ambiente: Literal["desenvolvimento", "producao"] = "desenvolvimento"
 
+    # LLM (app/services/llm.py): qualquer provedor com a API no formato da OpenAI (Gemini, DeepSeek, Groq, Ollama...).
+    # Sem a chave, o app sobe normalmente; só as funções de IA respondem 503 (llm_nao_configurada).
+    llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    llm_modelo: str = "gemini-flash-latest"
+    llm_chave: SecretStr | None = None
+    llm_timeout_segundos: float = 60
+    # Pede ao provedor resposta em JSON (response_format). Desligue só se o provedor recusar esse parâmetro.
+    llm_modo_json: bool = True
+
 
 configuracoes = Configuracoes()
 DATABASE_URL = configuracoes.database_url
 AMBIENTE = configuracoes.ambiente
+
+LLM_BASE_URL = configuracoes.llm_base_url
+LLM_MODELO = configuracoes.llm_modelo
+LLM_CHAVE = configuracoes.llm_chave.get_secret_value() if configuracoes.llm_chave else ""
+LLM_TIMEOUT_SEGUNDOS = configuracoes.llm_timeout_segundos
+LLM_MODO_JSON = configuracoes.llm_modo_json
+# Desafios com IA (Reading, Writing, Speaking): quantos cada CONTA pode iniciar por dia, em cada feature.
+# Cada desafio custa chamadas pagas à LLM (ver app/api/llm.py, dependência exigir_cota).
+LIMITE_DESAFIOS_LLM = "10/day"
 
 # Sessão de login: nome do cookie e quanto tempo ela vale sem precisar entrar de novo.
 COOKIE_SESSAO = "sessao"

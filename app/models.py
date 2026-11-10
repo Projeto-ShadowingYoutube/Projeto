@@ -103,3 +103,15 @@ class EntradaDicionario(SQLModel, table=True):
     palavra: str = Field(primary_key=True)
     dados: str  # JSON com as definições; "null" quando a palavra não foi encontrada
     data_consulta: NaiveDatetime = Field(default_factory=agora)
+
+
+# --- Pontos de encaixe: modelos das features novas (ver CLAUDE.md) ---
+# Cada membro cria os modelos num arquivo próprio (ex.: app/models_reading.py, que importa Usuario e agora daqui) e
+# altera SÓ a própria linha abaixo, para o Alembic e os testes enxergarem as tabelas. Ex.:
+#     import app.models_reading  # noqa: E402, F401
+
+# Membro 1 (Reading)
+
+# Membro 2 (Speaking)
+
+# Membro 3 (Writing)

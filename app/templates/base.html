@@ -18,6 +18,12 @@
         <link rel="stylesheet" href="/static/css/modais.css">
         <link rel="stylesheet" href="/static/css/decks.css">
         <link rel="stylesheet" href="/static/css/auth.css">
+        {# Pontos de encaixe (ver CLAUDE.md): cada membro altera SÓ a própria linha. Ex.: <link rel="stylesheet" href="/static/css/reading.css"> #}
+        {# Membro 1 (Reading): CSS #}
+
+        {# Membro 2 (Speaking): CSS #}
+
+        {# Membro 3 (Writing): CSS #}
 
         <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" crossorigin="anonymous"></script>
         <script src="https://unpkg.com/wavesurfer.js@8.0.4/dist/wavesurfer.min.js"></script>
@@ -50,6 +56,14 @@
             <div class="logo"><a href="/" style="color: inherit;">Shadowing</a></div>
             <div class="nav-right">
                 {% if usuario %}
+                {# Pontos de encaixe da navbar (ver CLAUDE.md): cada membro altera SÓ a própria linha. Ex.:
+                   <button class="nav-btn" hx-get="/reading" hx-target="main" hx-push-url="true">📖 <span class="btn-text-mobile">Reading</span></button> #}
+                {# Membro 1 (Reading): botão na navbar #}
+
+                {# Membro 2 (Speaking): botão na navbar #}
+
+                {# Membro 3 (Writing): botão na navbar #}
+
                 <button class="nav-btn">🔗 <span class="btn-text-mobile">Token</span> <span id="token-count">–</span></button>
                 <button class="nav-btn" hx-get="/decks" hx-target="main" hx-push-url="true">↺ <span class="btn-text-mobile">Revisar</span></button>
                 <span class="nav-usuario" title="Conta conectada">{{ usuario.email }}</span>

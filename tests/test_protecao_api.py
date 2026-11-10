@@ -15,13 +15,14 @@ from app.services import midia
 ROTAS_PUBLICAS = ("/api/auth/",)
 
 # Valores válidos para os parâmetros do caminho (o 401 tem de vir antes de qualquer validação ou busca).
+# Parâmetro que não está aqui (ex.: rotas novas com {attempt_id}) recebe "1".
 VALORES = {"video_id": "abcdefghijk", "deck_id": "1", "card_id": "1"}
 
 
 def _rotas_da_api():
     for rota in app.routes:
         if isinstance(rota, APIRoute) and rota.path.startswith("/api/") and not rota.path.startswith(ROTAS_PUBLICAS):
-            caminho = re.sub(r"\{(\w+)\}", lambda m: VALORES[m.group(1)], rota.path)
+            caminho = re.sub(r"\{(\w+)\}", lambda m: VALORES.get(m.group(1), "1"), rota.path)
             for metodo in sorted(rota.methods - {"HEAD"}):
                 yield pytest.param(metodo, caminho, id=f"{metodo} {rota.path}")
 
@@ -36,6 +37,7 @@ def test_a_lista_de_rotas_inclui_as_de_conteudo():
         "GET /api/videos/{video_id}/status", "GET /api/videos/{video_id}", "GET /api/videos/{video_id}/waveform",
         "GET /api/videos/{video_id}/audio", "GET /api/videos/{video_id}/palavras", "POST /api/avaliacoes",
         "GET /api/dicionario", "GET /api/decks", "GET /api/legendas", "PATCH /api/configuracoes",
+        "GET /api/llm/situacao",
     )
     for esperada in esperadas:
         assert esperada in ids, esperada

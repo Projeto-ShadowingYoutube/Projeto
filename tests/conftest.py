@@ -1,13 +1,16 @@
+import json
 import os
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlmodel import Session, SQLModel, create_engine
 
 from app import config, db, migrar
 from app.main import app
+from app.services import llm
 
 # Com TEST_DATABASE_URL definida (só no terminal, nunca no .env), os testes usam esse banco (ex.: o Postgres do
 # docker-compose). Sem ela, cada teste usa um SQLite temporário.
@@ -38,6 +41,63 @@ def dados_isolados(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PASTA_MIDIA", tmp_path / "midia")
     monkeypatch.setattr(config, "PASTA_MODELOS", tmp_path / "modelos")
     monkeypatch.setattr(config, "ARQUIVO_CACHE_LEGENDAS", tmp_path / "ultimo_video.json")
+
+
+@pytest.fixture(autouse=True)
+def llm_desligada(monkeypatch):
+    """Nenhum teste chama a LLM de verdade, mesmo com LLM_CHAVE no .env de quem roda. Para simular respostas, use
+    a fixture llm_falsa."""
+    monkeypatch.setattr(config, "LLM_CHAVE", "")
+
+    def sem_rede(*args, **kwargs):
+        raise AssertionError("teste tentou chamar a LLM de verdade: use a fixture llm_falsa")
+
+    monkeypatch.setattr(llm._sessao, "post", sem_rede)
+
+
+class LLMFalsa:
+    """Substituto da LLM nos testes (fixture llm_falsa). Passa pela validação real de llm.gerar_json.
+
+        llm_falsa.responder(Correcao(nota=8, comentario="ok"))   # objeto Pydantic, dict ou texto cru (JSON inválido)
+        llm_falsa.falhar(llm.LLMTempoEsgotado())                  # a próxima chamada levanta este erro
+        llm_falsa.chamadas                                        # mensagens enviadas em cada chamada
+
+    As respostas são consumidas em ordem, uma por chamada; uma chamada a mais que o previsto reprova o teste.
+    """
+
+    def __init__(self):
+        self.fila = []
+        self.chamadas = []
+
+    def responder(self, resposta):
+        if isinstance(resposta, BaseModel):
+            resposta = resposta.model_dump_json()
+        elif not isinstance(resposta, str):
+            resposta = json.dumps(resposta, ensure_ascii=False)
+        self.fila.append(resposta)
+        return self
+
+    def falhar(self, erro: Exception):
+        self.fila.append(erro)
+        return self
+
+    def _chamar(self, mensagens, temperatura, max_tokens):
+        self.chamadas.append([dict(m) for m in mensagens])
+        if not self.fila:
+            raise AssertionError("a LLM foi chamada mais vezes do que o teste previu (use llm_falsa.responder)")
+        proxima = self.fila.pop(0)
+        if isinstance(proxima, Exception):
+            raise proxima
+        return proxima
+
+
+@pytest.fixture()
+def llm_falsa(monkeypatch):
+    """LLM configurada e simulada: nada sai para a rede. Veja LLMFalsa acima."""
+    falsa = LLMFalsa()
+    monkeypatch.setattr(config, "LLM_CHAVE", "chave-de-teste")
+    monkeypatch.setattr(llm, "_chamar", falsa._chamar)
+    return falsa
 
 
 @pytest.fixture()

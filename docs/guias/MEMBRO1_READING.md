@@ -1,8 +1,10 @@
 # Guia do Membro 1: Reading Challenge
 
 Este guia mostra **onde cada tarefa do Reading Challenge se encaixa no projeto atual** e quais regras ele já
-impõe. A base é a branch `Membro4` (commit `e48fa44` ou posterior). Antes de começar, leia no `README.md` as seções
-"Banco de dados e migrações", "Contas e login" e "Formato dos erros da API".
+impõe. A base é a branch `Membro4` (a partir do commit do B-LLM, que traz o `llm.py` e o `CLAUDE.md`). Antes de começar, leia o **`CLAUDE.md`** (regras do trabalho: base protegida, pontos de encaixe,
+processo por blocos) e, no `README.md`, as seções "Banco de dados e migrações", "Contas e login",
+"LLM e desafios com IA" e "Formato dos erros da API". **Onde este guia e o `CLAUDE.md` divergirem, vale o
+`CLAUDE.md`.** Toda a sua documentação vai no `README_MEMBRO1.md`, nunca no `README.md`.
 
 ```bash
 python -m app.migrar                 # banco na versão atual
@@ -16,8 +18,9 @@ pytest                               # tudo verde antes de mexer
 - **Use SQLModel (`class X(SQLModel, table=True)`), e não `declarative_base()` puro.** O SQLModel é o SQLAlchemy
   com Pydantic por cima. O Alembic (`migrations/env.py`) e os testes enxergam **só** o `SQLModel.metadata`. Uma
   tabela feita com um `Base` próprio do SQLAlchemy fica invisível para as migrações e para os testes.
-- Coloque os modelos em `app/models.py`, que é o arquivo que `migrations/env.py` importa. Se preferir um arquivo
-  próprio (ex.: `app/models_reading.py`), importe-o em `app/models.py`. Sem isso, o Alembic não vê as tabelas.
+- Coloque os modelos em **`app/models_reading.py`** (importando `Usuario` e `agora` de `app/models.py`) e
+  acrescente `import app.models_reading  # noqa: E402, F401` no **seu ponto de encaixe**, no fim de
+  `app/models.py` (bloco "# Membro 1 (Reading)"). Sem isso, o Alembic e os testes não veem as tabelas.
 - **Dono:** o que é do usuário leva `usuario_id: int = Field(foreign_key="usuario.id", index=True)`. É o caso de
   `ReadingChallenge` e `ReadingAttempt`. Um texto (`ReadingText`) pode ser compartilhado entre usuários, como a
   tabela `waveform`.
@@ -68,7 +71,8 @@ o Membro 4 junta as "cabeças" com `alembic merge`. **Não edite as migrações 
 
 ## 4. Rotas (FastAPI)
 
-- Crie `app/api/reading.py` e registre-o na tupla de `app/main.py` (`for modulo in (...)`).
+- Crie `app/api/reading.py` e registre os routers no **seu ponto de encaixe** em `app/main.py`
+  (`_rotas_das_features`, bloco "# Membro 1 (Reading)").
 - **Prefixo `/api/reading`** (ex.: `POST /api/reading/challenges`). Toda a API do projeto fica em `/api/...`, e o
   teste de proteção só cobre esse prefixo.
 - **Login obrigatório:**
@@ -76,20 +80,27 @@ o Membro 4 junta as "cabeças" com `alembic merge`. **Não edite as migrações 
   O teste `tests/test_protecao_api.py` **falha** se uma rota `/api` responder sem login.
 - **Isolamento:** um recurso de outro usuário responde **404**, igual a um que não existe. Copie o padrão
   `_deck()` de `app/api/decks.py` (busca o recurso e compara `usuario_id`).
-- **Schemas** de entrada e saída em `app/schemas.py` (Pydantic). Valide a resposta da LLM com Pydantic **antes**
+- **Schemas** de entrada e saída em `app/schemas_reading.py` (Pydantic; `app/schemas.py` é base). Valide a resposta da LLM com Pydantic **antes**
   de usar ou gravar.
 - Chamadas bloqueantes (HTTP, LLM): use rotas `def` (o FastAPI as roda numa thread, como em `api/legendas.py`) ou
   `asyncio.to_thread`.
 
 ## 5. LLM (perguntas e correção)
 
-- Isole a LLM num serviço próprio (ex.: `app/services/llm.py`), com funções que **devolvem objetos Pydantic já
-  validados**. As rotas e os testes não conhecem o SDK.
-- **Chave da API:** campo novo em `Configuracoes` (`app/config.py`), lido do `.env`, e documentado no
-  `.env.example` **sem o valor real**. O app precisa **subir sem a chave** (testes e dev); só a geração falha, com
-  um erro claro.
-- **Custo:** cada chamada custa dinheiro. Limite por conta com o mesmo limitador dos tokens de legenda
-  (`app/api/legendas.py`, chave `usuario:<id>`), mas com outro espaço (ex.: `"reading"`).
+- **O serviço já existe: `app/services/llm.py`** (README, seção "LLM e desafios com IA"). **Não o altere**
+  (`CLAUDE.md`, seção 3). Os prompts da sua feature ficam no seu serviço (ex.: `app/services/reading_llm.py`):
+  ```python
+  from app.services import llm
+  resultado = llm.gerar_json(sistema=INSTRUCOES, usuario=texto, modelo=SeuModeloPydantic)
+  ```
+  Ele manda o schema do modelo, valida a resposta, tenta de novo uma vez se vier fora do formato e converte as
+  falhas no erro padrão (502/503/504). A chamada é bloqueante: rota `def` ou `asyncio.to_thread`.
+- **Provedor:** Gemini Flash (grátis no desenvolvimento, pago no deploy; decisão da equipe). Crie a **sua** chave em
+  https://aistudio.google.com/apikey e coloque em `LLM_CHAVE` no seu `.env` (nunca no Git).
+- **Cota diária (10 desafios por dia, decisão da equipe):** `Depends(exigir_cota("reading"))` (de `app/api/llm.py`)
+  **só** na rota que cria o desafio.
+- **Aviso de privacidade:** mostre `criarAvisoIA(aviso)` (`componentes/aviso-ia.js`, texto de `GET /api/llm/situacao`)
+  na tela, **antes** do envio.
 - **"Exatamente cinco perguntas":** valide com Pydantic (`Field(min_length=5, max_length=5)`). Se vier inválido,
   tente de novo uma vez e então use o **fallback**.
 
@@ -105,15 +116,19 @@ raise ErroDaApi(502, "Não foi possível gerar as perguntas agora. Tente de novo
 - Fonte de texto ou LLM fora do ar: **502**. O `codigo` padrão é `servico_externo_indisponivel`, ou use um próprio.
 - **Não capture `Exception` genérica só para devolver 500.** O app já transforma qualquer erro inesperado em 500
   padrão, com a stack no log.
-- `codigo` novo? Inclua em `CODIGOS` (`app/erros.py`), na tabela do README e num teste em `tests/test_erros.py`.
+- Falhas da LLM já viram o erro padrão sozinhas (`llm_indisponivel`, `llm_tempo_esgotado`...).
+- `codigo` novo? Use `ErroDaApi(..., codigo="...")` sem alterar `app/erros.py`, documente no `README_MEMBRO1.md`
+  e teste nos seus testes.
 
 ## 7. Telas (leitura com timer e as cinco questões)
 
-- **Página:** template em `app/templates/paginas/` e rota em `app/api/paginas.py` com `_pagina_protegida(...)`
-  (sem login, leva ao login e depois volta).
+- **Página:** template em `app/templates/paginas/reading.html` e rota no **seu** `app/api/reading.py` (um router
+  `paginas`, sem prefixo) com `pagina_protegida(...)`, importada de `app/api/paginas.py` (exemplo no próprio
+  arquivo). Sem login, leva ao login e depois volta. Botão na navbar e CSS: pontos de encaixe do `base.html`.
 - **JS:** `app/static/js/paginas/reading.js`, com `registrarPagina("reading", (raiz) => { ...; return limpeza; })`,
-  importado em `app/static/js/main.js`.
-- **Chamadas à API:** acrescente em `app/static/js/nucleo/api.js` e use `requisitarJSON`. Ele já trata a sessão
+  importado no seu ponto de encaixe de `app/static/js/main.js`.
+- **Chamadas à API:** crie `app/static/js/nucleo/api-reading.js`, importando `requisitarJSON` e `enviarJSON` de
+  `api.js` (que é base: não o altere). Ele já trata a sessão
   vencida (vai ao login) e o formato de erro (`erro.message`, `erro.codigo`).
 - **Timer:** **já existe** `contagemRegressiva(segundos, aCadaSegundo, aoTerminar)` e `formatarTempo(segundos)` em
   `app/static/js/nucleo/interface.js` (usados na tela de tokens). Cancele a contagem na limpeza da página.
@@ -126,8 +141,9 @@ raise ErroDaApi(502, "Não foi possível gerar as perguntas agora. Tente de novo
 - Fixtures prontas em `tests/conftest.py`:
   - `entrar_como("ana@exemplo.com")` → navegador logado (use dois para testar isolamento);
   - `engine_teste` → para conferir o que foi gravado.
-- **Nunca chame a rede ou a LLM de verdade nos testes.** Substitua com `monkeypatch.setattr(servico, "funcao",
-  falsa)`. Veja `tests/test_tokens.py` e `tests/test_api_legendas.py`.
+- **Testes em `tests/reading/`** (fixtures próprias em `tests/reading/conftest.py`; o `tests/conftest.py` é base).
+- **Nunca chame a rede ou a LLM de verdade nos testes.** LLM: fixture **`llm_falsa`** (README, seção "LLM").
+  Wikipedia/Gutendex: `monkeypatch.setattr(servico, "funcao", falsa)`. Veja `tests/test_tokens.py` e `tests/test_api_legendas.py`.
 - Teste o isolamento (o Bruno recebe 404 nos desafios da Ana), como em `tests/test_isolamento.py`.
 - Navegador (opcional, `E2E=1`): `tests/test_e2e_navegador.py` mostra como subir o servidor de teste, simular
   serviços externos e testar páginas.
@@ -139,7 +155,7 @@ raise ErroDaApi(502, "Não foi possível gerar as perguntas agora. Tente de novo
 
 ## 9. Para o Membro 4 (Docker e deploy no final)
 
-Anote no seu README ou PR:
-- bibliotecas novas no `requirements.txt` (**com versão fixa**, como as outras);
-- variáveis novas do `.env` (ex.: chave da LLM) e se o app funciona sem elas;
+Anote no `README_MEMBRO1.md`, seção "Para o Membro 4" (ver `CLAUDE.md`, seção 10):
+- bibliotecas novas, no seu bloco do `requirements.txt` (**com versão fixa**);
+- variáveis novas do `.env`, se houver (só com a confirmação do usuário; a da LLM já existe);
 - URLs externas usadas (Wikipedia, Gutendex, API da LLM), porque o servidor de produção precisa alcançá-las.

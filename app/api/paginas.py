@@ -66,6 +66,14 @@ def _pagina_protegida(request: Request, usuario: Usuario | None, template: str, 
     return _renderizar(request, template, usuario, **contexto)
 
 
+# Para as páginas das features novas (Membros 1 a 3), em app/api/<feature>.py:
+#     paginas = APIRouter(default_response_class=HTMLResponse, include_in_schema=False)
+#     @paginas.get("/reading")
+#     def pagina_reading(request: Request, usuario: Usuario | None = Depends(usuario_opcional)):
+#         return pagina_protegida(request, usuario, "reading.html")
+pagina_protegida = _pagina_protegida
+
+
 def _pagina_de_entrada(request: Request, usuario: Usuario | None, template: str, proximo: str | None):
     destino = caminho_seguro(proximo)
     if usuario is not None:  # já está logado: não faz sentido mostrar o login

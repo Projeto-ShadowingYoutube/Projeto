@@ -2,9 +2,10 @@
 
 Este guia mostra **onde cada tarefa do Speaking Challenge se encaixa no projeto atual**, quais regras ele já impõe
 e **o que já existe para reaproveitar**. O projeto já grava a voz do usuário, envia o áudio por multipart e o
-processa no servidor (a avaliação da fala do estudo). A base é a branch `Membro4` (commit `e48fa44` ou
-posterior). Antes de começar, leia no `README.md` as seções "Banco de dados e migrações", "Contas e login" e
-"Formato dos erros da API".
+processa no servidor (a avaliação da fala do estudo). A base é a branch `Membro4` (a partir do commit do B-LLM, que traz o `llm.py` e o `CLAUDE.md`). Antes de começar, leia o **`CLAUDE.md`** (regras do trabalho: base protegida, pontos de encaixe,
+processo por blocos) e, no `README.md`, as seções "Banco de dados e migrações", "Contas e login",
+"LLM e desafios com IA" e "Formato dos erros da API". **Onde este guia e o `CLAUDE.md` divergirem, vale o
+`CLAUDE.md`.** Toda a sua documentação vai no `README_MEMBRO2.md`, nunca no `README.md`.
 
 ```bash
 python -m app.migrar                 # banco na versão atual
@@ -16,8 +17,8 @@ pytest                               # tudo verde antes de mexer
 ## 1. Modelos (SpeakingSession, SpeakingQuestion, SpeakingAnswer)
 
 - **Use SQLModel (`class X(SQLModel, table=True)`), e não `declarative_base()` puro.** O Alembic e os testes
-  enxergam **só** o `SQLModel.metadata`. Coloque os modelos em `app/models.py`, ou num arquivo próprio importado
-  por ele.
+  enxergam **só** o `SQLModel.metadata`. Coloque os modelos em **`app/models_speaking.py`** e importe-o no **seu ponto de encaixe**, no fim de
+  `app/models.py` (`import app.models_speaking  # noqa: E402, F401`).
 - **Dono:** `SpeakingSession.usuario_id = Field(foreign_key="usuario.id", index=True)`. As respostas pertencem à
   sessão (`session_id`), como o Card pertence ao Deck. O dono de uma resposta é o dono da sessão dela.
 - **Estado da bateria** numa coluna: `em_andamento` → `processando` → `concluida` / `erro`. É isso que permite
@@ -27,9 +28,10 @@ pytest                               # tudo verde antes de mexer
 - **O áudio não vai para o banco.** Grave a transcrição e as métricas. Se precisar guardar o arquivo, use uma
   pasta dentro de `dados/` (fora do Git) e defina quando ele é apagado.
 - Dê **nome** a toda FK e UNIQUE. O autogenerate gera FK sem nome, e o downgrade quebra (veja a migração `0003`).
-- **Quantidade de perguntas por bateria:** se for uma preferência do usuário, ela pode virar uma coluna nova em
-  `ConfiguracaoEstudo`, que já tem velocidade e volume (veja a migração `0006`, coluna com valor padrão). Valide a
-  faixa no schema Pydantic (ex.: `Field(ge=1, le=10)`).
+- **Quantidade de perguntas por bateria:** guarde na própria sessão (ex.: `SpeakingSession.quantidade_perguntas`)
+  e valide a faixa no schema Pydantic (ex.: `Field(ge=1, le=10)`). **Não** acrescente coluna em
+  `ConfiguracaoEstudo`: é tabela da base. Se quiser que a escolha fique salva como preferência, use uma tabela sua
+  (1:1 com o usuário, como `ConfiguracaoEstudo`) ou peça confirmação ao usuário (`CLAUDE.md`, seção 3).
 
 ## 2. Migrações (Alembic)
 
@@ -47,8 +49,7 @@ A primeira migração tem `down_revision = "0006"`. Na integração, o Membro 4 
 
 ## 3. Rotas (FastAPI)
 
-- Crie `app/api/speaking.py` com prefixo **`/api/speaking`** (ex.: `POST /api/speaking/sessions`) e registre-o na
-  tupla de `app/main.py`.
+- Crie `app/api/speaking.py` com prefixo **`/api/speaking`** (ex.: `POST /api/speaking/sessions`) e registre os routers no **seu ponto de encaixe** em `app/main.py` (`_rotas_das_features`).
 - **Login obrigatório:** `APIRouter(..., dependencies=[Depends(usuario_atual)])`. O `tests/test_protecao_api.py`
   **falha** se uma rota `/api` responder sem login.
 - **Isolamento:** a sessão de outro usuário responde **404** (padrão `_deck()` em `app/api/decks.py`).
@@ -71,11 +72,13 @@ A primeira migração tem `down_revision = "0006"`. Na integração, o Membro 4 
   tipo que o `recorder.mimeType` informar. O servidor converte tudo pelo FFmpeg (item 5), então os dois funcionam.
   O reconhecimento de fala **do navegador** (usado no estudo) só funciona no Chrome e no Edge. O Speaking, com
   Whisper no servidor, funciona também no Firefox.
-- **Envio:** acrescente a chamada em `app/static/js/nucleo/api.js` usando `FormData`, como `api.avaliarFala`. Não
+- **Envio:** crie `app/static/js/nucleo/api-speaking.js` (importando `requisitarJSON` de `api.js`, que é base) e
+  envie com `FormData`, como `api.avaliarFala` faz. Não
   defina o `Content-Type` à mão, porque o navegador monta o multipart. Use `requisitarJSON`, que já trata a sessão
   vencida e o formato de erro.
-- **Página:** template em `app/templates/paginas/`, rota com `_pagina_protegida(...)` em `app/api/paginas.py`, JS
-  em `static/js/paginas/speaking.js` com `registrarPagina` (importado em `main.js`). Na limpeza da página, **pare o
+- **Página:** template em `app/templates/paginas/speaking.html`, rota no **seu** `app/api/speaking.py` (router
+  `paginas`) com `pagina_protegida(...)` de `app/api/paginas.py`, JS em `static/js/paginas/speaking.js` com
+  `registrarPagina` (importado no seu ponto de encaixe de `main.js`). Botão e CSS: encaixes do `base.html`. Na limpeza da página, **pare o
   stream do microfone e cancele os timers**, como faz o `Gravador.encerrar()`.
 
 ## 5. Transcrição (Whisper / faster-whisper)
@@ -104,14 +107,23 @@ A primeira migração tem `down_revision = "0006"`. Na integração, o Membro 4 
   - **pausas** (intervalos entre palavras acima de um limiar, ex.: 0,5 s);
   - **% do tempo usado** (duração ÷ 60 s).
 - `app/services/avaliacao.py` já mede ritmo e velocidade da fala com tempos de palavras (Vosk). Use como referência.
-- **LLM:** **um único serviço compartilhado com os Membros 1 e 3** (ex.: `app/services/llm.py`), com funções que
-  devolvem **objetos Pydantic já validados**. Combinem quem cria e a interface, para não surgirem três integrações
-  diferentes.
-  - A chave da API fica em `Configuracoes` (`app/config.py`) e no `.env.example`, **sem o valor real**. O app
-    precisa subir sem a chave.
-  - Feedback estruturado: schema Pydantic com fluência, clareza e conteúdo (nota + comentário). Valide antes de gravar.
-  - **Custo:** limite por conta com o mesmo limitador dos tokens de legenda (`app/api/legendas.py`, chave
-    `usuario:<id>`), noutro espaço (ex.: `"speaking"`).
+**LLM (avaliação da fala transcrita):**
+- **O serviço já existe: `app/services/llm.py`** (README, seção "LLM e desafios com IA"). **Não o altere**
+  (`CLAUDE.md`, seção 3). Os prompts da sua feature ficam no seu serviço (ex.: `app/services/speaking_llm.py`):
+  ```python
+  from app.services import llm
+  resultado = llm.gerar_json(sistema=INSTRUCOES, usuario=texto, modelo=SeuModeloPydantic)
+  ```
+  Ele manda o schema do modelo, valida a resposta, tenta de novo uma vez se vier fora do formato e converte as
+  falhas no erro padrão (502/503/504). A chamada é bloqueante: rota `def` ou `asyncio.to_thread`.
+- **Provedor:** Gemini Flash (grátis no desenvolvimento, pago no deploy; decisão da equipe). Crie a **sua** chave em
+  https://aistudio.google.com/apikey e coloque em `LLM_CHAVE` no seu `.env` (nunca no Git).
+- **Cota diária (10 desafios por dia, decisão da equipe):** `Depends(exigir_cota("speaking"))` (de `app/api/llm.py`)
+  **só** na rota que cria o desafio.
+- **Aviso de privacidade:** mostre `criarAvisoIA(aviso)` (`componentes/aviso-ia.js`, texto de `GET /api/llm/situacao`)
+  na tela, **antes** do envio.
+- Feedback estruturado: schema Pydantic com fluência, clareza e conteúdo (nota + comentário).
+- **Transcrição (Whisper, Vosk ou outra) é decisão sua** (item 5); o `llm.py` só recebe o texto.
 
 ## 7. Erros
 
@@ -129,8 +141,9 @@ raise ErroDaApi(502, "A avaliação está indisponível agora. A sua transcriç�
 
 ## 8. Testes
 
-- **Nunca rode o Whisper nem a LLM nos testes comuns.** Substitua com `monkeypatch.setattr(servico, "transcrever",
-  falsa)`, devolvendo palavras com tempos. Assim, as métricas e o fluxo são testados em milissegundos.
+- **Testes em `tests/speaking/`** (fixtures próprias em `tests/speaking/conftest.py`; o `tests/conftest.py` é base).
+- **Nunca rode o Whisper nem a LLM nos testes comuns.** LLM: fixture **`llm_falsa`**. Transcrição:
+  `monkeypatch.setattr(servico, "transcrever", falsa)`, devolvendo palavras com tempos. Assim, as métricas e o fluxo são testados em milissegundos.
 - Um teste opcional com o Whisper de verdade (um áudio curto) pode ficar desligado por variável de ambiente, como
   os testes de navegador (`E2E=1`).
 - Fixtures em `tests/conftest.py`: `entrar_como("ana@exemplo.com")` (use dois para testar isolamento) e
@@ -143,8 +156,9 @@ raise ErroDaApi(502, "A avaliação está indisponível agora. A sua transcriç�
 
 ## 9. Para o Membro 4 (Docker e deploy no final)
 
-Anote no seu README ou PR, porque **é a feature que mais muda o Docker**:
-- versões de `faster-whisper` e dependências no `requirements.txt` (**com versão fixa**);
+Anote no `README_MEMBRO2.md`, seção "Para o Membro 4" (ver `CLAUDE.md`, seção 10), porque **é a feature que mais muda o Docker**:
+- versões de `faster-whisper` (ou da opção escolhida) e dependências, no seu bloco do `requirements.txt`
+  (**com versão fixa**);
 - qual modelo do Whisper, o tamanho dele e onde fica (baixado no build ou na primeira execução, em `dados/modelos/`);
 - **uso de CPU e memória** medido numa transcrição de 60 s, para dimensionar a máquina de produção;
-- variáveis novas do `.env` (chave da LLM etc.) e onde ficam os arquivos de áudio, se forem guardados.
+- variáveis novas do `.env`, se houver (só com a confirmação do usuário), e onde ficam os arquivos de áudio.

@@ -402,6 +402,88 @@ navegador e sobrevivem a F5, logout e reinício do servidor.
 - **Tolerância temporal** (o critério de "no ritmo" do gravador, 15%) continua fixa no código
   (`TOLERANCIA_RITMO` em `static/js/componentes/gravador.js`), por decisão do projeto.
 
+## 🤖 LLM e desafios com IA (Reading, Writing, Speaking)
+
+As três atividades novas (Reading, Writing e Speaking Challenge) usam um **serviço único de LLM**:
+`app/services/llm.py`. Ele é **base compartilhada**: os Membros 1 a 3 usam, não alteram (ver `CLAUDE.md`).
+
+**Configuração (`.env`).** Funciona com qualquer provedor que tenha a API no formato da OpenAI. Trocar de provedor é
+só mudar o `.env`; o código das features não muda.
+
+| Variável | Padrão | Para que serve |
+|---|---|---|
+| `LLM_CHAVE` | vazia | Chave do provedor. **Sem ela, o app sobe normalmente**; só as funções de IA respondem 503 |
+| `LLM_BASE_URL` | Gemini (`https://generativelanguage.googleapis.com/v1beta/openai/`) | Endereço da API |
+| `LLM_MODELO` | `gemini-flash-latest` | Nome do modelo (confira no painel do provedor) |
+| `LLM_TIMEOUT_SEGUNDOS` | 60 | Espera máxima por uma resposta |
+| `LLM_MODO_JSON` | true | Pede resposta em JSON ao provedor (`response_format`) |
+
+Decisão da equipe (reunião de 07/11): **Gemini Flash gratuito no desenvolvimento** (cada membro cria a própria chave
+em https://aistudio.google.com/apikey, nunca no Git) e **Gemini Flash pago no deploy**. A LLM roda só pela API do
+servidor: o usuário final não instala nada.
+
+**Como usar numa feature.** Os prompts ficam no serviço da feature; o `llm.py` não sabe nada de Reading, Writing ou
+Speaking:
+```python
+from pydantic import BaseModel, Field
+from app.services import llm
+
+class Perguntas(BaseModel):
+    perguntas: list[str] = Field(min_length=5, max_length=5)
+
+resultado = llm.gerar_json(sistema="Crie 5 perguntas de compreensão...", usuario=texto, modelo=Perguntas)
+resultado.perguntas   # já validado pelo Pydantic
+```
+- `gerar_json(sistema, usuario, modelo, temperatura=0.2, max_tokens=None)`: manda o schema do `modelo` junto das
+  instruções, valida a resposta e devolve o objeto. Resposta fora do formato: **uma** nova tentativa, mostrando os
+  erros ao modelo. Timeout e falha de rede não são repetidos.
+- A chamada é **bloqueante** (segundos): use em rotas `def` (não `async def`) ou com `asyncio.to_thread`.
+- `configurada()`: há chave? `modelo_em_uso()`: nome do modelo, para gravar junto do resultado.
+- Falhas viram o erro padrão da API sozinhas (tabela abaixo). Para reagir antes (ex.: marcar a tentativa como
+  "erro na avaliação"), capture `llm.ErroLLM`, grave o estado e relance com `raise`.
+
+| Exceção | Status | `codigo` |
+|---|---|---|
+| `LLMNaoConfigurada` | 503 | `llm_nao_configurada` |
+| `LLMIndisponivel` (rede, provedor fora, chave recusada, limite do provedor) | 502 | `llm_indisponivel` |
+| `LLMTempoEsgotado` | 504 | `llm_tempo_esgotado` |
+| `LLMRespostaInvalida` (2 respostas fora do formato) | 502 | `llm_resposta_invalida` |
+
+Mensagem própria: `raise llm.LLMTempoEsgotado("A correção demorou. A sua redação foi salva; tente de novo.")`.
+
+**Cota diária (decisão da equipe: 10 desafios por dia).** Cada conta pode iniciar 10 desafios por dia **em cada
+feature** (`LIMITE_DESAFIOS_LLM` em `app/config.py`). A dependência vai **só na rota que cria o desafio**:
+```python
+from app.api.llm import exigir_cota
+
+@router.post("/challenges", dependencies=[Depends(exigir_cota("reading"))])   # "reading", "writing" ou "speaking"
+```
+Acabou: 429 `limite_de_desafios`, com `desafios_restantes`, `limite`, `tentar_novamente_em` e o header `Retry-After`.
+Mesmo algoritmo dos tokens de legenda: janela de 24 h a partir do primeiro desafio, em memória (zera ao reiniciar).
+O desafio é contado ao ser criado, mesmo que a LLM falhe depois.
+
+**Aviso de privacidade (decisão da equipe).** O texto (ou a transcrição da fala) vai para um provedor externo de IA.
+Toda tela de desafio mostra o aviso **antes** do envio:
+```javascript
+import { criarAvisoIA } from "../componentes/aviso-ia.js";
+const { aviso, configurada, cotas } = await api.situacaoLLM();   // GET /api/llm/situacao
+raiz.querySelector(".area-do-aviso").append(criarAvisoIA(aviso));
+```
+`GET /api/llm/situacao` devolve também se a IA está configurada e as cotas de cada feature (`restantes`, `limite`,
+`renova_em`), para a tela mostrar "7 de 10 desafios hoje".
+
+**Testes: nunca chamam a LLM de verdade.** A fixture automática `llm_desligada` reprova qualquer teste que tente. Para
+simular respostas, use a fixture `llm_falsa` (`tests/conftest.py`), que passa pela validação real:
+```python
+def test_gera_perguntas(llm_falsa, entrar_como):
+    llm_falsa.responder({"perguntas": ["a", "b", "c", "d", "e"]})   # dict, objeto Pydantic ou texto cru
+    llm_falsa.responder("isto não é JSON")                          # para testar a resposta inválida
+    llm_falsa.falhar(llm.LLMTempoEsgotado())                       # para testar o timeout
+    ...
+    assert len(llm_falsa.chamadas) == 1                            # mensagens enviadas em cada chamada
+```
+Exemplos completos em `tests/test_llm.py`.
+
 ## ⚠️ Formato dos erros da API
 
 **Toda** resposta de erro da API (status 4xx e 5xx) é um JSON com o mesmo formato:
@@ -436,7 +518,14 @@ navegador e sobrevivem a F5, logout e reinício do servidor.
 | 429 | `limite_atingido` | Padrão para outros 429 (nenhuma rota usa hoje) | — |
 | 500 | `erro_interno` | Qualquer erro **inesperado** (bug). A resposta nunca traz detalhes internos | — |
 | 500 | `erro_interno` | Erros conhecidos de processamento (ex.: FFmpeg falhou), com mensagem própria | — |
+| 429 | `limite_de_desafios` | Cota diária de desafios com IA acabou (veja "LLM") | `desafios_restantes`, `limite`, `tentar_novamente_em`; header `Retry-After` |
 | 502 | `servico_externo_indisponivel` | YouTube ou dicionário fora do ar / bloqueando | — |
+| 502 | `llm_indisponivel` | Provedor de IA fora do ar, chave recusada ou limite do provedor | — |
+| 502 | `llm_resposta_invalida` | A IA respondeu duas vezes fora do formato esperado | — |
+| 503 | `llm_nao_configurada` | Servidor sem `LLM_CHAVE` | — |
+| 503 | `servico_indisponivel` | Padrão para outros 503 (nenhuma rota usa hoje) | — |
+| 504 | `llm_tempo_esgotado` | A IA não respondeu em `LLM_TIMEOUT_SEGUNDOS` | — |
+| 504 | `tempo_esgotado` | Padrão para outros 504 (nenhuma rota usa hoje) | — |
 
 ### Exemplos
 
@@ -527,7 +616,8 @@ app/
 │   ├── videos.py       vídeo, onda (waveform) e áudio de cada frase e tempo das palavras
 │   ├── avaliacoes.py   avaliação da fala gravada
 │   ├── decks.py        Decks, Cards e revisão espaçada (REST)
-│   └── dicionario.py   popup de dicionário
+│   ├── dicionario.py   popup de dicionário
+│   └── llm.py          desafios com IA: cota diária por conta (exigir_cota) e aviso de privacidade
 ├── services/         # regras de negócio, sem FastAPI (testáveis isoladamente)
 │   ├── auth.py         hash de senha (Argon2id), contas e sessões
 │   ├── configuracoes.py padrões e salvamento das configurações de estudo
@@ -541,22 +631,34 @@ app/
 │   ├── alinhamento.py  legenda automática / Vosk → tempo de cada palavra
 │   ├── avaliacao.py    notas de palavras, ritmo e entonação da fala do usuário
 │   ├── dicionario.py   spaCy + Wiktionary
-│   └── decks.py        nomes únicos, dashboard e intervalo da revisão espaçada
+│   ├── decks.py        nomes únicos, dashboard e intervalo da revisão espaçada
+│   └── llm.py          serviço ÚNICO de LLM (qualquer provedor no formato da OpenAI), usado pelos desafios
 ├── templates/        # base.html, paginas/, partials/
 └── static/
     ├── css/            um arquivo por assunto (base, inicio, player, painel, legenda, modais, decks)
     └── js/             ES modules
         ├── main.js       ponto de entrada
         ├── nucleo/       cliente da API, interface global, ciclo de vida das páginas, tema, configurações
-        ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck, estado vazio
+        ├── componentes/  player, legenda (karaokê + dicionário), waveform, gravador, avaliação, escolha de Deck, estado vazio, aviso de IA
         └── paginas/      auth (login e cadastro), estudo, decks, revisao
 migrations/           # Alembic: env.py e versions/ (uma migração por mudança no esquema)
 docker/postgres/      # init.sql: cria o banco de testes no container do Postgres
 docker-compose.yml    # PostgreSQL local para desenvolvimento (docker compose up -d db)
 .env.example          # modelo das variáveis de ambiente (copie para .env)
 tests/                # um arquivo por módulo (pytest)
-docs/                 # plano de implementação (IMPLEMENTATION_PLAN.md) e métricas do projeto
+docs/                 # plano de implementação (IMPLEMENTATION_PLAN.md), guias dos membros (guias/) e métricas
+CLAUDE.md             # regras de trabalho com o Claude Code (base protegida, processo por blocos)
+README_MEMBRO{N}.md   # documentação de cada feature nova, mantida pelo próprio membro (na branch dele)
 ```
+
+## 👥 Trabalho em equipe (Membros 1 a 4)
+
+- **Membro 1:** Reading Challenge · **Membro 2:** Speaking Challenge · **Membro 3:** Writing Challenge ·
+  **Membro 4:** base do Shadowing, `llm.py`, integração (merge) e Docker/deploy (B14–B16).
+- Cada membro trabalha **na própria branch**, criada a partir da `Membro4`, e não altera a base (lista em
+  `CLAUDE.md`, "Base protegida"). O teste `tests/test_base_protegida.py` falha se um arquivo central mudar.
+- Cada um documenta a sua feature em `README_MEMBRO{N}.md` (não neste README) e segue o guia
+  `docs/guias/MEMBRO{N}_*.md`. Para começar com o Claude Code: `docs/guias/PROMPT_INICIAL.md`.
 
 ## 🧪 Desenvolvimento
 ```bash

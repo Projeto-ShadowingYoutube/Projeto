@@ -196,3 +196,13 @@
 }
 .estado-vazio-botao.principal { background: linear-gradient(90deg, #818cf8, #c084fc); color: #fff; border: none; }
 .estado-vazio-botao:hover { filter: brightness(1.08); }
+
+/* ====================================================================================
+   AVISO DE IA: componentes/aviso-ia.js — o texto vai para um provedor externo de IA
+   ==================================================================================== */
+.aviso-ia {
+    display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; padding: 10px 12px; border-radius: 10px;
+    font-size: 0.85rem; line-height: 1.4; color: var(--text-sub);
+    border: 1px solid var(--border-color); background: rgba(125, 125, 125, 0.08);
+}
+.aviso-ia-icone { flex: none; }
