@@ -4,10 +4,20 @@ O banco de teste é criado com create_all, que não roda migrações de DADOS: a
 precisa de temas usa a fixture "temas".
 """
 import pytest
+from limits.storage import MemoryStorage
+from limits.strategies import FixedWindowRateLimiter
 from sqlmodel import Session
 
+from app.api import llm as rota_llm
 from app.models_writing import WritingPrompt
 from app.services.writing_temas import CATEGORIAS
+
+
+@pytest.fixture(autouse=True)
+def cota_nova(monkeypatch):
+    """A cota diária fica num limitador global ao processo (app/api/llm.py), e os ids de usuário recomeçam em cada
+    banco de teste: sem isto, um teste herdaria os desafios gastos por outro. Mesmo padrão de tests/test_llm.py."""
+    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
 
 
 def criar_tema(session: Session, categoria: str, enunciado: str, ativo: bool = True) -> WritingPrompt:

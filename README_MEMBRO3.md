@@ -47,7 +47,41 @@ cota) → `services/writing_*.py` → banco (SQLModel) e LLM (`llm.gerar_json`, 
 
 ## API
 
-_(preenchida a partir do W3)_
+Todas as rotas exigem login (`APIRouter(prefix="/api/writing", dependencies=[Depends(usuario_atual)])`; sem sessão →
+401, coberto pelo `tests/test_protecao_api.py` da base). Redação de outra conta responde **404**, igual a uma
+inexistente (dependência `_tentativa` em `app/api/writing.py`).
+
+| Rota | Entrada | Saída | Erros próprios |
+|---|---|---|---|
+| `GET /api/writing/categorias` | — | lista de `{slug, nome, prova, tempo_limite_segundos, palavras_minimas}` | — |
+| `POST /api/writing/challenges` | `{categoria?}` (sem corpo ou `null` = "Surpresa") | **201** + redação | 422 · 429 `limite_de_desafios` (base) · 503 `sem_temas` |
+| `GET /api/writing/attempts` | — | as 50 redações mais recentes da conta (`id, estado, categoria, categoria_nome, palavras, iniciada_em, enviada_em`) | — |
+| `GET /api/writing/attempts/{id}` | — | redação | 404 |
+| `PATCH /api/writing/attempts/{id}` (autosave) | `{texto}` (máx. 10.000 caracteres) | `{palavras, salva_em, segundos_restantes}` | 404 · 409 `redacao_ja_enviada` · 409 `prazo_encerrado` · 422 |
+| `POST /api/writing/attempts/{id}/submissao` | `{texto}` (máx. 10.000 caracteres) | redação (com `usou_ultimo_salvamento`) | 404 · 409 `redacao_ja_enviada` · 422 `redacao_curta` · 422 |
+
+**Redação (resposta):** `id, estado, categoria, categoria_nome, enunciado, tempo_limite_segundos, palavras_minimas,
+texto, palavras, iniciada_em, prazo, segundos_restantes, salva_em, enviada_em, usou_ultimo_salvamento`.
+`segundos_restantes` vem do relógio do servidor (o timer da tela parte dele). Datas no horário de Brasília, sem fuso.
+
+**Entradas com `extra="forbid"`:** campos além dos documentados (ex.: `estado`) → 422. Estado, prazo e palavras nunca
+vêm do cliente.
+
+**Regras de tempo (D2):** até 30 s depois do prazo, tudo funciona. Depois: autosave → 409 `prazo_encerrado` (não
+grava); envio → ignora o texto recebido e envia o último autosave (`usou_ultimo_salvamento: true`).
+
+### Códigos de erro próprios (`codigo`)
+
+Criados com `ErroDaApi(..., codigo=...)`, sem alterar `app/erros.py`. Testados em `tests/writing/test_api_desafio.py`.
+
+| Status | `codigo` | Quando | Extras |
+|---|---|---|---|
+| 409 | `redacao_ja_enviada` | Autosave ou novo envio de uma redação que já saiu do rascunho | — |
+| 409 | `prazo_encerrado` | Autosave depois do prazo + 30 s | — |
+| 422 | `redacao_curta` | Envio com menos de 50 palavras (inclusive o último autosave, depois do prazo: D10) | `palavras`, `minimo` |
+| 503 | `sem_temas` | Nenhum tema ativo na categoria (ou em nenhuma, na "Surpresa") | — |
+
+Os demais (`nao_encontrado`, `dados_invalidos`, `nao_autenticado`, `limite_de_desafios`) são os da base.
 
 ## Banco de dados
 
@@ -106,6 +140,9 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D7 | 21/11/2026 | Avaliação **síncrona**: a submissão grava o texto, chama a LLM e devolve o resultado | Padrão do projeto (rotas `def`); fila assíncrona seria mais código e risco sem ganho real |
 | D8 | 21/11/2026 | **Um commit por bloco** (W0 = este plano, depois W1 … W10), feito pelo usuário, só com a suíte inteira e o `ruff` verdes, verificados antes de cada commit | Histórico organizado; cada commit deixa a branch funcionando |
 
+| D9 | 21/11/2026 | A cota usa o padrão do `CLAUDE.md`: `Depends(exigir_cota("writing"))` na rota `POST /challenges`. Uma requisição inválida (422) ou sem tema (503) **também gasta 1 desafio** | A dependência roda antes da validação do corpo (confirmado num experimento). Seguir o padrão mantém as três features iguais para o Membro 4; a tela só envia categorias vindas de `GET /categorias`, e com 24 temas não falta tema |
+| D10 | 21/11/2026 | Tempo acabou e o último autosave tem menos de 50 palavras → **422 `redacao_curta`**; a redação fica como rascunho vencido e a tela oferece outro desafio | Não gastar uma correção com texto curto demais (coerente com o D3) |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -134,7 +171,7 @@ W1 Modelos + migração 0301 (esquema)
 | W0 | Plano (este README) | — | ✅ concluído |
 | W1 | Modelos e migração do esquema (0301) | Modelagem WritingPrompt/Attempt/Feedback (+ WritingRewrite); migration das tabelas | ✅ concluído |
 | W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | ✅ concluído |
-| W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | pendente |
+| W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | ✅ concluído |
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | pendente |
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | pendente |
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | pendente |
@@ -226,6 +263,33 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   com 24 temas.
 - **Próxima ação:** Etapa A do W3 (API do desafio: criar com cota, ler, autosave, submissão com prazo no servidor).
 
+#### W3 — API do desafio
+- **Status:** concluído (21/11/2026).
+- **Tarefas atendidas:** endpoint para criação de um Writing Challenge; endpoint de submissão da redação; lado
+  servidor do autosave periódico e do timer regressivo (prazo conferido no servidor).
+- **Arquivos:** `app/api/writing.py`, `app/schemas_writing.py`, `app/services/writing_desafios.py`,
+  `tests/writing/test_api_desafio.py` (novos); `tests/writing/conftest.py` (fixture automática `cota_nova`);
+  **encaixe** `app/main.py` (2 linhas: `from app.api import writing` + `rotas += [writing.router]`).
+- **Decisões do usuário:** D9 (opção A: cota pelo padrão `Depends`) e D10 (recusar com 422).
+- **Decisões técnicas:** o serviço não conhece HTTP (exceções próprias, traduzidas para `ErroDaApi` na rota); o
+  "agora" entra como parâmetro (testes simulam o tempo movendo o `prazo` no banco); `segundos_restantes` vem do
+  servidor; entradas com `extra="forbid"`; limite de 10.000 caracteres no schema; sem estado "expirada" (o prazo
+  gravado já diz isso); limitador de cota novo a cada teste (o da base é global ao processo).
+- **Testes:** `test_api_desafio.py`, 38 testes (categorias; criar com prazo gravado, "Surpresa" de 3 formas, corpo
+  inválido, sem temas, 11º desafio → 429, cota por conta; ler, listar só as próprias em ordem, 404; autosave com
+  acentos/emoji, limite exato e acima, campo extra, dentro e fora da tolerância, depois do envio; envio, mínimo de
+  palavras (49 × 50), vazio/pontuação, acima do limite, segundo envio, tolerância, D2, D10; isolamento com 404 em
+  GET/PATCH/POST e nada alterado). O `test_protecao_api` da base passou a cobrir as 6 rotas novas (conferido na
+  coleta). Suíte inteira: **341 coletados, 339 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (7, todas detectadas):** (1) sem filtro de dono; (2) autosave sem conferir o prazo; (3) autosave depois
+  do envio; (4) envio depois do prazo usando o texto recebido; (5) envio sem o mínimo de palavras; (6) router sem
+  login (pego pelo `test_protecao_api`); (7) criar sem gastar cota.
+- **Problemas encontrados:** a mutação 4 passou no teste principal do D2 e só foi pega por um teste secundário: o
+  `enviar()` tinha uma proteção redundante (só gravava o texto quando não usava o autosave) que mascarava a
+  mutação, e o teste não conferia a contagem de palavras, que ficava errada. Corrigido nos dois lados: o código
+  grava sempre o texto final, e o teste confere `palavras`. Depois disso, o teste principal pega a mutação.
+- **Próxima ação:** Etapa A do W4 (tela do editor).
+
 ## Testes
 
 ```powershell
@@ -237,14 +301,72 @@ python -m ruff check .
 
 | Arquivo | O que cobre |
 |---|---|
-| `tests/writing/conftest.py` | Fixture `temas` (o `create_all` dos testes não roda a migração de dados) e `criar_tema()` |
+| `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
+| `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 | `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |
 | `tests/writing/test_texto.py` | Contagem de palavras (apóstrofo, hífen, números, pontuação, acentos, NFC, vazio) |
 
+## Encaixes na base (linhas alteradas)
+
+Os únicos trechos de arquivos da base alterados por esta feature. São os **pontos de encaixe** que o `CLAUDE.md`
+(seção 4) reserva para cada membro: só o bloco logo abaixo do comentário `Membro 3 (Writing)`, sem mexer nos blocos
+dos Membros 1 e 2 nem nas linhas em branco entre eles (assim o merge das três branches não tem conflito). Atualizada a
+cada bloco que usa um encaixe.
+
+| # | Bloco | Arquivo | Linhas adicionadas |
+|---|---|---|---|
+| 1 | W1 | `app/models.py` (fim do arquivo) | 1 |
+| 2 | W3 | `app/main.py` (`_rotas_das_features`) | 2 |
+
+**1. `app/models.py`** (W1): registra os modelos do Writing no `SQLModel.metadata` (Alembic e testes).
+
+Antes:
+```python
+# Membro 2 (Speaking)
+
+# Membro 3 (Writing)
+```
+Depois:
+```python
+# Membro 2 (Speaking)
+
+# Membro 3 (Writing)
+import app.models_writing  # noqa: E402, F401
+```
+
+**2. `app/main.py`**, função `_rotas_das_features` (W3): registra as rotas da API `/api/writing`.
+
+Antes:
+```python
+    # Membro 2 (Speaking)
+
+    # Membro 3 (Writing)
+
+    return rotas
+```
+Depois:
+```python
+    # Membro 2 (Speaking)
+
+    # Membro 3 (Writing)
+    from app.api import writing
+    rotas += [writing.router]
+
+    return rotas
+```
+
+**Encaixes previstos e ainda não usados:** `app/static/js/main.js` (W4: `import "./paginas/writing.js";`),
+`app/templates/base.html` (W4: CSS e botão da navbar) e, no `app/main.py`, `writing.paginas` acrescentado à mesma
+lista (W4). O `requirements.txt` não deve ser usado (nenhuma dependência nova).
+
+Para conferir a qualquer momento: `git --no-pager diff Membro4 -- app/models.py app/main.py app/static/js/main.js
+app/templates/base.html requirements.txt`.
+
 ## Alterações na base
 
-Nenhuma.
+Nenhuma. (Esta seção é para mudanças **fora** dos pontos de encaixe, que exigem aprovação explícita; ver
+`CLAUDE.md`, seção 3. Os encaixes estão na seção anterior.)
 
 ## Para o Membro 4
 
