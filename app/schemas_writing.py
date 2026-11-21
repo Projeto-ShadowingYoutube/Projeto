@@ -1,5 +1,7 @@
-"""Formatos de entrada e saída da API do Writing Challenge (Membro 3). Documentados em /docs."""
+"""Formatos do Writing Challenge (Membro 3): entrada e saída da API (documentados em /docs) e o contrato JSON que a
+LLM precisa seguir na correção (AvaliacaoLLM)."""
 from datetime import datetime
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -73,3 +75,49 @@ class AutosaveSalvo(BaseModel):
     palavras: int
     salva_em: datetime
     segundos_restantes: int
+
+
+# --- Contrato da correção por IA (W5) ---
+# llm.gerar_json manda o JSON Schema destes modelos junto das instruções e valida a resposta com eles: nota fora de
+# 0–10, categoria faltando ou texto grande demais = resposta inválida (o llm.py pede de novo uma vez). As
+# "description" vão no schema e orientam a LLM.
+
+CategoriaAvaliada = Literal["gramatica", "vocabulario", "coerencia", "organizacao", "atendimento_tarefa"]
+CATEGORIAS_AVALIADAS: tuple[str, ...] = get_args(CategoriaAvaliada)
+
+
+class NotaCategoria(BaseModel):
+    nota: int = Field(ge=0, le=10, description="Nota inteira de 0 a 10.")
+    comentario: str = Field(min_length=1, max_length=600, description="Comentário em português do Brasil.")
+
+
+class NotasPorCategoria(BaseModel):
+    """Chaves fixas, todas obrigatórias: faltar uma categoria é resposta inválida (numa lista, passaria)."""
+    gramatica: NotaCategoria = Field(description="Correção gramatical.")
+    vocabulario: NotaCategoria = Field(description="Variedade, precisão e ortografia das palavras.")
+    coerencia: NotaCategoria = Field(description="Clareza e lógica das ideias e a ligação entre elas.")
+    organizacao: NotaCategoria = Field(description="Estrutura do texto e divisão em parágrafos.")
+    atendimento_tarefa: NotaCategoria = Field(description="Resposta ao tema e à tarefa, e o mínimo de palavras.")
+
+
+class TrechoLLM(BaseModel):
+    categoria: CategoriaAvaliada = Field(description="Categoria do problema.")
+    citacao: str = Field(
+        min_length=1, max_length=300,
+        description="Cópia EXATA de um pedaço da redação, caractere por caractere, sem corrigir e sem aspas.",
+    )
+    gravidade: int = Field(ge=1, le=3, description="1 = leve, 2 = médio, 3 = grave.")
+    explicacao: str = Field(min_length=1, max_length=400, description="O problema, explicado em português.")
+    sugestao: str = Field(max_length=300, description="A versão corrigida do trecho, em inglês.")
+    instrucao_reescrita: str = Field(
+        min_length=1, max_length=300,
+        description="O que o estudante deve mudar, em português, SEM dar a resposta pronta.",
+    )
+
+
+class AvaliacaoLLM(BaseModel):
+    categorias: NotasPorCategoria
+    resumo: str = Field(min_length=1, max_length=800, description="Comentário geral sobre a redação, em português.")
+    trechos: list[TrechoLLM] = Field(
+        default_factory=list, max_length=15, description="Trechos problemáticos (no máximo 10, os mais graves).",
+    )

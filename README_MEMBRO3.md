@@ -95,6 +95,30 @@ Criados com `ErroDaApi(..., codigo=...)`, sem alterar `app/erros.py`. Testados e
 
 Os demais (`nao_encontrado`, `dados_invalidos`, `nao_autenticado`, `limite_de_desafios`) são os da base.
 
+### Correção por IA (`app/services/writing_llm.py`, W5)
+
+`avaliar(texto, enunciado, categoria, palavras_minimas, palavras)` → `ResultadoAvaliacao`
+(`notas, nota_geral, resumo, trechos, modelo, versao_prompt, descartados`). Uma chamada `llm.gerar_json` por
+correção; os erros da LLM sobem sem tratamento (quem chama decide, W6).
+
+**Contrato JSON** (`AvaliacaoLLM` em `app/schemas_writing.py`; o JSON Schema vai junto das instruções):
+
+| Campo | Regra |
+|---|---|
+| `categorias.{gramatica, vocabulario, coerencia, organizacao, atendimento_tarefa}` | as 5 chaves obrigatórias; cada uma `{nota: int 0–10, comentario: 1–600 caracteres}` |
+| `resumo` | 1–800 caracteres, em português |
+| `trechos[]` (até 15) | `categoria` (uma das 5), `citacao` (1–300, cópia exata), `gravidade` (1–3), `explicacao` (≤ 400, português), `sugestao` (≤ 300, inglês), `instrucao_reescrita` (≤ 300, português, sem dar a resposta) |
+
+**Prompt:** `INSTRUCOES` (papel de corretor IELTS/TOEFL, critérios das 5 categorias, escala, regras dos trechos,
+idiomas, segurança) + `montar_mensagem()` (tipo de tarefa, tema, mínimo, contagem de palavras do servidor e a redação
+entre `<redacao>…</redacao>`, com qualquer delimitador digitado pelo usuário neutralizado). `VERSAO_PROMPT = 1`,
+gravada com o feedback.
+
+**Trechos** (`localizar_trechos`, função pura): citação procurada exatamente no texto (tolerando aspas e espaços nas
+pontas); inexistente → descartada; repetida → próxima ocorrência; sobreposta → fica a mais grave (D14); no máximo 10;
+saída ordenada pela posição. **Posições `inicio`/`fim` em caracteres Unicode (como no Python):** no JS, recortar com
+`Array.from(texto)`, não com `texto.slice` (lá um emoji ocupa 2 posições).
+
 ## Banco de dados
 
 Faixa de migrações do Membro 3: `0301`, `0302`, … A primeira tem `down_revision = "0006"`.
@@ -159,6 +183,9 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D12 | 21/11/2026 | Autosave **3 s após parar de digitar** + **a cada 30 s** (se houver mudança) + **ao sair** (limpeza da página, troca de aba e `pagehide` com `keepalive`) | Perde no máximo alguns segundos de texto, sem uma requisição por tecla |
 | D13 | 21/11/2026 | **Sem botão na navbar**: o acesso é pela URL `/writing`. (Primeiro foi decidido um botão "Writing Challenge"; revisto no mesmo dia, antes do commit, por instrução do tech lead) | O tech lead vai criar uma interface inicial que leva a cada um dos quatro desafios (o Shadowing é um deles); essa interface só precisa de um link para `/writing` |
 
+| D14 | 21/11/2026 | Trechos sobrepostos: fica o de **maior gravidade** (empate: o que veio primeiro); **no máximo 10** trechos guardados | A tela não precisa desenhar destaques sobrepostos; o aluno vê primeiro o que é mais grave |
+| D15 | 21/11/2026 | Nota geral = **média simples com 1 casa decimal** (ex.: 7,4) | Não perde informação; não há critério oficial para pesos por categoria |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -189,7 +216,7 @@ W1 Modelos + migração 0301 (esquema)
 | W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | ✅ concluído |
 | W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | ✅ concluído |
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | ✅ concluído |
-| W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | pendente |
+| W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | ✅ concluído |
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | pendente |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | pendente |
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | pendente |
@@ -342,6 +369,35 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   trecho foi corrigido.
 - **Próxima ação:** Etapa A do W5 (contrato JSON, prompt das 5 categorias e serviço de avaliação, sem rotas).
 
+#### W5 — Serviço de avaliação (sem rotas)
+- **Status:** concluído (21/11/2026).
+- **Tarefas atendidas:** definição do contrato JSON da avaliação; criação de prompt para avaliação separada de
+  gramática, vocabulário, coerência, organização e atendimento à tarefa; implementação do serviço de avaliação no
+  backend; validação da saída da LLM através de Pydantic; criação de score por categoria. (Adianta parte do W8: a
+  `instrucao_reescrita` de cada problema vem nesta mesma chamada.)
+- **Arquivos:** `app/services/writing_llm.py`, `tests/writing/test_avaliacao_servico.py` (novos);
+  `app/schemas_writing.py` (contrato `AvaliacaoLLM`). Nenhum arquivo da base; nenhum encaixe.
+- **Decisões do usuário:** D14 (sobreposição: fica o mais grave; máximo 10) e D15 (média com 1 casa).
+- **Decisões técnicas:** categorias como chaves fixas (faltar uma = inválida); limites de tamanho e de nota no
+  contrato; contagem de palavras do servidor na mensagem; delimitadores + neutralização contra prompt injection
+  (reduz o risco, não elimina; o contrato vale para qualquer resposta); citação exata (sem casamento aproximado);
+  erros da LLM sobem para o W6 tratar; prompt em português.
+- **Testes:** `test_avaliacao_servico.py`, 33 testes (caminho feliz com média e rastreabilidade; médias em 3
+  cenários; sem trechos; mensagens enviadas; 4 grafias do delimitador; 6 respostas inválidas × 2 tentativas;
+  inválida e depois válida; timeout e indisponível sobem; sem chave → não configurada; localização: inexistente,
+  aspas, aspas legítimas, repetida, sobreposta por gravidade e por ordem, vizinhas, limite de 10, ordem, emoji,
+  campos completos). Suíte inteira: **383 coletados, 381 aprovados, 2 pulados, 0 falhas**; `ruff` limpo;
+  `test_base_protegida` verde (`llm.py` intocado).
+- **Mutações (8, todas detectadas):** (1) não descartar citação inexistente; (2) média errada; (3) categoria
+  opcional no contrato; (4) nota sem limite 0–10; (5) sobreposição sem preferir o mais grave; (6) repetida sempre na
+  1ª ocorrência; (7) sem neutralizar o delimitador; (8) sem limite de 10 trechos.
+- **Problemas encontrados:** a mutação 7 só derrubou 2 das 4 grafias do ataque (`</REDACAO>` e `< / redacao >`
+  passavam), porque o teste contava o delimitador só em minúsculas e sem espaços. O código neutralizava as quatro;
+  o teste é que não provava. Corrigido (o teste conta qualquer grafia), e as 4 passaram a falhar com a mutação.
+- **Não executado:** correção com o Gemini de verdade (precisa da `LLM_CHAVE` do usuário no `.env`); prevista para o
+  W6, quando a rota existir.
+- **Próxima ação:** Etapa A do W6 (avaliação na API: persistência, erro_avaliacao, "avaliar de novo").
+
 ## Testes
 
 ```powershell
@@ -355,6 +411,7 @@ python -m ruff check .
 |---|---|
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
 | `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`) e paridade da contagem de palavras JS × Python (textual e executando o JS no Node.js, se instalado) |
+| `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
 | `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 | `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |
