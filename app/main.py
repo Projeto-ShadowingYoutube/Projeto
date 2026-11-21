@@ -34,7 +34,7 @@ def _rotas_das_features() -> list:
 
     # Membro 3 (Writing)
     from app.api import writing
-    rotas += [writing.router]
+    rotas += [writing.router, writing.paginas]
 
     return rotas
 

@@ -16,6 +16,7 @@ import "./paginas/revisao.js";
 // Membro 2 (Speaking): import "./paginas/speaking.js";
 
 // Membro 3 (Writing): import "./paginas/writing.js";
+import "./paginas/writing.js";
 
 iniciarTema();
 iniciarModalErro();

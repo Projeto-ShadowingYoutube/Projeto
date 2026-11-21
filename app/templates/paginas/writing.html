@@ -1,0 +1,48 @@
+<!-- Writing Challenge (Membro 3): o JavaScript está em static/js/paginas/writing.js, que alterna as três telas.
+     Só estrutura fixa aqui: tudo o que vem do servidor (tema, texto, nomes) entra pelo JS com textContent. -->
+<div class="pagina writing" data-pagina="writing">
+
+    <section class="writing-tela animate-fade-in" data-tela="inicio">
+        <header class="writing-cabecalho">
+            <h2 class="writing-titulo">Writing Challenge</h2>
+            <span class="writing-cota" data-cota></span>
+        </header>
+        <div data-aviso-ia></div>
+        <p class="writing-instrucao">Escolha uma categoria. O tema é sorteado dentro dela.</p>
+        <div class="writing-categorias" data-categorias></div>
+        <h3 class="writing-subtitulo">Redações recentes</h3>
+        <div class="writing-recentes" data-recentes></div>
+    </section>
+
+    <section class="writing-tela animate-fade-in" data-tela="editor" hidden>
+        <header class="writing-cabecalho">
+            <div>
+                <span class="writing-categoria" data-categoria></span>
+                <span class="writing-detalhe" data-detalhe></span>
+            </div>
+            <span class="writing-timer" data-timer role="timer" title="Tempo restante"></span>
+        </header>
+        <p class="writing-enunciado" data-enunciado></p>
+        <textarea class="writing-texto" data-texto maxlength="10000" spellcheck="false" autocomplete="off"
+                  aria-label="Sua redação" placeholder="Write your essay here..."></textarea>
+        <div class="writing-rodape">
+            <span class="writing-contador" data-contador></span>
+            <span class="writing-salvo" data-salvo aria-live="polite"></span>
+        </div>
+        <div data-aviso-ia-envio></div>
+        <div class="writing-acoes">
+            <button type="button" class="writing-botao" data-sair>Salvar e voltar</button>
+            <span class="writing-dica" data-dica></span>
+            <button type="button" class="writing-botao principal" data-enviar disabled>Enviar redação</button>
+        </div>
+    </section>
+
+    <section class="writing-tela animate-fade-in" data-tela="fim" hidden>
+        <h2 class="writing-titulo" data-fim-titulo></h2>
+        <p class="writing-fim-texto" data-fim-texto></p>
+        <p class="writing-fim-aviso" data-fim-aviso></p>
+        <div class="writing-acoes">
+            <button type="button" class="writing-botao principal" data-voltar>Voltar ao início</button>
+        </div>
+    </section>
+</div>

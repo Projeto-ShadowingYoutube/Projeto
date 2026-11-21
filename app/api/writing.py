@@ -4,11 +4,13 @@ Todas exigem login (dependência no router: rotas novas já nascem protegidas). 
 redações: uma de outra conta responde 404, igual a uma que não existe (conferido num lugar só, em _tentativa).
 As regras ficam em services/writing_desafios.py; aqui só a tradução para HTTP.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from sqlmodel import Session
 
-from app.api.auth import usuario_atual
+from app.api.auth import usuario_atual, usuario_opcional
 from app.api.llm import exigir_cota
+from app.api.paginas import pagina_protegida
 from app.db import get_session
 from app.erros import ErroDaApi
 from app.models import Usuario, agora
@@ -33,6 +35,14 @@ from app.services.writing_desafios import (
 from app.services.writing_temas import CATEGORIAS
 
 router = APIRouter(prefix="/api/writing", tags=["writing"], dependencies=[Depends(usuario_atual)])
+# Página HTML (navegação pelo HTMX). Sem login, pagina_protegida leva ao /login?proximo=/writing.
+paginas = APIRouter(default_response_class=HTMLResponse, include_in_schema=False)
+
+
+@paginas.get("/writing")
+def pagina_writing(request: Request, usuario: Usuario | None = Depends(usuario_opcional)):
+    return pagina_protegida(request, usuario, "writing.html")
+
 
 # Exceção do serviço → (status, codigo). Códigos próprios documentados no README_MEMBRO3.md.
 _ERROS = {

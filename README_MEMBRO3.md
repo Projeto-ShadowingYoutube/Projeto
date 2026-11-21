@@ -17,7 +17,19 @@ histórico original → feedback → reescritas fica guardado, e o texto origina
 
 ## Como usar
 
-_(preenchido a partir do W4, quando a tela existir)_
+1. Entre na sua conta e abra **`/writing`** (ex.: http://127.0.0.1:8000/writing). Não há botão na navbar (D13): a
+   interface inicial que levará a cada desafio será criada pelo tech lead.
+2. Leia o aviso de privacidade (o texto vai para um provedor externo de IA) e veja quantos desafios restam hoje
+   (10 por dia; cada desafio criado gasta 1).
+3. Escolha uma **categoria** (o tema é sorteado dentro dela) ou **Surpresa** (qualquer categoria).
+4. Escreva no editor. O **contador** mostra as palavras (mesma regra do servidor) e o mínimo recomendado do tema; o
+   **timer** mostra o tempo restante (fica vermelho no último minuto). O texto é **salvo sozinho** 3 s depois de
+   você parar de digitar, a cada 30 s e ao sair da página ("Salvo às 14:32").
+5. Pode sair e voltar: **Salvar e voltar**, outra página ou até recarregar (a URL guarda a redação:
+   `/writing?redacao=7`). O texto e o tempo continuam de onde estavam; o tempo corre no servidor.
+6. Clique em **Enviar redação** (a partir de 50 palavras; pede confirmação). Quando o tempo acaba, o envio é
+   automático, com o último texto salvo.
+7. Em **Redações recentes** você retoma um rascunho ou vê as enviadas.
 
 Para a correção por IA funcionar localmente, coloque a **sua** chave do Gemini em `LLM_CHAVE` no `.env` (crie em
 https://aistudio.google.com/apikey; nunca no Git). Sem ela, o app sobe normalmente e a correção responde 503
@@ -143,6 +155,10 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D9 | 21/11/2026 | A cota usa o padrão do `CLAUDE.md`: `Depends(exigir_cota("writing"))` na rota `POST /challenges`. Uma requisição inválida (422) ou sem tema (503) **também gasta 1 desafio** | A dependência roda antes da validação do corpo (confirmado num experimento). Seguir o padrão mantém as três features iguais para o Membro 4; a tela só envia categorias vindas de `GET /categorias`, e com 24 temas não falta tema |
 | D10 | 21/11/2026 | Tempo acabou e o último autosave tem menos de 50 palavras → **422 `redacao_curta`**; a redação fica como rascunho vencido e a tela oferece outro desafio | Não gastar uma correção com texto curto demais (coerente com o D3) |
 
+| D11 | 21/11/2026 | O botão **Enviar** pede confirmação ("Depois de enviada, ela não pode mais ser editada"); o envio automático do fim do tempo não pergunta | Evita envio acidental; o envio é irreversível |
+| D12 | 21/11/2026 | Autosave **3 s após parar de digitar** + **a cada 30 s** (se houver mudança) + **ao sair** (limpeza da página, troca de aba e `pagehide` com `keepalive`) | Perde no máximo alguns segundos de texto, sem uma requisição por tecla |
+| D13 | 21/11/2026 | **Sem botão na navbar**: o acesso é pela URL `/writing`. (Primeiro foi decidido um botão "Writing Challenge"; revisto no mesmo dia, antes do commit, por instrução do tech lead) | O tech lead vai criar uma interface inicial que leva a cada um dos quatro desafios (o Shadowing é um deles); essa interface só precisa de um link para `/writing` |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -172,7 +188,7 @@ W1 Modelos + migração 0301 (esquema)
 | W1 | Modelos e migração do esquema (0301) | Modelagem WritingPrompt/Attempt/Feedback (+ WritingRewrite); migration das tabelas | ✅ concluído |
 | W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | ✅ concluído |
 | W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | ✅ concluído |
-| W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | pendente |
+| W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | ✅ concluído |
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | pendente |
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | pendente |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | pendente |
@@ -290,6 +306,42 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   grava sempre o texto final, e o teste confere `palavras`. Depois disso, o teste principal pega a mutação.
 - **Próxima ação:** Etapa A do W4 (tela do editor).
 
+#### W4 — Tela do editor
+- **Status:** concluído (21/11/2026), com a lógica da tela validada por roteiro manual (sem E2E: o Chromium do
+  Playwright não está instalado nesta máquina; o E2E fica para o W10).
+- **Tarefas atendidas:** desenvolvimento da interface do editor de redação; contador de palavras em JavaScript;
+  timer regressivo; autosave periódico do texto.
+- **Arquivos:** `app/templates/paginas/writing.html`, `app/static/js/paginas/writing.js`,
+  `app/static/js/nucleo/api-writing.js`, `app/static/css/writing.css`, `tests/writing/test_paginas.py` (novos);
+  `app/api/writing.py` (router `paginas` com `GET /writing`); **encaixes** `app/main.py` (`writing.paginas`),
+  `app/static/js/main.js`, `app/templates/base.html` (só o CSS). Antes e depois na seção "Encaixes na base".
+- **Decisões do usuário:** D11 (confirmar o envio), D12 (autosave 3 s + 30 s + ao sair), D13 (sem botão na navbar:
+  acesso pela URL `/writing`, por instrução do tech lead; o botão chegou a ser feito e foi removido antes do commit).
+- **Decisões técnicas:** uma página com três telas (início, editor, fim) e a redação aberta na URL
+  (`?redacao=`); timer a partir de `segundos_restantes` do servidor; conteúdo do servidor só por
+  `textContent`/`value` (sem `innerHTML`); salvamento ao fechar a aba com `fetch(..., {keepalive: true})` no
+  `api-writing.js` (o `enviarJSON` da base não tem essa opção); `spellcheck="false"` no editor (como nas provas, sem
+  corretor do navegador); colar texto não é bloqueado (acessibilidade).
+- **Testes:** `test_paginas.py`, 11 testes (login e HX-Redirect, as três telas, F5 com `?redacao=`, CSS no
+  `base.html`, arquivos estáticos, import no `main.js`, paridade textual das expressões JS × Python e **paridade real**:
+  o teste roda a `contarPalavras` do `writing.js` no Node.js e compara com o Python em 18 textos; pulado se não houver
+  Node). Verificação extra, fora da suíte: `node --check` nos dois JS novos e 20/20 casos iguais (incluindo japonês e
+  árabe). Suíte inteira: **352 coletados, 350 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (5, todas detectadas):** (1) expressão do JS sem o hífen; (2) JS sem NFC; (3) encaixe do `main.py` sem
+  `writing.paginas`; (4) encaixe do `main.js` sem o import; (5) encaixe do `base.html` sem o CSS (refeita depois da
+  remoção do botão; a mutação original era "sem o botão").
+- **Teste manual (usuário):** a página só apareceu completa depois de um Ctrl+Shift+R (o navegador usava o
+  `main.js` antigo em cache; ver "Para o Membro 4"). Depois disso, **roteiro completo aprovado**: aviso de IA, cota,
+  categorias, redações recentes, contador (5 palavras em `I don't agree, it's well-known.`), "Salvo às…", F5 volta ao
+  editor com texto e timer, "Salvar e voltar" e retomar o rascunho, envio com confirmação, tema claro/escuro, e o
+  **envio automático no fim do tempo** nos dois casos (≥ 50 palavras → "Redação enviada"; < 50 → "O tempo acabou",
+  D10). Network com todas as chamadas em 200.
+- **Problemas encontrados:** (1) o teste do `main.js` falhou de início porque o arquivo da base usa `\r\n` e o `$`
+  da expressão não casava antes do `\r` (corrigido com `\r?`); (2) no script de mutação, o trecho do import aparecia
+  também no comentário de exemplo do encaixe; a trava "exatamente uma vez" impediu a mutação sem alterar nada, e o
+  trecho foi corrigido.
+- **Próxima ação:** Etapa A do W5 (contrato JSON, prompt das 5 categorias e serviço de avaliação, sem rotas).
+
 ## Testes
 
 ```powershell
@@ -302,6 +354,7 @@ python -m ruff check .
 | Arquivo | O que cobre |
 |---|---|
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
+| `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`) e paridade da contagem de palavras JS × Python (textual e executando o JS no Node.js, se instalado) |
 | `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 | `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |
@@ -317,7 +370,11 @@ cada bloco que usa um encaixe.
 | # | Bloco | Arquivo | Linhas adicionadas |
 |---|---|---|---|
 | 1 | W1 | `app/models.py` (fim do arquivo) | 1 |
-| 2 | W3 | `app/main.py` (`_rotas_das_features`) | 2 |
+| 2 | W3, W4 | `app/main.py` (`_rotas_das_features`) | 2 (a 2ª linha ganhou `writing.paginas` no W4) |
+| 3 | W4 | `app/static/js/main.js` | 1 |
+| 4 | W4 | `app/templates/base.html` (CSS) | 1 |
+
+Total até o W4: **5 linhas adicionadas em 4 arquivos**, nenhuma removida.
 
 **1. `app/models.py`** (W1): registra os modelos do Writing no `SQLModel.metadata` (Alembic e testes).
 
@@ -335,7 +392,8 @@ Depois:
 import app.models_writing  # noqa: E402, F401
 ```
 
-**2. `app/main.py`**, função `_rotas_das_features` (W3): registra as rotas da API `/api/writing`.
+**2. `app/main.py`**, função `_rotas_das_features` (W3; W4 acrescentou `writing.paginas`): registra as rotas da API
+`/api/writing` e a página `/writing`.
 
 Antes:
 ```python
@@ -351,14 +409,53 @@ Depois:
 
     # Membro 3 (Writing)
     from app.api import writing
-    rotas += [writing.router]
+    rotas += [writing.router, writing.paginas]
 
     return rotas
 ```
 
-**Encaixes previstos e ainda não usados:** `app/static/js/main.js` (W4: `import "./paginas/writing.js";`),
-`app/templates/base.html` (W4: CSS e botão da navbar) e, no `app/main.py`, `writing.paginas` acrescentado à mesma
-lista (W4). O `requirements.txt` não deve ser usado (nenhuma dependência nova).
+**3. `app/static/js/main.js`** (W4): importa o JS da página (cada página se registra ao ser importada).
+
+Antes:
+```javascript
+// Membro 2 (Speaking): import "./paginas/speaking.js";
+
+// Membro 3 (Writing): import "./paginas/writing.js";
+
+iniciarTema();
+```
+Depois:
+```javascript
+// Membro 2 (Speaking): import "./paginas/speaking.js";
+
+// Membro 3 (Writing): import "./paginas/writing.js";
+import "./paginas/writing.js";
+
+iniciarTema();
+```
+
+**4. `app/templates/base.html`**, bloco de CSS (W4).
+
+Antes:
+```html
+        {# Membro 2 (Speaking): CSS #}
+
+        {# Membro 3 (Writing): CSS #}
+
+        <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" ...></script>
+```
+Depois:
+```html
+        {# Membro 2 (Speaking): CSS #}
+
+        {# Membro 3 (Writing): CSS #}
+        <link rel="stylesheet" href="/static/css/writing.css">
+
+        <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" ...></script>
+```
+
+**Encaixes não usados:** `app/templates/base.html` (botão na navbar), por decisão (D13: acesso pela URL `/writing`;
+o bloco está idêntico ao da `Membro4`); `requirements.txt` (nenhuma dependência nova).
 
 Para conferir a qualquer momento: `git --no-pager diff Membro4 -- app/models.py app/main.py app/static/js/main.js
 app/templates/base.html requirements.txt`.
@@ -374,6 +471,15 @@ _(preenchido ao longo dos blocos; checklist da seção 10 do `CLAUDE.md`)_
 
 - Dependências novas: nenhuma prevista (`difflib` é da biblioteca padrão).
 - Variáveis de ambiente novas: nenhuma (usa as da LLM que já existem).
+- **Acesso à página:** `/writing` (sem botão na navbar, D13). Para a interface inicial do tech lead, o link no padrão
+  do app é `<button hx-get="/writing" hx-target="main" hx-push-url="true">` (ou um `<a href="/writing">` comum).
+- **Cache dos arquivos estáticos (problema da base, não do Writing; para avaliar no B14–B16):** o `/static` é servido
+  sem `Cache-Control` e sem versão na URL, então o navegador reaproveita cópias antigas por um tempo que ele mesmo
+  decide. No teste manual do W4, o `main.js` antigo (sem o import do `writing.js`) continuou em uso depois da
+  mudança, e a página do Writing apareceu sem conteúdo até um **Ctrl+Shift+R**. O mesmo vai acontecer com quem
+  alterar qualquer JS/CSS existente (inclusive no merge das três branches) e com os usuários depois de cada deploy.
+  Possíveis soluções (alteração na base, fora do escopo do Membro 3): versão na URL dos arquivos
+  (`main.js?v=<commit>`) ou `Cache-Control: no-cache` no `/static` (revalida com o ETag que já é enviado).
 - Migrações: `0301` (esquema) e `0302` (dados: temas iniciais). Na integração, juntar as cabeças das três faixas com
   `alembic merge` **antes** de rodar `python -m app.migrar` (com várias cabeças, `migrar.revisao_mais_recente()`,
   que usa `get_current_head()`, falha).
