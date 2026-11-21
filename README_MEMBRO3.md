@@ -74,7 +74,24 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | Migração | Tipo | O que faz |
 |---|---|---|
 | `0301_writing_challenge.py` | esquema | Cria as 4 tabelas (só tabelas novas). FKs nomeadas à mão (o autogenerate as gera sem nome) |
-| `0302` | dados | _(W2)_ temas iniciais |
+| `0302_writing_temas_iniciais.py` | dados | 24 temas originais (4 por categoria), dados congelados na própria migração. Downgrade apaga só esses temas e **recusa** (sem alterar nada) se algum estiver em uso por uma redação |
+
+### Categorias (`app/services/writing_temas.py`)
+
+| Slug | Nome na tela | Inspiração | Tempo | Mín. palavras |
+|---|---|---|---|---|
+| `ielts_opiniao` | Opinião | IELTS Writing Task 2 | 40 min | 250 |
+| `ielts_discussao` | Discussão de dois lados | IELTS Writing Task 2 | 40 min | 250 |
+| `ielts_problema_solucao` | Problema e solução | IELTS Writing Task 2 | 40 min | 250 |
+| `ielts_vantagens` | Vantagens e desvantagens | IELTS Writing Task 2 | 40 min | 250 |
+| `toefl_discussao_academica` | Discussão acadêmica | TOEFL (Academic Discussion) | 10 min | 100 |
+| `toefl_independente` | Preferência pessoal | TOEFL (Independent Writing) | 30 min | 300 |
+
+- **Sorteio:** `sortear_tema(session, categoria=None)`: tema ativo ao acaso (`func.random()` no banco); `None` =
+  "Surpresa" (qualquer categoria). Sem tema ativo → `None`; categoria desconhecida → `ValueError`.
+- **Contagem de palavras** (`app/services/writing_texto.py`, `contar_palavras`): sequência de letras ou números, com
+  apóstrofo ou hífen só no meio; texto normalizado (NFC). Python `[^\W_]+(?:['’\-][^\W_]+)*`, JS (W4)
+  `/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu`. Ex.: `I don't agree.` = 3, `well-known` = 1, `word — word` = 2.
 
 ## Decisões
 
@@ -116,7 +133,7 @@ W1 Modelos + migração 0301 (esquema)
 |---|---|---|---|
 | W0 | Plano (este README) | — | ✅ concluído |
 | W1 | Modelos e migração do esquema (0301) | Modelagem WritingPrompt/Attempt/Feedback (+ WritingRewrite); migration das tabelas | ✅ concluído |
-| W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | pendente |
+| W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | ✅ concluído |
 | W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | pendente |
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | pendente |
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | pendente |
@@ -181,6 +198,34 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
 - **Problemas encontrados:** o autogenerate gerou as FKs sem nome (esperado; corrigido na revisão). Nenhum na base.
 - **Próxima ação:** Etapa A do W2 (temas, migração 0302, sorteio, contagem de palavras).
 
+#### W2 — Temas e regras puras (0302)
+- **Status:** concluído (21/11/2026).
+- **Tarefas atendidas:** definição de categorias de prompts inspiradas em TOEFL/IELTS; implementação da seleção
+  aleatória de tema; regra da contagem de palavras do servidor (a do JS vem no W4).
+- **Arquivos (todos novos):** `app/services/writing_temas.py`, `app/services/writing_texto.py`,
+  `migrations/versions/0302_writing_temas_iniciais.py`, `tests/writing/conftest.py` (fixture `temas`),
+  `tests/writing/test_temas.py`, `tests/writing/test_texto.py`. Nenhum encaixe neste bloco.
+- **Decisões do usuário:** nomes "Opinião" e "Discussão de dois lados" (em vez de "Opinião (concordar ou discordar)"
+  e "Discutir os dois lados").
+- **Decisões técnicas:** temas congelados dentro da 0302 (sem importar o serviço), com teste que confere que a
+  migração e `CATEGORIAS` não divergem; sorteio no banco (`func.random()`); contagem com regra explícita, não
+  `split()`; downgrade da 0302 recusa se houver tema em uso (padrão `BancoIncompativel` da 0003).
+- **Testes:** 27 novos (`test_temas.py`: categorias, sorteio por categoria, "Surpresa", inativo nunca sorteado,
+  sem temas → `None`, categoria desconhecida, 0302 bate com o serviço, insere 24 temas 4 por categoria, desce
+  apagando só os seus, recusa descer com tema em uso; `test_texto.py`: 16 casos de contagem + texto longo).
+  Suíte inteira: **303 coletados, 301 aprovados, 2 pulados, 0 falhas**; `ruff` limpo; `test_base_protegida` verde.
+- **Mutações (todas detectadas):** (a) sorteio sem filtro `ativo`; (b) contagem com `split()`; (c) sem NFC;
+  (d) downgrade da 0302 sem a trava; (e) tempo na 0302 divergente do serviço.
+- **Problemas encontrados:** (1) dois erros nos meus testes na primeira execução (`DetachedInstanceError` na
+  fixture e `dict()` sobre o resultado da consulta), corrigidos; (2) a primeira rodada de mutações, feita com
+  `Get-Content`/`Set-Content` do PowerShell 5.1, corrompeu os acentos dos arquivos mutados e derrubou testes não
+  relacionados: refeita com um script Python em UTF-8 (arquivos restaurados e conferidos byte a byte); (3) a
+  mutação "sem NFC" revelou um caso de teste fraco (`café` conta 1 mesmo sem NFC, porque o acento combinado no
+  fim é ignorado): trocado por `naïve` (acento no meio), que prova a necessidade do NFC.
+- **Banco local:** `python -m app.migrar` → backup `dados/backup/estudos-20261121-114802-147301.db`, banco na 0302
+  com 24 temas.
+- **Próxima ação:** Etapa A do W3 (API do desafio: criar com cota, ler, autosave, submissão com prazo no servidor).
+
 ## Testes
 
 ```powershell
@@ -192,7 +237,10 @@ python -m ruff check .
 
 | Arquivo | O que cobre |
 |---|---|
+| `tests/writing/conftest.py` | Fixture `temas` (o `create_all` dos testes não roda a migração de dados) e `criar_tema()` |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
+| `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |
+| `tests/writing/test_texto.py` | Contagem de palavras (apóstrofo, hífen, números, pontuação, acentos, NFC, vazio) |
 
 ## Alterações na base
 
