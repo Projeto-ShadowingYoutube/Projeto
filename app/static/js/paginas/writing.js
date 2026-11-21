@@ -1,9 +1,13 @@
-// Página do Writing Challenge (templates/paginas/writing.html), Membro 3. Três telas na mesma página:
-//   início (categorias, aviso de IA, cota, redações recentes) → editor (contador, timer, autosave) → fim (enviada).
+// Página do Writing Challenge (templates/paginas/writing.html), Membro 3. Quatro telas na mesma página:
+//   início (categorias, aviso de IA, cota, redações recentes) → editor (contador, timer, autosave)
+//   → resultado (notas, resumo, redação com os trechos destacados) ou fim (enviada sem correção / tempo esgotado).
 // A redação aberta fica na URL (/writing?redacao=7): recarregar a página volta ao editor com o texto e o tempo.
 // Conteúdo do servidor (tema, texto, nomes) entra só com textContent/value, nunca innerHTML.
 import { criarAvisoIA } from "../componentes/aviso-ia.js";
 import { criarEstadoVazio } from "../componentes/estado-vazio.js";
+import {
+    CATEGORIAS_AVALIADAS, NOMES_DAS_CATEGORIAS, NOMES_DAS_GRAVIDADES, formatarNota, partesDoTexto,
+} from "../componentes/writing-destaques.js";
 import { api } from "../nucleo/api.js";
 import { apiWriting } from "../nucleo/api-writing.js";
 import { contagemRegressiva, formatarTempo, mostrarErro } from "../nucleo/interface.js";
@@ -31,7 +35,7 @@ const data = (dataIso) => `${dataIso.slice(8, 10)}/${dataIso.slice(5, 7)} ${hora
 registrarPagina("writing", (raiz) => {
     const campo = (nome) => raiz.querySelector(`[data-${nome}]`);
     const telas = Object.fromEntries(
-        ["inicio", "editor", "fim"].map((nome) => [nome, raiz.querySelector(`[data-tela="${nome}"]`)]),
+        ["inicio", "editor", "fim", "resultado"].map((nome) => [nome, raiz.querySelector(`[data-tela="${nome}"]`)]),
     );
     const texto = campo("texto");
     const botaoEnviar = campo("enviar");
@@ -165,7 +169,15 @@ registrarPagina("writing", (raiz) => {
         const detalhe = document.createElement("span");
         detalhe.className = "writing-recente-detalhe";
         detalhe.textContent = `${data(item.iniciada_em)} · ${plural(item.palavras, "palavra", "palavras")}`;
-        botao.append(nome, estado, detalhe);
+        botao.append(nome, estado);
+        if (item.nota_geral !== null && item.nota_geral !== undefined) {
+            const nota = document.createElement("span");
+            nota.className = "writing-nota-recente";
+            nota.title = "Nota geral";
+            nota.textContent = formatarNota(item.nota_geral);
+            botao.append(nota);
+        }
+        botao.append(detalhe);
         botao.addEventListener("click", () => abrir(item.id));
         return botao;
     }
@@ -179,7 +191,13 @@ registrarPagina("writing", (raiz) => {
             await abrirInicio();
             return;
         }
+        mostrarRedacao(dados);
+    }
+
+    // Leva cada redação à tela certa pelo estado dela.
+    function mostrarRedacao(dados) {
         if (dados.estado === "rascunho") abrirEditor(dados);
+        else if (dados.feedback) mostrarResultado(dados);
         else mostrarEnviada(dados);
     }
 
@@ -290,7 +308,7 @@ registrarPagina("writing", (raiz) => {
             if (salvando) await salvando.catch(() => {});
             const enviada = await apiWriting.enviar(redacao.id, texto.value);
             pararEditor();
-            mostrarEnviada(enviada);
+            mostrarRedacao(enviada);  // corrigida → resultado
         } catch (erro) {
             if (erro.codigo === "redacao_curta" && automatico) {
                 pararEditor();
@@ -304,15 +322,10 @@ registrarPagina("writing", (raiz) => {
                 pararEditor();
                 await abrir(redacao.id);
             } else if (erro.codigo?.startsWith("llm_")) {
-                // A redação foi gravada ANTES da correção (W6): só a correção falhou.
+                // A redação foi gravada ANTES da correção (W6): só a correção falhou. Recarrega para saber o estado
+                // e quantas avaliações restam.
                 pararEditor();
-                redacao = { ...redacao, estado: "erro_avaliacao" };
-                definirUrl(redacao.id);
-                mostrarFim(
-                    "Redação enviada",
-                    `${redacao.categoria_nome} · ${plural(contarPalavras(texto.value), "palavra", "palavras")}`,
-                    `A correção falhou: ${erro.message}`,
-                );
+                await recarregarDepoisDaFalha(erro);
             } else {
                 mostrarErro(erro.message);
                 texto.readOnly = false;  // o texto continua na tela; dá para tentar de novo
@@ -324,29 +337,178 @@ registrarPagina("writing", (raiz) => {
         }
     }
 
-    function mostrarEnviada(dados) {
+    // Redação enviada SEM correção (falhou ou ficou pendente): explica e oferece "Avaliar de novo", se ainda houver.
+    function mostrarEnviada(dados, falha = null) {
         redacao = dados;
         definirUrl(dados.id);
-        mostrarFim(
-            "Redação enviada",
-            `${dados.categoria_nome} · ${plural(dados.palavras, "palavra", "palavras")}`,
-            (dados.usou_ultimo_salvamento ? "O tempo tinha acabado: foi enviado o último texto salvo. " : "")
-            + situacaoDaCorrecao(dados),
-        );
-    }
-
-    // Provisório até a tela de resultado (W7): só a situação da correção e a nota geral.
-    function situacaoDaCorrecao(dados) {
-        if (dados.feedback) return `Correção concluída: nota geral ${String(dados.feedback.nota_geral).replace(".", ",")} de 10.`;
-        if (dados.estado === "erro_avaliacao") return "A correção falhou. Você poderá pedir uma nova avaliação.";
-        return "Correção pendente.";
+        const restantes = dados.avaliacoes_restantes ?? 0;
+        let aviso = dados.usou_ultimo_salvamento ? "O tempo tinha acabado: foi enviado o último texto salvo. " : "";
+        if (falha) aviso += `A correção falhou: ${falha} `;
+        else if (dados.estado === "erro_avaliacao") aviso += "A correção falhou. ";
+        else aviso += "A correção ainda não foi feita. ";
+        aviso += restantes > 0
+            ? `Você pode pedir uma nova avaliação (${plural(restantes, "tentativa restante", "tentativas restantes")}).`
+            : "As tentativas de avaliação desta redação acabaram.";
+        mostrarFim("Redação enviada", `${dados.categoria_nome} · ${plural(dados.palavras, "palavra", "palavras")}`, aviso);
+        const botao = campo("avaliar");
+        botao.hidden = restantes <= 0;
+        botao.disabled = false;
+        botao.textContent = "Avaliar de novo";
     }
 
     function mostrarFim(titulo, textoPrincipal, aviso) {
         campo("fim-titulo").textContent = titulo;
         campo("fim-texto").textContent = textoPrincipal;
         campo("fim-aviso").textContent = aviso;
+        campo("avaliar").hidden = true;  // só mostrarEnviada o reexibe
         mostrarTela("fim");
+    }
+
+    async function recarregarDepoisDaFalha(erro) {
+        try {
+            mostrarEnviada(await apiWriting.obter(redacao.id), erro.message);
+        } catch {
+            mostrarEnviada({ ...redacao, estado: "erro_avaliacao" }, erro.message);
+        }
+    }
+
+    async function avaliarDeNovo() {
+        const botao = campo("avaliar");
+        botao.disabled = true;
+        botao.textContent = "Corrigindo…";
+        try {
+            mostrarRedacao(await apiWriting.avaliar(redacao.id));
+        } catch (erro) {
+            if (erro.codigo?.startsWith("llm_") || erro.codigo === "limite_de_avaliacoes") {
+                await recarregarDepoisDaFalha(erro);
+            } else if (erro.codigo === "redacao_ja_avaliada") {
+                await abrir(redacao.id);
+            } else {
+                mostrarErro(erro.message);
+                botao.disabled = false;
+                botao.textContent = "Avaliar de novo";
+            }
+        }
+    }
+
+    // --- Resultado ---
+
+    function mostrarResultado(dados) {
+        redacao = dados;
+        definirUrl(dados.id);
+        const { feedback } = dados;
+        campo("res-categoria").textContent = dados.categoria_nome;
+        campo("res-info").textContent = plural(dados.palavras, "palavra", "palavras");
+        campo("res-nota").textContent = formatarNota(feedback.nota_geral);
+        campo("res-enunciado").textContent = dados.enunciado;
+        campo("res-resumo").textContent = feedback.resumo;
+        campo("res-notas").replaceChildren(...CATEGORIAS_AVALIADAS.map((categoria) => cartaoDeNota(
+            categoria, feedback.notas[categoria], feedback.trechos.filter((t) => t.categoria === categoria).length,
+        )));
+        campo("res-texto").replaceChildren(...partesDoTexto(dados.texto, feedback.trechos).map((parte) => (
+            parte.trecho === null ? document.createTextNode(parte.texto) : marcaDoTrecho(parte, feedback.trechos)
+        )));
+        campo("res-legenda").replaceChildren(...CATEGORIAS_AVALIADAS.map((categoria) => {
+            const item = document.createElement("span");
+            item.className = `writing-legenda-item cat-${categoria}`;
+            item.textContent = NOMES_DAS_CATEGORIAS[categoria];
+            return item;
+        }));
+        mostrarDicaDoTrecho(feedback.trechos.length);
+        mostrarTela("resultado");
+    }
+
+    function cartaoDeNota(categoria, { nota, comentario }, quantidadeDeTrechos) {
+        const cartao = document.createElement("div");
+        cartao.className = `writing-nota cat-${categoria}`;
+        const titulo = document.createElement("div");
+        titulo.className = "writing-nota-titulo";
+        const nome = document.createElement("span");
+        nome.textContent = NOMES_DAS_CATEGORIAS[categoria];
+        const valor = document.createElement("strong");
+        valor.textContent = nota;
+        titulo.append(nome, valor);
+        const barra = document.createElement("div");
+        barra.className = "writing-nota-barra";
+        barra.setAttribute("role", "img");
+        barra.setAttribute("aria-label", `${nota} de 10`);
+        const preenchida = document.createElement("span");
+        preenchida.style.width = `${Math.max(0, Math.min(10, nota)) * 10}%`;
+        barra.append(preenchida);
+        const texto = document.createElement("p");
+        texto.textContent = comentario;
+        cartao.append(titulo, barra, texto);
+        if (quantidadeDeTrechos) {
+            const trechos = document.createElement("span");
+            trechos.className = "writing-nota-trechos";
+            trechos.textContent = `${plural(quantidadeDeTrechos, "trecho destacado", "trechos destacados")} no texto`;
+            cartao.append(trechos);
+        }
+        return cartao;
+    }
+
+    function marcaDoTrecho(parte, trechos) {
+        const trecho = trechos[parte.trecho];
+        const marca = document.createElement("mark");
+        marca.className = `writing-marca cat-${trecho.categoria}`;
+        marca.textContent = parte.texto;
+        marca.tabIndex = 0;
+        marca.setAttribute("role", "button");
+        marca.setAttribute("aria-label", `${NOMES_DAS_CATEGORIAS[trecho.categoria] ?? trecho.categoria}: ${parte.texto}`);
+        const selecionar = () => selecionarTrecho(trecho, marca);
+        marca.addEventListener("click", selecionar);
+        marca.addEventListener("keydown", (evento) => {
+            if (evento.key === "Enter" || evento.key === " ") {
+                evento.preventDefault();
+                selecionar();
+            }
+        });
+        return marca;
+    }
+
+    function mostrarDicaDoTrecho(quantidade) {
+        const dica = document.createElement("p");
+        dica.className = "writing-trecho-dica";
+        dica.textContent = quantidade
+            ? "Clique num trecho destacado para ver a explicação."
+            : "Nenhum trecho problemático foi apontado nesta redação.";
+        campo("res-trecho").replaceChildren(dica);
+    }
+
+    function selecionarTrecho(trecho, marca) {
+        campo("res-texto").querySelectorAll(".writing-marca.ativa").forEach((outra) => outra.classList.remove("ativa"));
+        marca.classList.add("ativa");
+
+        const titulo = document.createElement("p");
+        titulo.className = `writing-trecho-titulo cat-${trecho.categoria}`;
+        titulo.textContent = `${NOMES_DAS_CATEGORIAS[trecho.categoria] ?? trecho.categoria} · gravidade `
+            + (NOMES_DAS_GRAVIDADES[trecho.gravidade] ?? trecho.gravidade);
+        const citacao = document.createElement("blockquote");
+        citacao.textContent = trecho.citacao;
+        const explicacao = document.createElement("p");
+        explicacao.textContent = trecho.explicacao;
+        const instrucao = document.createElement("p");
+        const rotulo = document.createElement("strong");
+        rotulo.textContent = "O que fazer: ";
+        instrucao.append(rotulo, document.createTextNode(trecho.instrucao_reescrita));
+
+        // D18: a versão corrigida só aparece se a pessoa pedir (o Rewrite Challenge pede para reescrever esses trechos).
+        const sugestao = document.createElement("p");
+        sugestao.className = "writing-trecho-sugestao";
+        sugestao.hidden = true;
+        const rotuloSugestao = document.createElement("strong");
+        rotuloSugestao.textContent = "Sugestão: ";
+        sugestao.append(rotuloSugestao, document.createTextNode(trecho.sugestao));
+        const verSugestao = document.createElement("button");
+        verSugestao.type = "button";
+        verSugestao.className = "writing-botao pequeno";
+        verSugestao.textContent = "Ver sugestão";
+        verSugestao.addEventListener("click", () => {
+            sugestao.hidden = false;
+            verSugestao.remove();
+        });
+
+        campo("res-trecho").replaceChildren(titulo, citacao, explicacao, instrucao, sugestao, verSugestao);
     }
 
     // --- Eventos e ciclo de vida ---
@@ -365,6 +527,8 @@ registrarPagina("writing", (raiz) => {
         await abrirInicio();
     });
     campo("voltar").addEventListener("click", abrirInicio);
+    campo("res-voltar").addEventListener("click", abrirInicio);
+    campo("avaliar").addEventListener("click", avaliarDeNovo);
     window.addEventListener("pagehide", salvarAoSair);           // fechar a aba ou recarregar
     document.addEventListener("visibilitychange", aoMudarVisibilidade);  // trocar de aba (e celular em segundo plano)
 

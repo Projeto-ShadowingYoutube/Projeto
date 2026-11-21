@@ -28,8 +28,12 @@ histórico original → feedback → reescritas fica guardado, e o texto origina
 5. Pode sair e voltar: **Salvar e voltar**, outra página ou até recarregar (a URL guarda a redação:
    `/writing?redacao=7`). O texto e o tempo continuam de onde estavam; o tempo corre no servidor.
 6. Clique em **Enviar redação** (a partir de 50 palavras; pede confirmação). Quando o tempo acaba, o envio é
-   automático, com o último texto salvo.
-7. Em **Redações recentes** você retoma um rascunho ou vê as enviadas.
+   automático, com o último texto salvo. A correção leva alguns segundos ("Enviando e corrigindo…").
+7. **Resultado:** nota geral, as 5 categorias (nota, barra e comentário), o resumo e a sua redação com os trechos
+   problemáticos destacados por cor (legenda abaixo do texto). Clique num trecho (ou Tab + Enter) para ver a
+   categoria, a gravidade, a explicação e o que fazer; a versão corrigida só aparece em **Ver sugestão** (D18).
+8. Se a correção falhar, a redação continua salva: **Avaliar de novo** (até 3 vezes por redação, sem gastar a cota).
+9. Em **Redações recentes** você retoma um rascunho ou reabre um resultado (com a nota geral ao lado).
 
 Para a correção por IA funcionar localmente, coloque a **sua** chave do Gemini em `LLM_CHAVE` no `.env` (crie em
 https://aistudio.google.com/apikey; nunca no Git). Sem ela, o app sobe normalmente e a correção responde 503
@@ -201,6 +205,9 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D16 | 21/11/2026 | Sem LLM configurada (sem chave), a tentativa de correção **não conta** no limite de 3; a redação fica em `erro_avaliacao` com 503 | Um servidor mal configurado não gasta as tentativas das pessoas |
 | D17 | 21/11/2026 | Envio com falha da LLM responde **com o erro da LLM** (502/503/504); a tela sabe que a redação está salva pelo código `llm_*` | Padrão do guia e do projeto (o status HTTP diz a verdade) |
 
+| D18 | 21/11/2026 | Na tela de resultado, a **sugestão** (versão corrigida) fica escondida atrás de **"Ver sugestão"**; primeiro a explicação e a instrução | Não entregar a resposta de cara; o Rewrite Challenge (W8/W9) pede para reescrever justamente esses trechos |
+| D19 | 21/11/2026 | Layout do resultado: **redação à esquerda, notas à direita** no computador; no celular, empilhado (notas primeiro) | A redação destacada é o centro da tela; menos rolagem |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -233,7 +240,7 @@ W1 Modelos + migração 0301 (esquema)
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | ✅ concluído |
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | ✅ concluído |
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | ✅ concluído (inclui teste real com o Gemini) |
-| W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | pendente |
+| W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | ✅ concluído |
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | pendente |
 | W9 | Tela do Rewrite | Interface do Rewrite Challenge | pendente |
 | W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | pendente |
@@ -466,6 +473,47 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   transforma num 500 genérico (comportamento correto): o teste passou a esperar o 500.
 - **Próxima ação:** Etapa A do W7 (tela de resultado).
 
+#### W7 — Tela de resultado
+- **Status:** concluído (21/11/2026): testes automáticos e roteiro manual do usuário aprovados (sem E2E).
+- **Tarefas atendidas:** desenvolvimento da interface de resultado; destaque visual de trechos problemáticos.
+- **Arquivos:** `app/static/js/componentes/writing-destaques.js` (novo: `partesDoTexto`, `formatarNota`, nomes das
+  categorias e gravidades; módulo puro, sem imports); `app/templates/paginas/writing.html` (tela `resultado` e botão
+  "Avaliar de novo"); `app/static/js/paginas/writing.js` (resultado, detalhe do trecho, "Avaliar de novo", nota nas
+  recentes; sai o texto provisório do W6); `app/static/js/nucleo/api-writing.js` (`avaliar`);
+  `app/static/css/writing.css` (duas colunas, barras, cores das categorias nos dois temas, detalhe);
+  `tests/writing/test_paginas.py`. Nenhum arquivo da base; nenhum encaixe.
+- **Decisões do usuário:** D18 (sugestão atrás de "Ver sugestão") e D19 (redação à esquerda, notas à direita).
+- **Decisões técnicas:** destaques montados no front com `textContent` (sem `innerHTML`; destacar no servidor
+  misturaria texto do usuário com HTML); recorte com `Array.from` (posições em caracteres Unicode, como no Python);
+  a função ignora trechos fora dos limites ou sobrepostos (não confia cegamente nos dados); `white-space: pre-wrap`
+  preserva as quebras de linha; `<mark>` focável com Enter/Espaço; cor sempre acompanhada de legenda e do nome da
+  categoria; detalhe num painel (tooltip não funciona no celular); módulo puro separado para o Node importar o
+  código real nos testes.
+- **Testes:** `test_paginas.py` com 13 testes (+ tela `resultado`, + módulo servido, + `partesDoTexto` executada
+  no Node.js importando o módulo real: emoji e acentos antes do trecho, sem trechos, começo e fim, fora dos limites
+  e vazio, sobreposto, fora de ordem; sempre confere que a concatenação das partes é o texto original e que cada
+  parte destacada é exatamente o trecho do servidor). `node --check` nos 3 JS. Suíte inteira: **408 coletados,
+  406 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (5, todas detectadas):** (1) `slice` em vez de `Array.from`; (2) não ignorar sobrepostos; (3) não
+  ignorar fora dos limites; (4) perder o texto depois do último trecho; (5) template sem a tela de resultado.
+- **Teste manual (usuário, com o Gemini real `gemini-3.1-flash-lite`):** os 7 passos aprovados: resultado completo
+  (7 trechos nas posições exatas, cores por categoria, 5 cartões com contagem de trechos, "atendimento à tarefa" = 3
+  para 116 palavras), detalhe do trecho por clique e por Tab + Enter, "Ver sugestão", F5, nota nas recentes, tema
+  claro/escuro, celular, XSS (`<b>` e `<script>` aparecem como texto) e "Avaliar de novo" depois de uma falha forçada
+  (modelo inexistente no `.env`).
+- **Comportamento confirmado com o usuário:** o Tab só move o foco entre os trechos; o painel atualiza com Enter,
+  Espaço ou clique (padrão de acessibilidade para `role="button"`: foco não dispara ação, e o painel `aria-live` não
+  é lido a cada Tab).
+- **Problemas encontrados:** (1) no primeiro rascunho do teste do Node, o script usava `require` num módulo ES e só
+  funcionava porque o `node -e` expõe módulos internos como globais (frágil); reescrito com `import` explícito.
+  (2) No teste manual, a redação e os cartões apareciam centralizados (herdavam o alinhamento da base): corrigido com
+  `text-align: left` só na área do resultado (`writing.css`).
+- **Observação (qualidade da LLM, não do código):** no teste manual, 2 dos 9 erros postos de propósito (`dont`,
+  `goverment`) não viraram trechos, embora o comentário de Vocabulário cite o `goverment`. Todos os trechos
+  devolvidos foram desenhados (as contagens batem). Melhorar a cobertura seria um ajuste de prompt
+  (`VERSAO_PROMPT = 2`), não proposto agora.
+- **Próxima ação:** Etapa A do W8 (Rewrite no backend).
+
 ## Testes
 
 ```powershell
@@ -478,7 +526,7 @@ python -m ruff check .
 | Arquivo | O que cobre |
 |---|---|
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
-| `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`) e paridade da contagem de palavras JS × Python (textual e executando o JS no Node.js, se instalado) |
+| `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`), paridade da contagem de palavras JS × Python e os destaques do resultado (`partesDoTexto` executada no Node.js; os testes com Node são pulados se ele não estiver instalado) |
 | `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
 | `tests/writing/test_api_avaliacao.py` | Envio que corrige, falhas da LLM (redação nunca se perde), "avaliar de novo" e seus limites, duplo clique, isolamento e tamanhos/tipos de redação no fluxo completo |
 | `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |

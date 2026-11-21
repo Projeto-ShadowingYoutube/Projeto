@@ -30,13 +30,13 @@ def test_sem_login_navegacao_htmx_recebe_hx_redirect(client):
     assert resposta.headers["hx-redirect"].startswith("/login?proximo=")
 
 
-def test_logado_recebe_a_pagina_com_as_tres_telas(entrar_como):
+def test_logado_recebe_a_pagina_com_todas_as_telas(entrar_como):
     miolo = entrar_como("ana@exemplo.com").get("/writing", headers=HTMX)
 
     assert miolo.status_code == 200
     assert miolo.headers["cache-control"] == "no-store"
     assert 'data-pagina="writing"' in miolo.text
-    for tela in ("inicio", "editor", "fim"):
+    for tela in ("inicio", "editor", "fim", "resultado"):
         assert f'data-tela="{tela}"' in miolo.text
 
 
@@ -56,6 +56,7 @@ def test_base_html_carrega_o_css_do_writing(entrar_como):
 
 @pytest.mark.parametrize("arquivo", [
     "/static/js/paginas/writing.js", "/static/js/nucleo/api-writing.js", "/static/css/writing.css",
+    "/static/js/componentes/writing-destaques.js",
 ])
 def test_arquivos_estaticos_sao_servidos(client, arquivo):
     assert client.get(arquivo).status_code == 200
@@ -102,3 +103,65 @@ def test_contagem_do_js_da_o_mesmo_resultado_que_a_do_python():
         capture_output=True, text=True, encoding="utf-8", timeout=30, check=True,
     )
     assert json.loads(resultado.stdout) == [contar_palavras(texto) for texto in TEXTOS_DE_PARIDADE]
+
+
+# --- W7: destaques da redação corrigida (componentes/writing-destaques.js, executado no Node.js) ---
+
+MODULO_DESTAQUES = config.PASTA_STATIC / "js" / "componentes" / "writing-destaques.js"
+# Importa o módulo REAL (não uma cópia) e devolve as partes de cada caso em JSON.
+_SCRIPT_DESTAQUES = """
+import { readFileSync } from "node:fs";
+const { partesDoTexto } = await import(process.argv[1]);
+const casos = JSON.parse(readFileSync(0, "utf8"));
+process.stdout.write(JSON.stringify(casos.map(([texto, trechos]) => partesDoTexto(texto, trechos))));
+"""
+
+
+def _partes_no_node(casos: list) -> list:
+    resultado = subprocess.run(
+        ["node", "--input-type=module", "-e", _SCRIPT_DESTAQUES, "--", MODULO_DESTAQUES.as_uri()],
+        input=json.dumps(casos, ensure_ascii=False), capture_output=True, text=True, encoding="utf-8",
+        timeout=30, check=False,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    return json.loads(resultado.stdout)
+
+
+def _trecho(texto: str, citacao: str, a_partir_de: int = 0) -> dict:
+    """Posições como o servidor calcula (Python: caracteres Unicode)."""
+    inicio = texto.index(citacao, a_partir_de)
+    return {"inicio": inicio, "fim": inicio + len(citacao)}
+
+
+EMOJI = "Café 😀 naïve 👍🏽 — people thinks so.\nNew line: it have problems."
+CASOS_DE_DESTAQUE = {
+    "emoji e acentos antes do trecho": (EMOJI, [_trecho(EMOJI, "people thinks"), _trecho(EMOJI, "it have")]),
+    "sem trechos": ("Just a text.", []),
+    "trecho no começo e no fim": ("bad start and bad end", [{"inicio": 0, "fim": 9}, {"inicio": 14, "fim": 21}]),
+    "fora dos limites e vazio são ignorados": ("short text", [{"inicio": 6, "fim": 99}, {"inicio": 3, "fim": 3},
+                                                              {"inicio": -1, "fim": 2}, {"inicio": 0, "fim": 5}]),
+    "sobreposto é ignorado": ("one two three", [{"inicio": 0, "fim": 7}, {"inicio": 4, "fim": 13}]),
+    "fora de ordem": ("aaa bbb ccc", [{"inicio": 8, "fim": 11}, {"inicio": 0, "fim": 3}]),
+}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js não instalado: destaques não verificados")
+def test_partes_do_texto_executado_no_node():
+    casos = list(CASOS_DE_DESTAQUE.values())
+    resultados = dict(zip(CASOS_DE_DESTAQUE, _partes_no_node([[t, tr] for t, tr in casos]), strict=True))
+
+    for nome, (texto, trechos) in CASOS_DE_DESTAQUE.items():
+        partes = resultados[nome]
+        assert "".join(p["texto"] for p in partes) == texto, nome  # nunca perde nem duplica texto
+        for parte in partes:
+            if parte["trecho"] is not None:  # o pedaço destacado é exatamente o que o servidor apontou
+                trecho = trechos[parte["trecho"]]
+                assert parte["texto"] == texto[trecho["inicio"]:trecho["fim"]], nome
+
+    destacados = lambda nome: [p["texto"] for p in resultados[nome] if p["trecho"] is not None]  # noqa: E731
+    assert destacados("emoji e acentos antes do trecho") == ["people thinks", "it have"]
+    assert destacados("sem trechos") == []
+    assert destacados("trecho no começo e no fim") == ["bad start", "bad end"]
+    assert destacados("fora dos limites e vazio são ignorados") == ["short"]
+    assert destacados("sobreposto é ignorado") == ["one two"]
+    assert destacados("fora de ordem") == ["aaa", "ccc"]

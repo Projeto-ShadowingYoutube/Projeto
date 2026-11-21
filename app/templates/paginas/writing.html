@@ -42,7 +42,39 @@
         <p class="writing-fim-texto" data-fim-texto></p>
         <p class="writing-fim-aviso" data-fim-aviso></p>
         <div class="writing-acoes">
-            <button type="button" class="writing-botao principal" data-voltar>Voltar ao início</button>
+            <button type="button" class="writing-botao" data-voltar>Voltar ao início</button>
+            <button type="button" class="writing-botao principal" data-avaliar hidden>Avaliar de novo</button>
+        </div>
+    </section>
+
+    <section class="writing-tela animate-fade-in" data-tela="resultado" hidden>
+        <header class="writing-cabecalho">
+            <div>
+                <span class="writing-categoria" data-res-categoria></span>
+                <span class="writing-detalhe" data-res-info></span>
+            </div>
+            <div class="writing-nota-geral" title="Média das cinco categorias">
+                <span>Nota geral</span>
+                <strong data-res-nota></strong>
+                <span>/ 10</span>
+            </div>
+        </header>
+        <p class="writing-enunciado" data-res-enunciado></p>
+        <div class="writing-resultado">
+            <div class="writing-resultado-texto">
+                <h3 class="writing-subtitulo">Sua redação</h3>
+                <div class="writing-redacao" data-res-texto></div>
+                <div class="writing-legenda" data-res-legenda></div>
+                <div class="writing-trecho-detalhe" data-res-trecho aria-live="polite"></div>
+            </div>
+            <aside class="writing-resultado-notas">
+                <div class="writing-notas" data-res-notas></div>
+                <h3 class="writing-subtitulo">Resumo</h3>
+                <p class="writing-resumo" data-res-resumo></p>
+            </aside>
+        </div>
+        <div class="writing-acoes">
+            <button type="button" class="writing-botao" data-res-voltar>Voltar ao início</button>
         </div>
     </section>
 </div>

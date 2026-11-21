@@ -12,6 +12,8 @@ export const apiWriting = {
     criar: (categoria) => enviarJSON("/api/writing/challenges", "POST", categoria ? { categoria } : {}),
     salvar: (id, texto) => enviarJSON(redacao(id), "PATCH", { texto }),
     enviar: (id, texto) => enviarJSON(`${redacao(id)}/submissao`, "POST", { texto }),
+    // "Avaliar de novo" depois de uma falha da correção (até 3 por redação; não gasta cota).
+    avaliar: (id) => enviarJSON(`${redacao(id)}/avaliacao`, "POST"),
 
     // Autosave ao fechar a aba ou recarregar (evento pagehide). keepalive: o navegador conclui o envio mesmo com a
     // página indo embora. Não dá para esperar a resposta, então falhas são ignoradas (valem os autosaves anteriores).

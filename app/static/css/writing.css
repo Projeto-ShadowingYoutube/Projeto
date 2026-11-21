@@ -1,11 +1,23 @@
 /* Writing Challenge (Membro 3). Só variáveis de tema da base (base.css): claro e escuro funcionam sozinhos. */
 
 .writing {
-    max-width: 920px;
+    max-width: 1080px;
     margin: 24px auto;
     padding: 0 16px;
     color: var(--text-main);
+    /* Cores das 5 categorias da correção: legíveis no tema claro e no escuro (fundo translúcido + sublinhado). */
+    --cat-gramatica: #ef4444;
+    --cat-vocabulario: #f59e0b;
+    --cat-coerencia: #3b82f6;
+    --cat-organizacao: #a855f7;
+    --cat-atendimento_tarefa: #10b981;
 }
+
+.cat-gramatica { --cor: var(--cat-gramatica); }
+.cat-vocabulario { --cor: var(--cat-vocabulario); }
+.cat-coerencia { --cor: var(--cat-coerencia); }
+.cat-organizacao { --cor: var(--cat-organizacao); }
+.cat-atendimento_tarefa { --cor: var(--cat-atendimento_tarefa); }
 
 .writing-tela {
     background: var(--card-bg);
@@ -149,6 +161,105 @@
 /* Fim */
 .writing-fim-texto { font-size: 1.1rem; }
 .writing-fim-aviso { color: var(--text-sub); }
+
+/* Redações recentes: nota */
+.writing-nota-recente {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+/* Resultado */
+.writing-nota-geral { display: flex; align-items: baseline; gap: 6px; color: var(--text-sub); }
+.writing-nota-geral strong { font-size: 2rem; color: var(--text-main); font-variant-numeric: tabular-nums; }
+
+.writing-resultado {
+    text-align: left;  /* a base centraliza o conteúdo; para ler a redação e os comentários, à esquerda é melhor */
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);  /* D19: redação à esquerda, notas à direita */
+    gap: 24px;
+    margin-top: 8px;
+}
+
+.writing-redacao {
+    white-space: pre-wrap;  /* preserva as quebras de linha da redação */
+    overflow-wrap: anywhere;
+    line-height: 1.8;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-button);
+}
+
+.writing-marca {
+    color: inherit;
+    background: color-mix(in srgb, var(--cor) 22%, transparent);
+    border-bottom: 2px solid var(--cor);
+    border-radius: 3px;
+    padding: 0 1px;
+    cursor: pointer;
+}
+.writing-marca:hover, .writing-marca:focus-visible { background: color-mix(in srgb, var(--cor) 38%, transparent); }
+.writing-marca:focus-visible { outline: 2px solid var(--cor); outline-offset: 1px; }
+.writing-marca.ativa { background: color-mix(in srgb, var(--cor) 50%, transparent); }
+
+.writing-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0; font-size: 0.85rem; }
+.writing-legenda-item::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 2px;
+    background: var(--cor);
+}
+
+.writing-trecho-detalhe {
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+}
+.writing-trecho-detalhe p { margin: 6px 0; }
+.writing-trecho-dica { color: var(--text-sub); }
+.writing-trecho-titulo { font-weight: 700; color: var(--cor); }
+.writing-trecho-detalhe blockquote {
+    margin: 8px 0;
+    padding: 4px 12px;
+    border-left: 3px solid var(--border-color);
+    font-style: italic;
+}
+.writing-botao.pequeno { padding: 6px 12px; font-size: 0.9rem; }
+
+.writing-notas { display: flex; flex-direction: column; gap: 10px; }
+.writing-nota {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--cor);
+    background: var(--bg-button);
+}
+.writing-nota p { margin: 6px 0 0; font-size: 0.9rem; }
+.writing-nota-titulo { display: flex; justify-content: space-between; font-weight: 600; }
+.writing-nota-titulo strong { font-variant-numeric: tabular-nums; }
+.writing-nota-barra {
+    height: 6px;
+    margin-top: 6px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+.writing-nota-barra span { display: block; height: 100%; background: var(--cor); }
+.writing-nota-trechos { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--text-sub); }
+.writing-resumo { line-height: 1.6; }
+
+@media (max-width: 800px) {
+    .writing-resultado { grid-template-columns: 1fr; }
+    .writing-resultado-notas { order: -1; }  /* no celular, as notas vêm antes da redação */
+}
 
 @media (max-width: 600px) {
     .writing-tela { padding: 16px; }
