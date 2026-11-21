@@ -118,6 +118,44 @@ def test_gutenberg_remove_cabecalho_rodape_e_ilustracoes():
     assert "CHAPTER" not in texto
 
 
+LIVRO_COM_PREFACIO = """*** START OF THE PROJECT GUTENBERG EBOOK BEES ***
+
+CONTENTS
+
+CHAPTER I. The Hive
+CHAPTER II. The Queen
+
+PREFACE
+
+This little book was written for children who like to watch the bees in the garden.
+
+CHAPTER I. THE HIVE
+
+The bees woke up early in the morning and flew out of the hive to look for flowers.
+
+CHAPTER II. THE QUEEN
+
+The queen stayed inside the hive all day long and laid hundreds of eggs in the cells.
+
+*** END OF THE PROJECT GUTENBERG EBOOK BEES ***
+"""
+
+
+def test_gutenberg_descarta_sumario_e_prefacio_e_comeca_no_capitulo_1():
+    """DR13: o capítulo 1 fica em primeiro (e ganha a prioridade da "introdução" no selecionar_trecho)."""
+    secoes = rt.limpar_gutenberg(LIVRO_COM_PREFACIO)
+    assert secoes == [
+        ["The bees woke up early in the morning and flew out of the hive to look for flowers."],
+        ["The queen stayed inside the hive all day long and laid hundreds of eggs in the cells."],
+    ]
+
+
+def test_gutenberg_sem_capitulos_mantem_todas_as_secoes():
+    livro = ("INTRODUCTION\n\nThe bees woke up early in the morning and flew out of the hive.\n\n"
+             "THE QUEEN\n\nThe queen stayed inside the hive all day long and laid many eggs.")
+    assert len(rt.limpar_gutenberg(livro)) == 2
+
+
 def test_gutenberg_sem_marcas_usa_o_texto_inteiro():
     secoes = rt.limpar_gutenberg("The bees flew out of the hive to look for flowers in the field.")
     assert secoes == [["The bees flew out of the hive to look for flowers in the field."]]

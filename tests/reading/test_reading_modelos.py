@@ -11,7 +11,7 @@ import pytest
 from alembic import command
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import migrar
 from app.models import Usuario
@@ -123,6 +123,15 @@ def test_valores_padrao(engine_teste):
         assert session.query(ReadingQuestion).one().alternativas == []  # pergunta aberta: sem alternativas
         tentativa = session.query(ReadingAttempt).one()
         assert tentativa.avaliacao == [] and tentativa.nota is None and tentativa.avaliado_em is None
+
+
+def test_texto_sem_perguntas_de_reserva_grava_null_do_sql(engine_teste):
+    """O filtro "é texto de reserva?" usa IS NULL: o None não pode virar o texto JSON 'null'."""
+    with Session(engine_teste) as session:
+        _texto(session, id_origem="comum")
+        _texto(session, id_origem="reserva", perguntas_reserva=[{"enunciado": "Q?"}])
+        comuns = session.exec(select(ReadingText).where(ReadingText.perguntas_reserva.is_(None))).all()
+        assert [t.id_origem for t in comuns] == ["comum"]
 
 
 def test_o_mesmo_artigo_nao_e_gravado_duas_vezes(engine_teste):

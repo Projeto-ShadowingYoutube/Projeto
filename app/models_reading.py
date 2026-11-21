@@ -19,14 +19,17 @@ class ReadingText(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("fonte", "id_origem", name="uq_readingtext_fonte_origem"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    fonte: str = Field(index=True)  # "wikipedia", "gutenberg" ou "reserva"
-    id_origem: str                  # id do artigo/livro na fonte (na reserva, um apelido fixo)
+    fonte: str = Field(index=True)  # "wikipedia" ou "gutenberg" (define o crédito e a licença)
+    id_origem: str                  # id do artigo/livro na fonte (pageid da Wikipedia, id do Gutenberg)
     titulo: str
     url: str | None = None
     conteudo: str                   # texto limpo (sem HTML, referências, listas)
     palavras: int
-    # Só nos textos de reserva: as cinco perguntas prontas, usadas quando a LLM falha (decisão DR3).
-    perguntas_reserva: list[dict] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # Só nos textos de reserva (migração 0102): as cinco perguntas prontas, usadas quando a busca ou a LLM falham
+    # (decisões DR3 e DR12). É o que identifica um texto de reserva.
+    # none_as_null: o None vira NULL do SQL (e não o texto JSON "null"), para o filtro "IS NULL" funcionar.
+    perguntas_reserva: list[dict] | None = Field(default=None, sa_column=Column(JSON(none_as_null=True),
+                                                                                nullable=True))
     data_criacao: NaiveDatetime = Field(default_factory=agora)
 
 

@@ -91,7 +91,11 @@ def limpar_wikipedia(bruto: str) -> list[list[str]]:
 def limpar_gutenberg(bruto: str) -> list[list[str]]:
     """Livro do Project Gutenberg (texto puro) → seções (capítulos) com parágrafos.
     Fica só com o miolo entre as marcas START/END, junta as linhas quebradas em ~70 colunas e usa os títulos de
-    capítulo para separar as seções."""
+    capítulo para separar as seções.
+
+    Se o livro tem capítulos (CHAPTER, BOOK, PART...), tudo o que vem antes do primeiro capítulo com texto (prefácio,
+    sumário, nota do transcritor) é descartado: assim, o capítulo 1 fica em primeiro e ganha a prioridade do
+    selecionar_trecho (decisão DR13)."""
     inicio = _INICIO_GUTENBERG.search(bruto)
     if inicio:
         bruto = bruto[inicio.end():]
@@ -100,17 +104,24 @@ def limpar_gutenberg(bruto: str) -> list[list[str]]:
         bruto = bruto[:fim.start()]
     bruto = _ILUSTRACAO.sub("", bruto)
 
-    secoes: list[list[str]] = [[]]
+    # Cada seção: (parágrafos, começa num título de capítulo?). Um título só em maiúsculas (PREFACE) também abre
+    # uma seção nova, mas não conta como capítulo.
+    secoes: list[tuple[list[str], bool]] = [([], False)]
     for bloco in re.split(r"\n\s*\n", normalizar(bruto)):
         paragrafo = " ".join(bloco.split())
         if not paragrafo:
             continue
         letras = re.sub(r"[^A-Za-z]", "", paragrafo)
-        if _TITULO_CAPITULO.match(paragrafo) or (letras and letras.isupper()):
-            secoes.append([])
+        eh_capitulo = bool(_TITULO_CAPITULO.match(paragrafo))
+        if eh_capitulo or (letras and letras.isupper()):
+            secoes.append(([], eh_capitulo))
         elif eh_paragrafo(paragrafo):
-            secoes[-1].append(paragrafo)
-    return [secao for secao in secoes if secao]
+            secoes[-1][0].append(paragrafo)
+
+    com_texto = [(paragrafos, eh_capitulo) for paragrafos, eh_capitulo in secoes if paragrafos]
+    # Os títulos do sumário também casam com CHAPTER, mas abrem seções vazias: vale o primeiro capítulo COM texto.
+    primeiro_capitulo = next((i for i, (_, eh_capitulo) in enumerate(com_texto) if eh_capitulo), 0)
+    return [paragrafos for paragrafos, _ in com_texto[primeiro_capitulo:]]
 
 
 # --- Conteúdo inadequado ---

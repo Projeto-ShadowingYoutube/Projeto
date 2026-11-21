@@ -1,0 +1,217 @@
+"""Reading Challenge (Membro 1): de onde vêm os textos (Wikipedia, Project Gutenberg e a reserva do banco).
+
+Cada fonte é uma função sem parâmetros que devolve um TextoBruto (mesma interface: trocar ou somar fontes não muda
+a rota). A limpeza e a seleção do trecho são as funções puras de reading_textos.py.
+
+    texto = obter_texto(session, "wikipedia")   # ReadingText já gravado, pronto para o desafio
+
+Ordem (decisões DR1, DR12):
+1. Até TENTATIVAS_BUSCA artigos da fonte: os curtos, longos demais (sem bloco válido) ou inadequados são pulados.
+   Falha de rede ou timeout não é repetida (cada nova tentativa esperaria o timeout de novo).
+2. Não deu: um artigo da mesma fonte já salvo no banco (a LLM gera as perguntas normalmente).
+3. Nenhum salvo: um texto de reserva (migração 0102), que já tem as perguntas prontas.
+4. Nem reserva (banco sem a 0102): TextoIndisponivel, que a rota transforma num 502.
+
+Padrão de app/services/dicionario.py: requests.Session reaproveitada, User-Agent identificado (a Wikimedia exige) e
+timeout em toda chamada.
+"""
+import logging
+import random
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import requests
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
+
+from app.models_reading import ReadingText
+from app.services import reading_textos as rt
+
+logger = logging.getLogger("uvicorn.error")
+
+TENTATIVAS_BUSCA = 3
+TIMEOUT_API = 10    # segundos (Wikipedia e Gutendex)
+TIMEOUT_LIVRO = 20  # o .txt de um livro é maior
+LIMITE_BYTES_LIVRO = 3 * 1024 * 1024  # lê no máximo 3 MB do livro (o trecho sai dos primeiros capítulos)
+PAGINAS_GUTENDEX = 20  # sorteia entre as 20 primeiras páginas (os livros mais baixados, 32 por página)
+
+URL_WIKIPEDIA = "https://en.wikipedia.org/w/api.php"
+URL_GUTENDEX = "https://gutendex.com/books/"
+URL_LIVRO_GUTENBERG = "https://www.gutenberg.org/ebooks/{id}"
+
+# Crédito exigido pela licença de cada fonte (a tela mostra junto do texto).
+CREDITOS = {
+    "wikipedia": "Texto: Wikipedia, artigo \"{titulo}\" ({url}). Licença CC BY-SA 4.0 "
+                 "(https://creativecommons.org/licenses/by-sa/4.0/). Trecho selecionado do artigo.",
+    "gutenberg": "Texto: Project Gutenberg, \"{titulo}\" ({url}). Obra em domínio público nos EUA. "
+                 "Trecho selecionado do livro.",
+}
+
+http_session = requests.Session()
+# A Wikimedia pede que todo cliente se identifique pelo User-Agent (o mesmo de app/services/dicionario.py).
+http_session.headers["User-Agent"] = "ShadowingApp/1.0 (projeto academico de pratica de ingles)"
+
+_sorteio = random.Random()
+
+
+class FonteIndisponivel(Exception):
+    """A fonte não respondeu (rede, timeout, status de erro) ou respondeu fora do formato esperado."""
+
+
+class TextoIndisponivel(Exception):
+    """Não há texto nenhum: a fonte falhou, não há artigo salvo e não há textos de reserva no banco."""
+
+
+@dataclass
+class TextoBruto:
+    """O que uma fonte devolve: o texto já limpo, separado em seções com parágrafos."""
+    fonte: str
+    id_origem: str
+    titulo: str
+    url: str | None
+    secoes: list[list[str]]
+
+
+# --- Fontes ---
+
+def buscar_wikipedia() -> TextoBruto:
+    """Um artigo aleatório da Wikipedia em inglês, numa única chamada (texto e URL juntos)."""
+    parametros = {
+        "action": "query", "format": "json", "formatversion": 2,
+        "generator": "random", "grnnamespace": 0, "grnlimit": 1,  # só artigos (sem páginas de usuário etc.)
+        "prop": "extracts|info", "explaintext": 1, "exlimit": 1, "inprop": "url",
+    }
+    resposta = _get(URL_WIKIPEDIA, params=parametros, timeout=TIMEOUT_API)
+    try:
+        pagina = resposta.json()["query"]["pages"][0]
+        return TextoBruto(fonte="wikipedia", id_origem=str(pagina["pageid"]), titulo=pagina["title"],
+                          url=pagina.get("fullurl"), secoes=rt.limpar_wikipedia(pagina.get("extract") or ""))
+    except (ValueError, KeyError, IndexError, TypeError) as erro:
+        raise FonteIndisponivel("a Wikipedia respondeu fora do formato esperado") from erro
+
+
+def buscar_gutenberg() -> TextoBruto:
+    """Um livro em inglês e em domínio público, sorteado entre os mais baixados do Project Gutenberg (Gutendex)."""
+    parametros = {"languages": "en", "copyright": "false", "mime_type": "text/plain",
+                  "page": _sorteio.randint(1, PAGINAS_GUTENDEX)}
+    resposta = _get(URL_GUTENDEX, params=parametros, timeout=TIMEOUT_API)
+    try:
+        livros = [livro for livro in resposta.json()["results"] if _url_do_texto(livro)]
+        livro = _sorteio.choice(livros)
+        id_livro, titulo = livro["id"], livro["title"]
+    except (ValueError, KeyError, IndexError, TypeError) as erro:
+        raise FonteIndisponivel("o Gutendex respondeu fora do formato esperado") from erro
+    bruto = _baixar_texto(_url_do_texto(livro))
+    return TextoBruto(fonte="gutenberg", id_origem=str(id_livro), titulo=titulo,
+                      url=URL_LIVRO_GUTENBERG.format(id=id_livro), secoes=rt.limpar_gutenberg(bruto))
+
+
+FONTES: dict[str, Callable[[], TextoBruto]] = {"wikipedia": buscar_wikipedia, "gutenberg": buscar_gutenberg}
+
+
+# --- Obter o texto do desafio ---
+
+def obter_texto(session: Session, fonte: str, tentativas: int = TENTATIVAS_BUSCA) -> ReadingText:
+    """Texto pronto para um desafio, na ordem descrita no topo do módulo."""
+    if fonte not in FONTES:
+        raise ValueError(f"fonte desconhecida: {fonte!r} (use uma de {tuple(FONTES)})")
+    buscar = FONTES[fonte]
+
+    for tentativa in range(1, tentativas + 1):
+        try:
+            bruto = buscar()
+        except FonteIndisponivel as erro:
+            logger.warning("Reading: %s indisponível (%s); usando um texto salvo", fonte, erro)
+            break
+        trecho = rt.selecionar_trecho(bruto.secoes)
+        if trecho is None or rt.eh_inadequado(bruto.titulo, trecho):
+            logger.info("Reading: %s \"%s\" descartado (tentativa %d de %d)", fonte, bruto.titulo, tentativa,
+                        tentativas)
+            continue
+        return _gravar(session, bruto, trecho)
+
+    texto = texto_salvo(session, fonte) or texto_de_reserva(session)
+    if texto is None:
+        raise TextoIndisponivel()
+    return texto
+
+
+def texto_salvo(session: Session, fonte: str) -> ReadingText | None:
+    """Um artigo da fonte já salvo por um desafio anterior (sem os textos de reserva), sorteado."""
+    consulta = (select(ReadingText)
+                .where(ReadingText.fonte == fonte, ReadingText.perguntas_reserva.is_(None))
+                .order_by(func.random()).limit(1))
+    return session.exec(consulta).first()
+
+
+def texto_de_reserva(session: Session) -> ReadingText | None:
+    """Um dos textos de reserva (com perguntas prontas), sorteado. Também usado quando a LLM falha (R4)."""
+    consulta = (select(ReadingText).where(ReadingText.perguntas_reserva.is_not(None))
+                .order_by(func.random()).limit(1))
+    return session.exec(consulta).first()
+
+
+def credito(texto: ReadingText) -> str:
+    """Crédito e licença do texto, para mostrar na tela (exigência da CC BY-SA da Wikipedia)."""
+    return CREDITOS[texto.fonte].format(titulo=texto.titulo, url=texto.url or "")
+
+
+# --- Internos ---
+
+def _gravar(session: Session, bruto: TextoBruto, trecho: str) -> ReadingText:
+    """Grava o texto, ou devolve o já gravado (o mesmo artigo é compartilhado por todos os usuários)."""
+    existente = _buscar_gravado(session, bruto)
+    if existente:
+        return existente
+    texto = ReadingText(fonte=bruto.fonte, id_origem=bruto.id_origem, titulo=bruto.titulo, url=bruto.url,
+                        conteudo=trecho, palavras=rt.contar_palavras(trecho))
+    session.add(texto)
+    try:
+        session.commit()
+    except IntegrityError:
+        # Outro desafio gravou o mesmo artigo entre a consulta e o commit (UNIQUE fonte + id_origem): usa o dele.
+        session.rollback()
+        return _buscar_gravado(session, bruto)
+    session.refresh(texto)
+    return texto
+
+
+def _buscar_gravado(session: Session, bruto: TextoBruto) -> ReadingText | None:
+    consulta = select(ReadingText).where(ReadingText.fonte == bruto.fonte, ReadingText.id_origem == bruto.id_origem)
+    return session.exec(consulta).first()
+
+
+def _get(url: str, **parametros) -> requests.Response:
+    try:
+        resposta = http_session.get(url, **parametros)
+    except requests.RequestException as erro:
+        raise FonteIndisponivel(f"falha de conexão ({type(erro).__name__})") from erro
+    if resposta.status_code >= 400:
+        raise FonteIndisponivel(f"status {resposta.status_code}")
+    return resposta
+
+
+def _url_do_texto(livro: dict) -> str | None:
+    """URL do texto puro do livro (o Gutendex lista vários formatos; o .zip não serve)."""
+    for tipo, url in (livro.get("formats") or {}).items():
+        if tipo.startswith("text/plain") and not url.endswith(".zip"):
+            return url
+    return None
+
+
+def _baixar_texto(url: str) -> str:
+    """Baixa o .txt do livro, lendo no máximo LIMITE_BYTES_LIVRO."""
+    resposta = _get(url, timeout=TIMEOUT_LIVRO, stream=True)
+    partes, total = [], 0
+    try:
+        for pedaco in resposta.iter_content(chunk_size=64 * 1024):
+            partes.append(pedaco)
+            total += len(pedaco)
+            if total >= LIMITE_BYTES_LIVRO:
+                break
+    except requests.RequestException as erro:
+        raise FonteIndisponivel(f"falha ao baixar o livro ({type(erro).__name__})") from erro
+    finally:
+        resposta.close()
+    return b"".join(partes)[:LIMITE_BYTES_LIVRO].decode("utf-8", errors="replace")
