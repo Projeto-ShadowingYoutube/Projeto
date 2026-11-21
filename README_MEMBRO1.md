@@ -40,6 +40,9 @@ _A preencher a partir do bloco R5._
 | DR6 | 21/11/2026 | Sem limite de tempo para responder (o tempo gasto é registrado) | A lista só pede o bloqueio da leitura |
 | DR7 | 21/11/2026 | Código (nomes, comentários, mensagens) em português; os testes de cada bloco ficam prontos antes do próximo | Pedido do usuário; segue o padrão do repositório |
 | DR8 | 21/11/2026 | Sem prazo fixo: os blocos seguem a ordem das dependências | Decisão do usuário |
+| DR9 | 21/11/2026 | Seleção do trecho (opções C + B): só parágrafos inteiros, nunca corte no meio. Prioriza a introdução; se não couber em 250–600 palavras, procura um bloco contínuo de outra seção; se nada couber, descarta o artigo (a fonte tenta outro, até 3 vezes, e depois usa a reserva) | O texto fica íntegro (com começo e fim naturais) sem perder artigos longos |
+| DR10 | 21/11/2026 | Tempo limite arredondado para cima em múltiplos de 5 s (ex.: 90,3 s → 95 s) | Timer mais legível; decisão do usuário |
+| DR11 | 21/11/2026 | Só o título do artigo/livro aparece (`ReadingText.titulo`); os títulos de seção e capítulo servem para separar as seções e são descartados (opção B) | Mais simples; não muda o esquema nem o R2 |
 
 ## Plano e progresso
 
@@ -53,8 +56,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 
 | ID | Bloco | Tarefas atendidas | Depende de | Status |
 |---|---|---|---|---|
-| R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11), aguardando commit |
-| R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | Planejado |
+| R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11) |
+| R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11), aguardando commit |
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | Planejado |
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | Planejado |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | Planejado |
@@ -90,6 +93,28 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 - **Atenção na integração (Membro 4):** as migrações 0101, 0201 e 0301 partem da 0006 → várias cabeças; o
   `app/migrar.py` usa `get_current_head()` e exige o `alembic merge` antes.
 - **Próxima ação:** R2 (normalização dos textos e tempo de leitura).
+
+### R2 — Normalização e tempo de leitura (✅ 21/11/2026)
+
+- **Arquivos:** `app/services/reading_textos.py` (novo), `tests/reading/test_reading_textos.py` (novo). Nenhum
+  arquivo da base, nenhum ponto de encaixe.
+- **Funções (puras):** `normalizar` (HTML, entidades, referências `[n]`, espaços), `limpar_wikipedia` e
+  `limpar_gutenberg` (texto bruto → seções com parágrafos; listas, títulos, cabeçalho/rodapé do Gutenberg e seções
+  finais da Wikipedia saem), `eh_inadequado` (listas, desambiguação, temas sensíveis por início de palavra),
+  `selecionar_trecho` (DR9), `contar_palavras`, `limite_leitura_segundos` (DR10).
+- **Constantes:** `VELOCIDADES_PPM = (150, 200, 250)`, `PPM_PADRAO = 200`, `PALAVRAS_MIN = 250`,
+  `PALAVRAS_MAX = 600`, `ARREDONDAMENTO_SEGUNDOS = 5`, `SECOES_FINAIS`, lista de termos sensíveis.
+- **Decisões:** tempo calculado só com inteiros (divisão com teto), sem erro de float nos limites exatos; o filtro de
+  conteúdo é uma lista de termos (simples e previsível, não infalível; ajustável numa constante).
+- **Testes:** 44 novos. Suíte: **320 aprovados, 2 pulados, 0 falhas** (SQLite); `ruff` limpo. Postgres e E2E não
+  executados (o bloco não usa banco).
+- **Mutações (9, todas detectadas; arquivo restaurado e conferido com `cmp`):** sem remover `[n]`; parágrafo que
+  passa do máximo incluído (corte); bloco atravessando seções; sem prioridade da introdução; sem arredondar para 5 s;
+  fórmula invertida; filtro sensível sem início de palavra; linhas de lista aceitas; sem parar nas seções finais.
+- **Problemas encontrados:** (1) um teste meu esperava o bloco 200+200 = 400, mas 200+300 = 500 também é contínuo e
+  maior; o código estava certo, a expectativa foi corrigida. (2) A mutação do filtro sensível passou na 1ª versão:
+  os exemplos ("therapist", "grapevine") não dependiam do `\b` inicial; trocados por "grapes"/"drapes"/"popcorn".
+- **Próxima ação:** R3 (fontes: Wikipedia, Gutendex e textos de reserva).
 
 ## Testes
 
