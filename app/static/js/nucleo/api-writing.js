@@ -14,6 +14,9 @@ export const apiWriting = {
     enviar: (id, texto) => enviarJSON(`${redacao(id)}/submissao`, "POST", { texto }),
     // "Avaliar de novo" depois de uma falha da correção (até 3 por redação; não gasta cota).
     avaliar: (id) => enviarJSON(`${redacao(id)}/avaliacao`, "POST"),
+    // Rewrite Challenge: o estado (rodada, problemas, histórico) e o envio de uma rodada inteira.
+    rewrite: (id) => requisitarJSON(`${redacao(id)}/rewrite`),
+    enviarRewrite: (id, reescritas) => enviarJSON(`${redacao(id)}/rewrite`, "POST", { reescritas }),
 
     // Autosave ao fechar a aba ou recarregar (evento pagehide). keepalive: o navegador conclui o envio mesmo com a
     // página indo embora. Não dá para esperar a resposta, então falhas são ignoradas (valem os autosaves anteriores).

@@ -38,6 +38,20 @@ export function partesDoTexto(texto, trechos = []) {
     return partes;
 }
 
+// Rewrite Challenge: destaca o trecho apontado (citacao) dentro da frase a reescrever. → [{ texto, destaque }]
+// A citação e a frase vêm do servidor como textos inteiros (sem posições), então indexOf/slice são consistentes
+// entre si. Citação ausente: a frase inteira, sem destaque. Repetida na frase: destaca a primeira ocorrência.
+export function partesDaFrase(frase, citacao) {
+    const inicio = citacao ? frase.indexOf(citacao) : -1;
+    if (inicio === -1) return [{ texto: frase, destaque: false }];
+    const fim = inicio + citacao.length;
+    return [
+        { texto: frase.slice(0, inicio), destaque: false },
+        { texto: citacao, destaque: true },
+        { texto: frase.slice(fim), destaque: false },
+    ].filter((parte) => parte.texto);
+}
+
 // 7.4 → "7,4"
 export function formatarNota(nota) {
     return Number(nota).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });

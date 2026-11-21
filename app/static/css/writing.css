@@ -256,6 +256,61 @@
 .writing-nota-trechos { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--text-sub); }
 .writing-resumo { line-height: 1.6; }
 
+/* Rewrite Challenge */
+.writing-rodada { color: var(--text-sub); font-weight: 600; }
+.writing-rw-problemas, .writing-rw-historico { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.writing-rw-problema, .writing-rw-item {
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--cor);
+    background: var(--bg-button);
+}
+.writing-rw-problema p, .writing-rw-item p { margin: 6px 0; }
+.writing-rw-frase { line-height: 1.7; }
+.writing-rw-frase .writing-marca { cursor: default; }
+.writing-rw-texto {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 8px;
+    padding: 10px 12px;
+    font-size: 1rem;
+    line-height: 1.6;
+    resize: vertical;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--input-text);
+}
+.writing-rw-texto:read-only { opacity: 0.75; }
+.writing-rw-item-cabecalho { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-weight: 600; }
+.writing-veredito { font-variant-numeric: tabular-nums; }
+.writing-veredito.melhorou { color: #10b981; }
+.writing-veredito.nao { color: #ef4444; }
+.writing-rw-comparacao { line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.writing-rw-comparacao del {
+    color: #ef4444;
+    background: color-mix(in srgb, #ef4444 15%, transparent);
+    text-decoration: line-through;
+}
+.writing-rw-comparacao ins {
+    color: #10b981;
+    background: color-mix(in srgb, #10b981 15%, transparent);
+    text-decoration: none;
+    font-weight: 600;
+}
+.writing-rw-comentario { color: var(--text-sub); }
+.writing-rw-erro {
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #ef4444;
+    background: color-mix(in srgb, #ef4444 12%, transparent);
+    color: #ef4444;
+    text-align: left;
+}
+.writing-rw-erro[hidden] { display: none; }
+
 @media (max-width: 800px) {
     .writing-resultado { grid-template-columns: 1fr; }
     .writing-resultado-notas { order: -1; }  /* no celular, as notas vêm antes da redação */

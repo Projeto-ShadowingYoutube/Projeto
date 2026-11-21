@@ -36,8 +36,10 @@ def test_logado_recebe_a_pagina_com_todas_as_telas(entrar_como):
     assert miolo.status_code == 200
     assert miolo.headers["cache-control"] == "no-store"
     assert 'data-pagina="writing"' in miolo.text
-    for tela in ("inicio", "editor", "fim", "resultado"):
+    for tela in ("inicio", "editor", "fim", "resultado", "rewrite"):
         assert f'data-tela="{tela}"' in miolo.text
+    assert "data-res-rewrite" in miolo.text  # o caminho do resultado para o Rewrite Challenge
+    assert 'data-rw-erro role="alert"' in miolo.text  # erro do envio do Rewrite na própria tela (não no modal)
 
 
 def test_recarregar_com_a_redacao_na_url_entrega_a_pagina(entrar_como):
@@ -165,3 +167,50 @@ def test_partes_do_texto_executado_no_node():
     assert destacados("fora dos limites e vazio são ignorados") == ["short"]
     assert destacados("sobreposto é ignorado") == ["one two"]
     assert destacados("fora de ordem") == ["aaa", "ccc"]
+
+
+# --- W9: trecho destacado dentro da frase do Rewrite (partesDaFrase, executada no Node.js) ---
+
+_SCRIPT_FRASE = """
+import { readFileSync } from "node:fs";
+const { partesDaFrase } = await import(process.argv[1]);
+const casos = JSON.parse(readFileSync(0, "utf8"));
+process.stdout.write(JSON.stringify(casos.map(([frase, citacao]) => partesDaFrase(frase, citacao))));
+"""
+
+CASOS_DA_FRASE = {
+    "no meio": ("Many student cant pay the fees.", "student cant"),
+    "no começo": ("Many student cant pay the fees.", "Many"),
+    "no fim": ("Many student cant pay the fees.", "the fees."),
+    "emoji e acentos antes": ("Café 😀 naïve, they gives up.", "they gives"),
+    "repetida: a primeira": ("the the end", "the"),
+    "ausente": ("A sentence.", "not here"),
+    "citação vazia": ("A sentence.", ""),
+    # Sem a proteção, o JS converteria null no texto "null" e destacaria a palavra "null" da frase.
+    "citação nula": ("A null pointer.", None),
+}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js não instalado: destaque na frase não verificado")
+def test_partes_da_frase_executado_no_node():
+    resultado = subprocess.run(
+        ["node", "--input-type=module", "-e", _SCRIPT_FRASE, "--", MODULO_DESTAQUES.as_uri()],
+        input=json.dumps(list(CASOS_DA_FRASE.values()), ensure_ascii=False), capture_output=True, text=True,
+        encoding="utf-8", timeout=30, check=False,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    resultados = dict(zip(CASOS_DA_FRASE, json.loads(resultado.stdout), strict=True))
+
+    for nome, (frase, _citacao) in CASOS_DA_FRASE.items():
+        assert "".join(p["texto"] for p in resultados[nome]) == frase, nome  # nunca perde nem duplica texto
+
+    destaque = lambda nome: [p["texto"] for p in resultados[nome] if p["destaque"]]  # noqa: E731
+    assert destaque("no meio") == ["student cant"]
+    assert destaque("no começo") == ["Many"] and resultados["no começo"][0]["destaque"] is True
+    assert destaque("no fim") == ["the fees."] and resultados["no fim"][-1]["destaque"] is True
+    assert destaque("emoji e acentos antes") == ["they gives"]
+    assert resultados["repetida: a primeira"] == [{"texto": "the", "destaque": True}, {"texto": " the end",
+                                                                                          "destaque": False}]
+    assert resultados["ausente"] == [{"texto": "A sentence.", "destaque": False}]
+    assert resultados["citação vazia"] == [{"texto": "A sentence.", "destaque": False}]
+    assert resultados["citação nula"] == [{"texto": "A null pointer.", "destaque": False}]

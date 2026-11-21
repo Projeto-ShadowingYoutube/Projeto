@@ -75,6 +75,27 @@
         </div>
         <div class="writing-acoes">
             <button type="button" class="writing-botao" data-res-voltar>Voltar ao início</button>
+            <button type="button" class="writing-botao principal" data-res-rewrite hidden>Rewrite Challenge →</button>
+        </div>
+    </section>
+
+    <section class="writing-tela animate-fade-in" data-tela="rewrite" hidden>
+        <header class="writing-cabecalho">
+            <h2 class="writing-titulo">Rewrite Challenge</h2>
+            <span class="writing-rodada" data-rw-rodada></span>
+        </header>
+        <p class="writing-instrucao" data-rw-intro></p>
+        <div class="writing-rw-problemas" data-rw-problemas></div>
+        <!-- Erro do envio na própria tela (não no modal da base, cujo botão "início" faria perder as reescritas). -->
+        <p class="writing-rw-erro" data-rw-erro role="alert" hidden></p>
+        <div class="writing-acoes" data-rw-envio>
+            <span class="writing-dica" data-rw-dica></span>
+            <button type="button" class="writing-botao principal" data-rw-enviar disabled>Enviar reescritas</button>
+        </div>
+        <h3 class="writing-subtitulo" data-rw-titulo-historico>Histórico</h3>
+        <div class="writing-rw-historico" data-rw-historico></div>
+        <div class="writing-acoes">
+            <button type="button" class="writing-botao" data-rw-voltar>Voltar ao resultado</button>
         </div>
     </section>
 </div>

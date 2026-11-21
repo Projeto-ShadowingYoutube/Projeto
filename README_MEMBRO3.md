@@ -34,6 +34,11 @@ histórico original → feedback → reescritas fica guardado, e o texto origina
    categoria, a gravidade, a explicação e o que fazer; a versão corrigida só aparece em **Ver sugestão** (D18).
 8. Se a correção falhar, a redação continua salva: **Avaliar de novo** (até 3 vezes por redação, sem gastar a cota).
 9. Em **Redações recentes** você retoma um rascunho ou reabre um resultado (com a nota geral ao lado).
+10. **Rewrite Challenge:** no resultado, **Rewrite Challenge →** (aparece se a correção apontou trechos). Até 3 frases
+    problemáticas, cada uma com o trecho destacado, o problema e o que fazer. Os campos já vêm com a frase: edite-as
+    (o envio só libera quando todas foram alteradas) e clique em **Enviar reescritas**. A IA diz se cada uma melhorou,
+    com nota e comentário, e a comparação mostra o que saiu (riscado) e o que entrou (destacado). As que não
+    melhoraram voltam numa 2ª rodada (máximo de 2). O histórico fica guardado; nada é sobrescrito.
 
 Para a correção por IA funcionar localmente, coloque a **sua** chave do Gemini em `LLM_CHAVE` no `.env` (crie em
 https://aistudio.google.com/apikey; nunca no Git). Sem ela, o app sobe normalmente e a correção responde 503
@@ -231,6 +236,10 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D22 | 21/11/2026 | A rodada é enviada **inteira** (uma reescrita por problema), avaliada numa **chamada só** à LLM | Controle de custo (D4) |
 | D23 | 21/11/2026 | Falha da LLM no Rewrite: **nada é gravado e a rodada não é gasta**; a tela mantém os textos para reenviar | Gravar "pendente" exigiria uma migração nova (a avaliação é obrigatória na tabela) para um caso raro |
 
+| D24 | 21/11/2026 | Na tela do Rewrite, o campo da rodada 1 já vem **preenchido com a frase original** | Editar é mais natural do que redigitar a frase inteira |
+| D25 | 21/11/2026 | Na rodada 2, o campo vem com **a reescrita da rodada 1** | Continua de onde parou |
+| D26 | 21/11/2026 | **Enviar reescritas** só libera quando todas as frases foram **alteradas** em relação ao texto com que o campo começou | Não gastar uma chamada à LLM com frases não mexidas |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -265,7 +274,7 @@ W1 Modelos + migração 0301 (esquema)
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | ✅ concluído (inclui teste real com o Gemini) |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | ✅ concluído |
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | ✅ concluído |
-| W9 | Tela do Rewrite | Interface do Rewrite Challenge | pendente |
+| W9 | Tela do Rewrite | Interface do Rewrite Challenge | ✅ concluído (falta o teste manual) |
 | W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | pendente |
 
 ### Cronograma (2 dias)
@@ -567,7 +576,41 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
 - **Problemas encontrados:** a mutação 1 passou na primeira rodada: os dados do teste davam a mesma seleção com e sem
   a regra de variar as categorias (coincidência). Acrescentado um teste em que a regra muda o resultado. Também
   troquei, no teste do envio duplo, uma substituição manual de função por `monkeypatch` (padrão do projeto).
+- **Teste manual (usuário, pelo `/docs`, com o Gemini real):** `GET .../rewrite` e `POST .../rewrite` numa redação
+  avaliada funcionaram (problemas, avaliação, comparação e rodada 2).
 - **Próxima ação:** Etapa A do W9 (tela do Rewrite).
+
+#### W9 — Tela do Rewrite Challenge
+- **Status:** implementado (21/11/2026); testes automáticos aprovados; **aguarda o teste manual do usuário**.
+- **Tarefas atendidas:** interface do Rewrite Challenge.
+- **Arquivos:** `app/static/js/componentes/writing-destaques.js` (+ `partesDaFrase`), `app/templates/paginas/writing.html`
+  (tela `rewrite` e botão no resultado), `app/static/js/paginas/writing.js` (abrir, problemas, validação D26, envio,
+  histórico com a comparação, conclusão; `&rewrite=1` na URL), `app/static/js/nucleo/api-writing.js` (`rewrite`,
+  `enviarRewrite`), `app/static/css/writing.css` (cartões, `<del>`/`<ins>`, vereditos), `tests/writing/test_paginas.py`.
+  Nenhum arquivo da base; nenhum encaixe.
+- **Decisões do usuário:** D24 (campo com a frase original), D25 (rodada 2 com a reescrita anterior), D26 (enviar só
+  frases alteradas).
+- **Decisões técnicas:** a tela é sempre redesenhada a partir do servidor (sem estado escondido no navegador); a
+  comparação vem pronta do servidor (sem lógica duplicada em JS); `<del>`/`<ins>` com `textContent`; em falha da LLM
+  os textos ficam nos campos (D23); a sugestão (D18) não aparece no Rewrite; botão só aparece se houver trechos.
+- **Testes:** `test_paginas.py` com 15 testes (+ tela `rewrite` e botão; + `partesDaFrase` executada no Node: meio,
+  começo, fim, emoji/acentos, repetida, ausente, vazia, nula). `node --check` nos 3 JS. Suíte inteira: **447
+  coletados, 445 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (4, todas detectadas):** (1) perder o texto depois do trecho; (2) destacar deslocado; (3) tirar a
+  proteção da citação vazia/nula; (4) template sem a tela do Rewrite.
+- **Problemas encontrados:** (1) a mutação 3 passou na primeira rodada: para a citação **vazia** ela é equivalente
+  (o pedaço vazio é descartado pelo filtro); a proteção importa para `null`/`undefined`, que o JS converteria no
+  texto "null". Acrescentado o caso nulo, e a mutação passou a ser pega. (2) A frase de conclusão tinha uma montagem
+  de texto confusa (três `replace` encadeados); reescrita como uma expressão direta antes dos testes.
+- **Teste manual (usuário, Gemini real):** etapas 1 a 7 aprovadas (botão no resultado, problemas com o trecho
+  destacado, bloqueio do envio, rodada 1 com veredito e comparação, F5, rodada 2 com a reescrita anterior,
+  conclusão, tema claro/escuro). Na etapa 8 (falha forçada), o usuário clicou em **"início"** no modal de erro da base
+  e saiu da página, perdendo as reescritas digitadas (que, pelo D23, não são gravadas).
+- **Correção depois do teste manual:** no envio do Rewrite, o erro passou a aparecer **na própria tela** (acima do
+  botão, em vermelho, com "As suas reescritas continuam aqui: tente enviar de novo"), e não mais no modal da base.
+  O modal continua para os casos sem texto a perder (abrir o Rewrite, rodada já gravada). A mensagem some ao editar
+  um campo ou reenviar. Base não alterada.
+- **Próxima ação:** refazer a etapa 8 do teste manual; depois, Etapa A do W10 (integração e entrega).
 
 ## Testes
 

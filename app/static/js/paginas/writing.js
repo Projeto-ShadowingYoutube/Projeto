@@ -1,12 +1,13 @@
-// Página do Writing Challenge (templates/paginas/writing.html), Membro 3. Quatro telas na mesma página:
+// Página do Writing Challenge (templates/paginas/writing.html), Membro 3. Cinco telas na mesma página:
 //   início (categorias, aviso de IA, cota, redações recentes) → editor (contador, timer, autosave)
-//   → resultado (notas, resumo, redação com os trechos destacados) ou fim (enviada sem correção / tempo esgotado).
+//   → resultado (notas, resumo, redação com os trechos destacados) ou fim (enviada sem correção / tempo esgotado)
+//   → rewrite (reescrever as frases problemáticas, em até 2 rodadas, com a comparação e o veredito da IA).
 // A redação aberta fica na URL (/writing?redacao=7): recarregar a página volta ao editor com o texto e o tempo.
 // Conteúdo do servidor (tema, texto, nomes) entra só com textContent/value, nunca innerHTML.
 import { criarAvisoIA } from "../componentes/aviso-ia.js";
 import { criarEstadoVazio } from "../componentes/estado-vazio.js";
 import {
-    CATEGORIAS_AVALIADAS, NOMES_DAS_CATEGORIAS, NOMES_DAS_GRAVIDADES, formatarNota, partesDoTexto,
+    CATEGORIAS_AVALIADAS, NOMES_DAS_CATEGORIAS, NOMES_DAS_GRAVIDADES, formatarNota, partesDaFrase, partesDoTexto,
 } from "../componentes/writing-destaques.js";
 import { api } from "../nucleo/api.js";
 import { apiWriting } from "../nucleo/api-writing.js";
@@ -35,7 +36,9 @@ const data = (dataIso) => `${dataIso.slice(8, 10)}/${dataIso.slice(5, 7)} ${hora
 registrarPagina("writing", (raiz) => {
     const campo = (nome) => raiz.querySelector(`[data-${nome}]`);
     const telas = Object.fromEntries(
-        ["inicio", "editor", "fim", "resultado"].map((nome) => [nome, raiz.querySelector(`[data-tela="${nome}"]`)]),
+        ["inicio", "editor", "fim", "resultado", "rewrite"].map(
+            (nome) => [nome, raiz.querySelector(`[data-tela="${nome}"]`)],
+        ),
     );
     const texto = campo("texto");
     const botaoEnviar = campo("enviar");
@@ -53,8 +56,9 @@ registrarPagina("writing", (raiz) => {
         Object.entries(telas).forEach(([chave, tela]) => { tela.hidden = chave !== nome; });
     }
 
-    function definirUrl(id) {
-        history.replaceState(history.state, "", id ? `/writing?redacao=${id}` : "/writing");
+    function definirUrl(id, noRewrite = false) {
+        const url = id ? `/writing?redacao=${id}${noRewrite ? "&rewrite=1" : ""}` : "/writing";
+        history.replaceState(history.state, "", url);
     }
 
     // --- Início ---
@@ -415,6 +419,7 @@ registrarPagina("writing", (raiz) => {
             return item;
         }));
         mostrarDicaDoTrecho(feedback.trechos.length);
+        campo("res-rewrite").hidden = feedback.trechos.length === 0;  // sem trechos, não há o que reescrever
         mostrarTela("resultado");
     }
 
@@ -511,6 +516,188 @@ registrarPagina("writing", (raiz) => {
         campo("res-trecho").replaceChildren(titulo, citacao, explicacao, instrucao, sugestao, verSugestao);
     }
 
+    // --- Rewrite Challenge ---
+    // A tela é sempre redesenhada a partir do servidor (GET/POST .../rewrite); a URL leva &rewrite=1 (F5 volta aqui).
+
+    let rewriteId = null;
+    const textoInicial = new Map();  // campo → texto com que ele começou (D26: só envia frases alteradas)
+
+    async function abrirRewrite(id) {
+        rewriteId = id;
+        let desafio;
+        try {
+            desafio = await apiWriting.rewrite(id);
+        } catch (erro) {
+            mostrarErro(erro.message);
+            await abrir(id);
+            return;
+        }
+        desenharRewrite(desafio);
+    }
+
+    // manter: {indice: texto} digitado antes de uma falha (D23: os textos continuam nos campos).
+    function desenharRewrite(desafio, manter = {}) {
+        definirUrl(rewriteId, true);
+        const { concluido, historico } = desafio;
+        campo("rw-rodada").textContent = concluido ? "Concluído" : `Rodada ${desafio.rodada_atual} de 2`;
+
+        const indicesFeitos = new Set(historico.map((h) => h.indice));
+        const melhorados = new Set(historico.filter((h) => h.avaliacao.melhorou).map((h) => h.indice));
+        const total = indicesFeitos.size;
+        campo("rw-intro").textContent = concluido
+            ? `Rewrite concluído: ${melhorados.size} de ${total} ${total === 1 ? "frase melhorou" : "frases melhoraram"}.`
+            : "Reescreva cada frase seguindo a instrução. Uma IA avalia se o problema foi resolvido sem criar erros "
+                + "novos e sem mudar o sentido.";
+
+        textoInicial.clear();
+        campo("rw-problemas").replaceChildren(...desafio.problemas.map((problema, posicao) => {
+            const ultima = historico.filter((h) => h.indice === problema.indice).at(-1);
+            const inicial = ultima ? ultima.reescrita : problema.frase;  // D24 (rodada 1) e D25 (rodada 2)
+            return cartaoDoProblema(problema, posicao + 1, manter[problema.indice] ?? inicial, inicial);
+        }));
+        campo("rw-envio").hidden = concluido;
+        esconderErroDoRewrite();
+        atualizarEnvioDoRewrite();
+
+        campo("rw-titulo-historico").hidden = historico.length === 0;
+        campo("rw-historico").replaceChildren(...historico.map(itemDoHistorico));
+        mostrarTela("rewrite");
+    }
+
+    function cartaoDoProblema(problema, numero, valor, inicial) {
+        const cartao = document.createElement("section");
+        cartao.className = `writing-rw-problema cat-${problema.categoria}`;
+
+        const titulo = document.createElement("p");
+        titulo.className = "writing-trecho-titulo";
+        titulo.textContent = `${numero} · ${NOMES_DAS_CATEGORIAS[problema.categoria] ?? problema.categoria} · gravidade `
+            + (NOMES_DAS_GRAVIDADES[problema.gravidade] ?? problema.gravidade);
+
+        const frase = document.createElement("p");
+        frase.className = "writing-rw-frase";
+        const rotuloFrase = document.createElement("strong");
+        rotuloFrase.textContent = "Frase: ";
+        frase.append(rotuloFrase, ...partesDaFrase(problema.frase, problema.citacao).map((parte) => {
+            if (!parte.destaque) return document.createTextNode(parte.texto);
+            const marca = document.createElement("mark");
+            marca.className = `writing-marca cat-${problema.categoria}`;
+            marca.textContent = parte.texto;
+            return marca;
+        }));
+
+        const explicacao = paragrafoComRotulo("O problema: ", problema.explicacao);
+        const instrucao = paragrafoComRotulo("O que fazer: ", problema.instrucao);
+
+        const campoTexto = document.createElement("textarea");
+        campoTexto.className = "writing-rw-texto";
+        campoTexto.maxLength = 1000;
+        campoTexto.rows = 3;
+        campoTexto.spellcheck = false;
+        campoTexto.value = valor;
+        campoTexto.dataset.indice = problema.indice;
+        campoTexto.setAttribute("aria-label", `Reescrita da frase ${numero}`);
+        campoTexto.addEventListener("input", () => {
+            esconderErroDoRewrite();
+            atualizarEnvioDoRewrite();
+        });
+        textoInicial.set(campoTexto, inicial);
+
+        cartao.append(titulo, frase, explicacao, instrucao, campoTexto);
+        return cartao;
+    }
+
+    function paragrafoComRotulo(rotulo, texto) {
+        const paragrafo = document.createElement("p");
+        const negrito = document.createElement("strong");
+        negrito.textContent = rotulo;
+        paragrafo.append(negrito, document.createTextNode(texto));
+        return paragrafo;
+    }
+
+    function camposDoRewrite() {
+        return [...campo("rw-problemas").querySelectorAll(".writing-rw-texto")];
+    }
+
+    // D26: só envia quando todas as frases estão preenchidas E diferentes do texto com que o campo começou.
+    function atualizarEnvioDoRewrite() {
+        const campos = camposDoRewrite();
+        const vazios = campos.filter((c) => !c.value.trim()).length;
+        const iguais = campos.filter((c) => c.value.trim() && c.value === textoInicial.get(c)).length;
+        const botao = campo("rw-enviar");
+        botao.disabled = vazios > 0 || iguais > 0 || campos.length === 0;
+        campo("rw-dica").textContent = vazios ? "Preencha todas as frases para enviar."
+            : iguais ? `Altere ${iguais === 1 ? "a frase que ainda está igual" : `as ${iguais} frases que ainda estão iguais`} para enviar.`
+                : "";
+    }
+
+    function mostrarErroDoRewrite(mensagem) {
+        const aviso = campo("rw-erro");
+        aviso.textContent = `Não foi possível avaliar agora: ${mensagem} As suas reescritas continuam aqui: `
+            + "tente enviar de novo.";
+        aviso.hidden = false;
+    }
+
+    function esconderErroDoRewrite() {
+        campo("rw-erro").hidden = true;
+    }
+
+    async function enviarRewrite() {
+        const campos = camposDoRewrite();
+        const reescritas = campos.map((c) => ({ indice: Number(c.dataset.indice), texto: c.value }));
+        const botao = campo("rw-enviar");
+        botao.disabled = true;
+        botao.textContent = "Avaliando…";
+        esconderErroDoRewrite();
+        campos.forEach((c) => { c.readOnly = true; });
+        try {
+            desenharRewrite(await apiWriting.enviarRewrite(rewriteId, reescritas));
+        } catch (erro) {
+            if (erro.codigo === "rewrite_concluido" || erro.codigo === "rodada_ja_enviada") {
+                mostrarErro(erro.message);  // a rodada já está gravada: não há texto a perder, só recarregar
+                await abrirRewrite(rewriteId);
+            } else {
+                // D23: nada foi gravado e a rodada não foi gasta. O erro fica NA TELA (não no modal da base, cujo
+                // botão "início" levaria para fora da página e faria perder as reescritas digitadas).
+                mostrarErroDoRewrite(erro.message);
+                campos.forEach((c) => { c.readOnly = false; });
+                atualizarEnvioDoRewrite();
+            }
+        } finally {
+            botao.textContent = "Enviar reescritas";
+        }
+    }
+
+    function itemDoHistorico(item) {
+        const cartao = document.createElement("div");
+        cartao.className = `writing-rw-item cat-${item.categoria}`;
+
+        const cabecalho = document.createElement("div");
+        cabecalho.className = "writing-rw-item-cabecalho";
+        const titulo = document.createElement("span");
+        titulo.textContent = `Rodada ${item.rodada} · ${NOMES_DAS_CATEGORIAS[item.categoria] ?? item.categoria}`;
+        const veredito = document.createElement("span");
+        veredito.className = item.avaliacao.melhorou ? "writing-veredito melhorou" : "writing-veredito nao";
+        veredito.textContent = `${item.avaliacao.melhorou ? "✓ Melhorou" : "✗ Ainda não"} · ${item.avaliacao.nota}/10`;
+        cabecalho.append(titulo, veredito);
+
+        // Comparação calculada no servidor (difflib): removido riscado, adicionado destacado.
+        const comparacao = document.createElement("p");
+        comparacao.className = "writing-rw-comparacao";
+        comparacao.append(...item.comparacao.map((pedaco) => {
+            if (pedaco.tipo === "igual") return document.createTextNode(pedaco.texto);
+            const marca = document.createElement(pedaco.tipo === "removido" ? "del" : "ins");
+            marca.textContent = pedaco.texto;
+            return marca;
+        }));
+
+        const comentario = document.createElement("p");
+        comentario.className = "writing-rw-comentario";
+        comentario.textContent = item.avaliacao.comentario;
+
+        cartao.append(cabecalho, comparacao, comentario);
+        return cartao;
+    }
+
     // --- Eventos e ciclo de vida ---
 
     const salvarAoSair = () => {
@@ -529,13 +716,18 @@ registrarPagina("writing", (raiz) => {
     campo("voltar").addEventListener("click", abrirInicio);
     campo("res-voltar").addEventListener("click", abrirInicio);
     campo("avaliar").addEventListener("click", avaliarDeNovo);
+    campo("res-rewrite").addEventListener("click", () => abrirRewrite(redacao.id));
+    campo("rw-enviar").addEventListener("click", enviarRewrite);
+    campo("rw-voltar").addEventListener("click", () => abrir(rewriteId));
     window.addEventListener("pagehide", salvarAoSair);           // fechar a aba ou recarregar
     document.addEventListener("visibilitychange", aoMudarVisibilidade);  // trocar de aba (e celular em segundo plano)
 
-    const id = Number(new URLSearchParams(location.search).get("redacao"));
+    const parametros = new URLSearchParams(location.search);
+    const id = Number(parametros.get("redacao"));
     if (id) {
         carregarSituacao();  // o aviso de IA do editor vem daqui (o início carrega o seu sozinho)
-        abrir(id);
+        if (parametros.get("rewrite") === "1") abrirRewrite(id);
+        else abrir(id);
     } else {
         abrirInicio();
     }
