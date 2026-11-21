@@ -51,9 +51,30 @@ _(preenchida a partir do W3)_
 
 ## Banco de dados
 
-_(preenchido no W1 e no W2)_
-
 Faixa de migrações do Membro 3: `0301`, `0302`, … A primeira tem `down_revision = "0006"`.
+
+```
+usuario ──1:N──► writingattempt ──N:1──► writingprompt   (tema: compartilhado, sem dono)
+                      │
+                      └──1:1──► writingfeedback ──1:N──► writingrewrite
+```
+
+| Tabela | Campos | Restrições |
+|---|---|---|
+| `writingprompt` | `categoria` (índice), `enunciado`, `tempo_limite_segundos`, `palavras_minimas`, `ativo` | — |
+| `writingattempt` | `usuario_id`, `prompt_id`, `texto`, `estado`, `palavras`, `iniciada_em`, `prazo`, `salva_em`, `enviada_em`, `avaliacoes_tentadas` | `fk_writingattempt_usuario_id_usuario`, `fk_writingattempt_prompt_id_writingprompt`; índices em `usuario_id` e `prompt_id` |
+| `writingfeedback` | `attempt_id`, `notas` (JSON), `nota_geral`, `resumo`, `trechos` (JSON), `modelo`, `versao_prompt`, `criado_em` | `fk_writingfeedback_attempt_id_writingattempt`; **`uq_writingfeedback_attempt`** (um feedback por tentativa) |
+| `writingrewrite` | `feedback_id`, `rodada`, `indice_trecho`, `trecho_original`, `instrucao`, `reescrita`, `avaliacao` (JSON), `modelo`, `versao_prompt`, `criado_em` | `fk_writingrewrite_feedback_id_writingfeedback`; **`uq_writingrewrite_rodada_trecho`** (`feedback_id`, `rodada`, `indice_trecho`); índice em `feedback_id` |
+
+- **Estados da tentativa** (`app/models_writing.py`): `rascunho` → `enviada` → `avaliada` ou `erro_avaliacao`.
+  Validados no código (sem `CHECK` no banco, como no resto do projeto).
+- **`prazo`** é gravado ao criar (início + tempo do tema): mudar o tema depois não afeta tentativas abertas (D2).
+- **O diff da reescrita não é gravado**: é calculado ao ler (`difflib`), a partir de dois textos que nunca mudam.
+
+| Migração | Tipo | O que faz |
+|---|---|---|
+| `0301_writing_challenge.py` | esquema | Cria as 4 tabelas (só tabelas novas). FKs nomeadas à mão (o autogenerate as gera sem nome) |
+| `0302` | dados | _(W2)_ temas iniciais |
 
 ## Decisões
 
@@ -94,7 +115,7 @@ W1 Modelos + migração 0301 (esquema)
 | ID | Bloco | Tarefas atendidas | Status |
 |---|---|---|---|
 | W0 | Plano (este README) | — | ✅ concluído |
-| W1 | Modelos e migração do esquema (0301) | Modelagem WritingPrompt/Attempt/Feedback (+ WritingRewrite); migration das tabelas | ⏳ Etapa A |
+| W1 | Modelos e migração do esquema (0301) | Modelagem WritingPrompt/Attempt/Feedback (+ WritingRewrite); migration das tabelas | ✅ concluído |
 | W2 | Temas e regras puras (0302) | Categorias TOEFL/IELTS; seleção aleatória; regra de contagem de palavras | pendente |
 | W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | pendente |
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | pendente |
@@ -138,6 +159,28 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   limpo. Aviso preexistente da base: `StarletteDeprecationWarning` (httpx no TestClient), não reprova nada.
 - **Próxima ação:** Etapa A do W1.
 
+#### W1 — Modelos e migração do esquema (0301)
+- **Status:** concluído (21/11/2026).
+- **Tarefas atendidas:** modelagem das entidades WritingPrompt, WritingAttempt e WritingFeedback (+ WritingRewrite,
+  para o histórico do Rewrite); migration das novas tabelas.
+- **Arquivos:** `app/models_writing.py` (novo), `migrations/versions/0301_writing_challenge.py` (novo, gerado pelo
+  autogenerate e revisado à mão), `tests/writing/__init__.py` e `tests/writing/test_modelos.py` (novos);
+  **encaixe** `app/models.py` (1 linha: `import app.models_writing  # noqa: E402, F401`).
+- **Decisões técnicas:** quatro tabelas ligadas por FK (o banco garante "um feedback por tentativa" e "nenhuma
+  reescrita duplicada"); notas e trechos em JSON (lidos sempre junto com o feedback); `prazo` gravado na criação;
+  diff não gravado (derivável); estado validado no código. `tests/writing/` é um pacote (`__init__.py`) para não
+  colidir com testes da base de mesmo nome (o pytest usa o modo de import padrão).
+- **Testes:** `tests/writing/test_modelos.py`, 8 testes (padrões da tentativa, tema ativo, JSON lido do banco, UNIQUE do
+  feedback, UNIQUE da reescrita, linhas novas por rodada/trecho, encaixe no metadata, 0301 sobe/desce com FKs
+  nomeadas e sem tocar nas tabelas da base). Suíte inteira: **276 coletados, 274 aprovados, 2 pulados, 0 falhas**;
+  `ruff` limpo; `test_base_protegida` verde.
+- **Mutações (todas detectadas, arquivos restaurados e conferidos por hash):** (1) sem o UNIQUE do feedback →
+  `test_banco_recusa_segundo_feedback...` falha; (2) FK do dono sem nome na 0301 → `test_migracao_0301...` falha;
+  (3) 0301 sem a coluna `avaliacoes_tentadas` → `test_migracoes_produzem_o_mesmo_esquema_dos_modelos` falha.
+- **Banco local:** `python -m app.migrar` → backup `dados/backup/estudos-20261121-111858-318461.db`, banco na 0301.
+- **Problemas encontrados:** o autogenerate gerou as FKs sem nome (esperado; corrigido na revisão). Nenhum na base.
+- **Próxima ação:** Etapa A do W2 (temas, migração 0302, sorteio, contagem de palavras).
+
 ## Testes
 
 ```powershell
@@ -147,7 +190,9 @@ python -m pytest tests/writing   # só os testes do Writing
 python -m ruff check .
 ```
 
-_(a lista do que cada arquivo cobre é preenchida a cada bloco)_
+| Arquivo | O que cobre |
+|---|---|
+| `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 
 ## Alterações na base
 

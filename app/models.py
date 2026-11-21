@@ -115,3 +115,4 @@ class EntradaDicionario(SQLModel, table=True):
 # Membro 2 (Speaking)
 
 # Membro 3 (Writing)
+import app.models_writing  # noqa: E402, F401
