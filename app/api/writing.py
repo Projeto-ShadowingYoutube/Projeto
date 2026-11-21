@@ -23,7 +23,8 @@ from app.schemas_writing import (
     TentativaWriting,
     TextoRedacao,
 )
-from app.services import writing_desafios
+from app.services import writing_avaliacao, writing_desafios
+from app.services.writing_avaliacao import LimiteDeAvaliacoes, RedacaoJaAvaliada, RedacaoNaoEnviada
 from app.services.writing_desafios import (
     MIN_PALAVRAS_ENVIO,
     ErroDesafio,
@@ -50,6 +51,9 @@ _ERROS = {
     RedacaoJaEnviada: (status.HTTP_409_CONFLICT, "redacao_ja_enviada"),
     PrazoEncerrado: (status.HTTP_409_CONFLICT, "prazo_encerrado"),
     RedacaoCurta: (422, "redacao_curta"),
+    RedacaoJaAvaliada: (status.HTTP_409_CONFLICT, "redacao_ja_avaliada"),
+    RedacaoNaoEnviada: (status.HTTP_409_CONFLICT, "redacao_nao_enviada"),
+    LimiteDeAvaliacoes: (status.HTTP_409_CONFLICT, "limite_de_avaliacoes"),
 }
 
 
@@ -75,6 +79,7 @@ def _nome_da_categoria(slug: str) -> str:
 
 def _resposta(session: Session, tentativa: WritingAttempt, usou_ultimo_salvamento: bool = False) -> dict:
     tema = session.get(WritingPrompt, tentativa.prompt_id)
+    feedback = writing_avaliacao.feedback_de(session, tentativa)
     return {
         **tentativa.model_dump(include={
             "id", "estado", "texto", "palavras", "iniciada_em", "prazo", "salva_em", "enviada_em",
@@ -86,6 +91,8 @@ def _resposta(session: Session, tentativa: WritingAttempt, usou_ultimo_salvament
         "palavras_minimas": tema.palavras_minimas,
         "segundos_restantes": writing_desafios.segundos_restantes(tentativa, agora()),
         "usou_ultimo_salvamento": usou_ultimo_salvamento,
+        "avaliacoes_restantes": writing_avaliacao.avaliacoes_restantes(tentativa),
+        "feedback": feedback.model_dump() if feedback else None,
     }
 
 
@@ -114,12 +121,15 @@ def criar_desafio(
 
 @router.get("/attempts", response_model=list[ResumoTentativa])
 def listar_redacoes(usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session)):
+    tentativas = writing_desafios.listar(session, usuario.id)
+    notas = writing_avaliacao.notas_gerais(session, [t.id for t in tentativas])
     resumos = []
-    for tentativa in writing_desafios.listar(session, usuario.id):
+    for tentativa in tentativas:
         categoria = session.get(WritingPrompt, tentativa.prompt_id).categoria
         resumos.append({
             **tentativa.model_dump(include={"id", "estado", "palavras", "iniciada_em", "enviada_em"}),
             "categoria": categoria, "categoria_nome": _nome_da_categoria(categoria),
+            "nota_geral": notas.get(tentativa.id),
         })
     return resumos
 
@@ -143,12 +153,26 @@ def autosave(
     }
 
 
+# Rotas "def" (não async): a correção chama a LLM, que bloqueia por alguns segundos (roda no threadpool).
 @router.post("/attempts/{attempt_id}/submissao", response_model=TentativaWriting)
 def enviar_redacao(
     corpo: TextoRedacao, tentativa: WritingAttempt = Depends(_tentativa), session: Session = Depends(get_session),
 ):
+    """Grava o texto (commit) e só então corrige. Falha da LLM: a redação fica em erro_avaliacao e a resposta é o
+    erro da LLM (502/503/504, D17); o texto continua salvo."""
     try:
         usou_ultimo_salvamento = writing_desafios.enviar(session, tentativa, corpo.texto, agora())
+        writing_avaliacao.avaliar_redacao(session, tentativa)
     except ErroDesafio as erro:
         raise _erro_da_api(erro) from erro
     return _resposta(session, tentativa, usou_ultimo_salvamento)
+
+
+@router.post("/attempts/{attempt_id}/avaliacao", response_model=TentativaWriting)
+def avaliar_de_novo(tentativa: WritingAttempt = Depends(_tentativa), session: Session = Depends(get_session)):
+    """"Avaliar de novo" depois de uma falha (até MAX_AVALIACOES por redação). Não gasta a cota diária."""
+    try:
+        writing_avaliacao.avaliar_redacao(session, tentativa)
+    except ErroDesafio as erro:
+        raise _erro_da_api(erro) from erro
+    return _resposta(session, tentativa)

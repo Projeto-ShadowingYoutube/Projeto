@@ -20,6 +20,28 @@ def cota_nova(monkeypatch):
     monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
 
 
+# Resposta válida da LLM no contrato AvaliacaoLLM (média 7,4). Sem trechos: cada teste acrescenta os que precisa.
+RESPOSTA_LLM = {
+    "categorias": {
+        "gramatica": {"nota": 6, "comentario": "Erros de concordância."},
+        "vocabulario": {"nota": 7, "comentario": "Vocabulário simples."},
+        "coerencia": {"nota": 8, "comentario": "Ideias claras."},
+        "organizacao": {"nota": 7, "comentario": "Parágrafos bem divididos."},
+        "atendimento_tarefa": {"nota": 9, "comentario": "Responde ao tema."},
+    },
+    "resumo": "Boa redação.",
+    "trechos": [],
+}
+
+
+@pytest.fixture()
+def llm_corrige(llm_falsa):
+    """LLM simulada que responde RESPOSTA_LLM às próximas chamadas (para testes em que a correção não é o foco)."""
+    for _ in range(5):
+        llm_falsa.responder(RESPOSTA_LLM)
+    return llm_falsa
+
+
 def criar_tema(session: Session, categoria: str, enunciado: str, ativo: bool = True) -> WritingPrompt:
     formato = CATEGORIAS[categoria]
     tema = WritingPrompt(

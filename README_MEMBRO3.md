@@ -70,10 +70,19 @@ inexistente (dependência `_tentativa` em `app/api/writing.py`).
 | `GET /api/writing/attempts` | — | as 50 redações mais recentes da conta (`id, estado, categoria, categoria_nome, palavras, iniciada_em, enviada_em`) | — |
 | `GET /api/writing/attempts/{id}` | — | redação | 404 |
 | `PATCH /api/writing/attempts/{id}` (autosave) | `{texto}` (máx. 10.000 caracteres) | `{palavras, salva_em, segundos_restantes}` | 404 · 409 `redacao_ja_enviada` · 409 `prazo_encerrado` · 422 |
-| `POST /api/writing/attempts/{id}/submissao` | `{texto}` (máx. 10.000 caracteres) | redação (com `usou_ultimo_salvamento`) | 404 · 409 `redacao_ja_enviada` · 422 `redacao_curta` · 422 |
+| `POST /api/writing/attempts/{id}/submissao` | `{texto}` (máx. 10.000 caracteres) | redação **corrigida** (com `usou_ultimo_salvamento` e `feedback`) | 404 · 409 `redacao_ja_enviada` · 422 `redacao_curta` · 422 · 502/503/504 `llm_*` (texto salvo, redação em `erro_avaliacao`) |
+| `POST /api/writing/attempts/{id}/avaliacao` ("avaliar de novo") | — | redação corrigida | 404 · 409 `redacao_ja_avaliada` · 409 `redacao_nao_enviada` · 409 `limite_de_avaliacoes` · 502/503/504 `llm_*` |
 
 **Redação (resposta):** `id, estado, categoria, categoria_nome, enunciado, tempo_limite_segundos, palavras_minimas,
-texto, palavras, iniciada_em, prazo, segundos_restantes, salva_em, enviada_em, usou_ultimo_salvamento`.
+texto, palavras, iniciada_em, prazo, segundos_restantes, salva_em, enviada_em, usou_ultimo_salvamento,
+avaliacoes_restantes, feedback` (`feedback`: `null` até ser avaliada; senão `notas, nota_geral, resumo, trechos,
+modelo, versao_prompt, criado_em`). Na lista, cada item tem também `nota_geral` (`null` se não avaliada).
+
+**Envio e correção (W6):** o envio grava o texto (commit) e **só então** chama a LLM. Sucesso → `WritingFeedback` e
+estado `avaliada`. Falha da LLM → estado `erro_avaliacao` e a resposta é o erro da LLM (D17), com a mensagem "A sua
+redação foi salva; tente avaliar de novo." O "avaliar de novo" aceita `enviada` ou `erro_avaliacao`, até 3 chamadas à
+LLM por redação (D4), e não gasta cota. Sem LLM configurada, a tentativa não conta (D16). Lógica em
+`app/services/writing_avaliacao.py`.
 `segundos_restantes` vem do relógio do servidor (o timer da tela parte dele). Datas no horário de Brasília, sem fuso.
 
 **Entradas com `extra="forbid"`:** campos além dos documentados (ex.: `estado`) → 422. Estado, prazo e palavras nunca
@@ -92,6 +101,9 @@ Criados com `ErroDaApi(..., codigo=...)`, sem alterar `app/erros.py`. Testados e
 | 409 | `prazo_encerrado` | Autosave depois do prazo + 30 s | — |
 | 422 | `redacao_curta` | Envio com menos de 50 palavras (inclusive o último autosave, depois do prazo: D10) | `palavras`, `minimo` |
 | 503 | `sem_temas` | Nenhum tema ativo na categoria (ou em nenhuma, na "Surpresa") | — |
+| 409 | `redacao_ja_avaliada` | "Avaliar de novo" numa redação já avaliada (inclusive o duplo clique, pelo `UNIQUE` do feedback) | — |
+| 409 | `redacao_nao_enviada` | "Avaliar de novo" num rascunho | — |
+| 409 | `limite_de_avaliacoes` | A redação já usou as 3 chamadas à LLM (D4) | — |
 
 Os demais (`nao_encontrado`, `dados_invalidos`, `nao_autenticado`, `limite_de_desafios`) são os da base.
 
@@ -186,6 +198,9 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D14 | 21/11/2026 | Trechos sobrepostos: fica o de **maior gravidade** (empate: o que veio primeiro); **no máximo 10** trechos guardados | A tela não precisa desenhar destaques sobrepostos; o aluno vê primeiro o que é mais grave |
 | D15 | 21/11/2026 | Nota geral = **média simples com 1 casa decimal** (ex.: 7,4) | Não perde informação; não há critério oficial para pesos por categoria |
 
+| D16 | 21/11/2026 | Sem LLM configurada (sem chave), a tentativa de correção **não conta** no limite de 3; a redação fica em `erro_avaliacao` com 503 | Um servidor mal configurado não gasta as tentativas das pessoas |
+| D17 | 21/11/2026 | Envio com falha da LLM responde **com o erro da LLM** (502/503/504); a tela sabe que a redação está salva pelo código `llm_*` | Padrão do guia e do projeto (o status HTTP diz a verdade) |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -217,7 +232,7 @@ W1 Modelos + migração 0301 (esquema)
 | W3 | API do desafio | Endpoint de criação; endpoint de submissão; autosave (servidor); timer no servidor | ✅ concluído |
 | W4 | Tela do editor | Interface do editor; contador de palavras JS; timer regressivo; autosave periódico | ✅ concluído |
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | ✅ concluído |
-| W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | pendente |
+| W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | ✅ concluído (inclui teste real com o Gemini) |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | pendente |
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | pendente |
 | W9 | Tela do Rewrite | Interface do Rewrite Challenge | pendente |
@@ -398,6 +413,59 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   W6, quando a rota existir.
 - **Próxima ação:** Etapa A do W6 (avaliação na API: persistência, erro_avaliacao, "avaliar de novo").
 
+#### W6 — Avaliação na API
+- **Status:** concluído (21/11/2026), nos testes automáticos e com o Gemini de verdade.
+- **Teste real com o Gemini (21/11/2026):** script de medição (fora da suíte; chama `writing_llm.avaliar()` com a
+  `LLM_CHAVE` do `.env`, sem gravar no banco) com 3 redações de um mesmo tema IELTS, com erros de propósito.
+  - A chave só pôde ser criada numa conta Google pessoal (a institucional bloqueia a criação de projetos).
+  - Modelos testados: `gemini-flash-latest` → 503 "high demand" nas 3; `gemini-2.5-flash` → 404 "no longer
+    available to new users"; `gemini-3.8-flash` → 2 timeouts de 60 s e um 503; **`gemini-3.1-flash-lite` → as 3 com
+    sucesso**. Em todas as falhas, o tratamento funcionou como planejado (`llm_indisponivel` ou `llm_tempo_esgotado`,
+    mensagem em português para o usuário, detalhe do provedor só no log).
+  - Resultado com `gemini-3.1-flash-lite`:
+
+    | Redação | Palavras | Tempo | Nota geral | Atendimento à tarefa | Trechos aceitos / descartados |
+    |---|---|---|---|---|---|
+    | Curta | 57 | 23,7 s (1ª chamada) | 3,2 | 2 | 5 / 0 |
+    | Média | 208 | 3,1 s | 5,4 | 5 | 7 / 0 |
+    | Longa | 335 | 4,2 s | 4,6 | 6 | 6 / 1 |
+
+  - Conferido: 3/3 respostas no contrato (nenhuma inválida); comentários e instruções em português e sugestões em
+    inglês (D6); citações exatas (só 1 descartada em 18); "atendimento à tarefa" penaliza quem fica abaixo de 250
+    palavras; instruções de reescrita orientam sem dar a resposta. A nota baixa de organização da longa está
+    correta: a redação de teste tinha parágrafos depois da conclusão, e o modelo percebeu.
+- **Tarefas atendidas:** persistência do feedback e da versão original; tratamento de timeout e resposta inválida
+  da LLM; testes com diferentes tamanhos e tipos de redação.
+- **Arquivos:** `app/services/writing_avaliacao.py` e `tests/writing/test_api_avaliacao.py` (novos);
+  `app/api/writing.py` (envio corrige; `POST .../avaliacao`; `feedback` e `avaliacoes_restantes` na resposta;
+  `nota_geral` na lista), `app/schemas_writing.py` (`TrechoAvaliado`, `FeedbackWriting`),
+  `app/static/js/paginas/writing.js` (ajuste mínimo: erro `llm_*` no envio vai para "Redação enviada" com o aviso
+  da falha; "Enviando e corrigindo…"), `tests/writing/conftest.py` (`RESPOSTA_LLM`, `llm_corrige`),
+  `tests/writing/test_api_desafio.py` (envio agora com a LLM simulada). Nenhum arquivo da base; nenhum encaixe.
+- **Desvio da Etapa A:** a lógica da avaliação foi para um arquivo novo (`writing_avaliacao.py`) em vez do
+  `writing_desafios.py`, para evitar um import circular (`writing_desafios` → `writing_llm` → `schemas_writing` →
+  `writing_desafios`). O comportamento combinado não mudou.
+- **Decisões do usuário:** D16 (sem LLM configurada não conta) e D17 (envio responde com o erro da LLM).
+- **Decisões técnicas:** commit do texto antes da LLM; contador gravado antes da chamada; captura de `llm.ErroLLM`
+  e relançamento com mensagem própria (padrão do guia); `IntegrityError` do `UNIQUE` do feedback → 409 (duplo
+  clique); erro inesperado durante a chamada vira o 500 genérico da base, com o texto já salvo.
+- **Testes:** `test_api_avaliacao.py`, 18 testes (24 com os parametrizados): envio corrige e grava; redação nova
+  com 3 avaliações; GET e lista com o resultado; timeout/indisponível/limite do provedor; resposta inválida 2×; sem
+  chave (D16); texto e tentativa gravados antes da chamada (erro inesperado → 500); avaliar de novo sem gastar cota;
+  enviada sem feedback; limite de 3; já avaliada; rascunho; duplo clique; isolamento; **tamanhos e tipos** (exatamente
+  50 palavras, ~9.990 caracteres, acentos e emoji, HTML e especiais); D2 + correção do último autosave.
+  `test_api_desafio.py`: os testes de envio usam a LLM simulada, e dois passaram a esperar `avaliada` em vez de
+  `enviada` (todas as conferências anteriores mantidas). `node --check` no `writing.js`. Suíte inteira:
+  **406 coletados, 404 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (7, todas detectadas):** (1) tentativa não gravada antes da chamada; (2) falha não marca
+  `erro_avaliacao`; (3) contar a tentativa sem LLM configurada; (4) sem o limite de 3; (5) sem tratar o
+  `IntegrityError`; (6) sem a mensagem própria do timeout; (7) envio sem corrigir.
+- **Problemas encontrados (todos nos meus testes):** (1) o texto de teste tinha 44 palavras, não as 51 do meu
+  comentário (contei de cabeça), e o envio era recusado pelo mínimo de 50: agora a contagem é conferida no próprio
+  teste com `contar_palavras`; (2) esperei que um erro inesperado "estourasse" no teste, mas o middleware da base o
+  transforma num 500 genérico (comportamento correto): o teste passou a esperar o 500.
+- **Próxima ação:** Etapa A do W7 (tela de resultado).
+
 ## Testes
 
 ```powershell
@@ -412,6 +480,7 @@ python -m ruff check .
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
 | `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`) e paridade da contagem de palavras JS × Python (textual e executando o JS no Node.js, se instalado) |
 | `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
+| `tests/writing/test_api_avaliacao.py` | Envio que corrige, falhas da LLM (redação nunca se perde), "avaliar de novo" e seus limites, duplo clique, isolamento e tamanhos/tipos de redação no fluxo completo |
 | `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 | `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |
@@ -528,6 +597,19 @@ _(preenchido ao longo dos blocos; checklist da seção 10 do `CLAUDE.md`)_
 
 - Dependências novas: nenhuma prevista (`difflib` é da biblioteca padrão).
 - Variáveis de ambiente novas: nenhuma (usa as da LLM que já existem).
+- **Tempo de uma correção real (para os timeouts do servidor e do proxy):** com `gemini-3.1-flash-lite`, **3 a 4 s**
+  numa chamada "aquecida" e **~24 s** na primeira (ver W6). Com modelos sobrecarregados, a chamada chega ao limite de
+  `LLM_TIMEOUT_SEGUNDOS` (60 s). O envio espera a correção (D7), então o proxy de produção precisa aceitar pelo menos
+  **~65 s** em `POST /api/writing/attempts/{id}/submissao` e `.../avaliacao`.
+- **Modelo do Gemini em produção (decisão do Membro 4):** o padrão da base (`gemini-flash-latest`) estava
+  sobrecarregado no teste (503), o `gemini-2.5-flash` não está mais disponível para contas novas (404) e o
+  `gemini-3.8-flash` deu timeouts; o **`gemini-3.1-flash-lite` funcionou bem**. Prefira um modelo com versão no nome
+  (os `-latest` mudam sozinhos) e confirme-o na conta que vai pagar. O nome do modelo fica gravado em cada feedback
+  (`WritingFeedback.modelo`).
+- **Sobrecarga do provedor (503) no `llm.py` (base, não alterado):** de propósito, o `llm.py` não repete chamadas que
+  falham por rede ou provedor. No teste, os 503 "high demand" eram temporários. Uma nova tentativa automática com
+  espera, só para 503, evitaria parte desses erros (no Writing, o usuário já tem o "avaliar de novo", até 3 vezes).
+  Fica como sugestão para avaliar no `llm.py`.
 - **Acesso à página:** `/writing` (sem botão na navbar, D13). Para a interface inicial do tech lead, o link no padrão
   do app é `<button hx-get="/writing" hx-target="main" hx-push-url="true">` (ou um `<a href="/writing">` comum).
 - **Cache dos arquivos estáticos (problema da base, não do Writing; para avaliar no B14–B16):** o `/static` é servido

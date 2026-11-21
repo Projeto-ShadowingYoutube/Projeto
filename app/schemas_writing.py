@@ -59,6 +59,8 @@ class TentativaWriting(BaseModel):
     salva_em: datetime | None
     enviada_em: datetime | None
     usou_ultimo_salvamento: bool = False  # só no envio: o prazo tinha acabado e foi enviado o último autosave
+    avaliacoes_restantes: int  # tentativas de correção que ainda restam (D4)
+    feedback: "FeedbackWriting | None" = None  # null até ser avaliada
 
 
 class ResumoTentativa(BaseModel):
@@ -69,6 +71,7 @@ class ResumoTentativa(BaseModel):
     palavras: int
     iniciada_em: datetime
     enviada_em: datetime | None
+    nota_geral: float | None = None  # null até ser avaliada
 
 
 class AutosaveSalvo(BaseModel):
@@ -121,3 +124,30 @@ class AvaliacaoLLM(BaseModel):
     trechos: list[TrechoLLM] = Field(
         default_factory=list, max_length=15, description="Trechos problemáticos (no máximo 10, os mais graves).",
     )
+
+
+# --- Feedback gravado (saída da API, W6) ---
+
+class TrechoAvaliado(BaseModel):
+    """Trecho já localizado no texto. inicio/fim em caracteres Unicode (no JS: Array.from(texto), não slice)."""
+    categoria: str
+    citacao: str
+    inicio: int
+    fim: int
+    gravidade: int
+    explicacao: str
+    sugestao: str
+    instrucao_reescrita: str
+
+
+class FeedbackWriting(BaseModel):
+    notas: dict[str, NotaCategoria]
+    nota_geral: float
+    resumo: str
+    trechos: list[TrechoAvaliado]
+    modelo: str
+    versao_prompt: int
+    criado_em: datetime
+
+
+TentativaWriting.model_rebuild()  # resolve a referência a FeedbackWriting, definido depois

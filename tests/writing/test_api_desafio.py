@@ -5,11 +5,16 @@ import pytest
 from sqlmodel import Session
 
 from app.models import agora
-from app.models_writing import ENVIADA, RASCUNHO, WritingAttempt
+from app.models_writing import AVALIADA, RASCUNHO, WritingAttempt
 from app.services.writing_desafios import MAX_CARACTERES, MIN_PALAVRAS_ENVIO, TOLERANCIA_PRAZO_SEGUNDOS
 
 TEXTO_OK = "Education matters a lot. " * 15  # 60 palavras
 OUTRO_TEXTO = "Cities should invest more in public transport. " * 10  # 70 palavras
+
+
+@pytest.fixture(autouse=True)
+def _correcao_simulada(llm_corrige):
+    """Desde o W6, o envio também corrige: aqui a correção não é o foco (ver test_api_avaliacao.py)."""
 
 
 def _palavras(n: int) -> str:
@@ -224,10 +229,10 @@ def test_envio_congela_a_redacao(ana, engine_teste):
 
     assert resposta.status_code == 200, resposta.text
     corpo = resposta.json()
-    assert corpo["estado"] == ENVIADA and corpo["texto"] == TEXTO_OK and corpo["palavras"] == 60
+    assert corpo["estado"] == AVALIADA and corpo["texto"] == TEXTO_OK and corpo["palavras"] == 60
     assert corpo["usou_ultimo_salvamento"] is False and corpo["segundos_restantes"] == 0
     tentativa = _no_banco(engine_teste, redacao["id"])
-    assert tentativa.estado == ENVIADA and tentativa.texto == TEXTO_OK and tentativa.enviada_em is not None
+    assert tentativa.estado == AVALIADA and tentativa.texto == TEXTO_OK and tentativa.enviada_em is not None
 
 
 def test_envio_exige_o_minimo_de_palavras(ana, engine_teste):
@@ -289,7 +294,7 @@ def test_envio_depois_do_prazo_envia_o_ultimo_autosave(ana, engine_teste):
 
     assert resposta.status_code == 200
     corpo = resposta.json()
-    assert corpo["texto"] == TEXTO_OK and corpo["usou_ultimo_salvamento"] is True and corpo["estado"] == ENVIADA
+    assert corpo["texto"] == TEXTO_OK and corpo["usou_ultimo_salvamento"] is True and corpo["estado"] == AVALIADA
     assert corpo["palavras"] == 60  # contadas no texto enviado de fato, não no que foi ignorado
     tentativa = _no_banco(engine_teste, redacao["id"])
     assert tentativa.texto == TEXTO_OK and tentativa.palavras == 60

@@ -284,7 +284,7 @@ registrarPagina("writing", (raiz) => {
         enviando = true;
         clearTimeout(temporizador);
         botaoEnviar.disabled = true;
-        botaoEnviar.textContent = "Enviando…";
+        botaoEnviar.textContent = "Enviando e corrigindo…";
         texto.readOnly = true;
         try {
             if (salvando) await salvando.catch(() => {});
@@ -303,6 +303,16 @@ registrarPagina("writing", (raiz) => {
             } else if (erro.codigo === "redacao_ja_enviada") {
                 pararEditor();
                 await abrir(redacao.id);
+            } else if (erro.codigo?.startsWith("llm_")) {
+                // A redação foi gravada ANTES da correção (W6): só a correção falhou.
+                pararEditor();
+                redacao = { ...redacao, estado: "erro_avaliacao" };
+                definirUrl(redacao.id);
+                mostrarFim(
+                    "Redação enviada",
+                    `${redacao.categoria_nome} · ${plural(contarPalavras(texto.value), "palavra", "palavras")}`,
+                    `A correção falhou: ${erro.message}`,
+                );
             } else {
                 mostrarErro(erro.message);
                 texto.readOnly = false;  // o texto continua na tela; dá para tentar de novo
@@ -321,8 +331,15 @@ registrarPagina("writing", (raiz) => {
             "Redação enviada",
             `${dados.categoria_nome} · ${plural(dados.palavras, "palavra", "palavras")}`,
             (dados.usou_ultimo_salvamento ? "O tempo tinha acabado: foi enviado o último texto salvo. " : "")
-            + "A correção por IA ainda não está disponível nesta versão.",
+            + situacaoDaCorrecao(dados),
         );
+    }
+
+    // Provisório até a tela de resultado (W7): só a situação da correção e a nota geral.
+    function situacaoDaCorrecao(dados) {
+        if (dados.feedback) return `Correção concluída: nota geral ${String(dados.feedback.nota_geral).replace(".", ",")} de 10.`;
+        if (dados.estado === "erro_avaliacao") return "A correção falhou. Você poderá pedir uma nova avaliação.";
+        return "Correção pendente.";
     }
 
     function mostrarFim(titulo, textoPrincipal, aviso) {
