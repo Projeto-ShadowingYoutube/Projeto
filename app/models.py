@@ -111,6 +111,7 @@ class EntradaDicionario(SQLModel, table=True):
 #     import app.models_reading  # noqa: E402, F401
 
 # Membro 1 (Reading)
+import app.models_reading  # noqa: E402, F401
 
 # Membro 2 (Speaking)
 
