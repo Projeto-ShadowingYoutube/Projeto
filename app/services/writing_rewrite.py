@@ -112,12 +112,10 @@ def comparar(original: str, reescrita: str) -> list[dict]:
     antes, depois = _PEDACO.findall(original), _PEDACO.findall(reescrita)
     pedacos: list[dict] = []
 
+    # O difflib alterna blocos iguais com UM bloco diferente (replace, delete ou insert): nunca saem dois pedaços
+    # seguidos do mesmo tipo, então não é preciso juntá-los.
     def acrescentar(tipo: str, partes: list[str]) -> None:
-        if not partes:
-            return
-        if pedacos and pedacos[-1]["tipo"] == tipo:
-            pedacos[-1]["texto"] += "".join(partes)
-        else:
+        if partes:
             pedacos.append({"tipo": tipo, "texto": "".join(partes)})
 
     for operacao, i1, i2, j1, j2 in difflib.SequenceMatcher(None, antes, depois, autojunk=False).get_opcodes():

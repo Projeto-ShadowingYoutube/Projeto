@@ -64,6 +64,8 @@ def _trechos(texto: str = TEXTO, citacoes=CITACOES) -> list[dict]:
     ("Is it true? Yes it is! Really.", "Yes", "Yes it is!"),
     ("It costs 3.5 million dollars. Next one.", "million", "It costs 3.5 million dollars."),  # 3.5 não corta
     ("Bad end. Next.", "Bad end.", "Bad end."),  # citação que já termina no ponto final
+    ("line one   \nline two", "one", "line one"),  # sem pontuação: os espaços antes da quebra ficam de fora
+    ("Last words here   ", "words", "Last words here"),  # sem pontuação no fim do texto
 ])
 def test_extrair_frase(texto, citacao, frase):
     inicio = texto.index(citacao)
@@ -122,6 +124,14 @@ def test_comparacao_reconstroi_os_dois_textos(original, reescrita):
     pedacos = comparar(original, reescrita)
     assert _reconstruir(pedacos, "igual", "removido") == original
     assert _reconstruir(pedacos, "igual", "adicionado") == reescrita
+
+
+def test_comparacao_nunca_tem_dois_pedacos_seguidos_do_mesmo_tipo():
+    """Garante a premissa que deixou o código simples (o difflib alterna iguais com um bloco diferente)."""
+    for original, reescrita in [(FRASE_1, "Totally different words here, nothing alike!"), ("a b c d", "x b y d z"),
+                                ("one two three", "three two one"), ("", "new"), ("old", "")]:
+        tipos = [p["tipo"] for p in comparar(original, reescrita)]
+        assert all(a != b for a, b in zip(tipos, tipos[1:])), (original, reescrita, tipos)
 
 
 def test_comparacao_mostra_o_que_mudou():

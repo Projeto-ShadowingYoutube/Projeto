@@ -100,7 +100,7 @@ def test_0302_insere_24_temas_ativos_4_por_categoria(banco_0302):
     assert _contar(engine, "SELECT COUNT(*) FROM writingprompt WHERE ativo") == 24
     with engine.connect() as conexao:
         consulta = text("SELECT categoria, COUNT(*) FROM writingprompt GROUP BY categoria")
-        por_categoria = dict(conexao.execute(consulta).tuples().all())
+        por_categoria = dict(conexao.execute(consulta).all())  # cada linha se comporta como uma tupla
     assert por_categoria == {categoria: 4 for categoria in CATEGORIAS}
 
 
@@ -121,12 +121,14 @@ def test_0302_desce_apagando_so_os_seus_temas(banco_0302):
 def test_0302_recusa_descer_com_tema_em_uso_sem_apagar_nada(banco_0302):
     cfg, engine = banco_0302
     with engine.begin() as conexao:
+        # Datas como texto ISO (o formato que o SQLAlchemy grava): o adaptador automático de datetime do sqlite3
+        # está descontinuado desde o Python 3.12.
         conexao.execute(text("INSERT INTO usuario (email, senha_hash, data_criacao) VALUES ('a@x.com', 'h', :d)"),
-                        {"d": agora()})
+                        {"d": agora().isoformat(" ")})
         conexao.execute(text(
             "INSERT INTO writingattempt (usuario_id, prompt_id, texto, estado, palavras, iniciada_em, prazo, "
             "avaliacoes_tentadas) VALUES (1, 1, '', 'rascunho', 0, :inicio, :prazo, 0)"
-        ), {"inicio": agora(), "prazo": agora() + timedelta(minutes=40)})
+        ), {"inicio": agora().isoformat(" "), "prazo": (agora() + timedelta(minutes=40)).isoformat(" ")})
 
     with pytest.raises(migrar.BancoIncompativel, match="redação"):
         command.downgrade(cfg, "0301")

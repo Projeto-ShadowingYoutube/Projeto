@@ -46,22 +46,32 @@ https://aistudio.google.com/apikey; nunca no Git). Sem ela, o app sobe normalmen
 
 ## Arquitetura
 
-_(atualizada a cada bloco)_
+Todos os arquivos da feature são novos e levam o nome dela (nenhum arquivo da base foi alterado fora dos encaixes):
 
-Arquivos previstos (todos novos, com o nome da feature):
+| Camada | Arquivo | Responsabilidade |
+|---|---|---|
+| Modelos | `app/models_writing.py` | `WritingPrompt`, `WritingAttempt`, `WritingFeedback`, `WritingRewrite` e os estados |
+| Schemas | `app/schemas_writing.py` | Entrada/saída da API e os contratos da LLM (`AvaliacaoLLM`, `AvaliacaoReescritasLLM`) |
+| Rotas | `app/api/writing.py` | `/api/writing/...` (login no router, `_tentativa` → 404) e a página `/writing` |
+| Serviços | `app/services/writing_temas.py` | Categorias e sorteio do tema |
+| | `app/services/writing_texto.py` | Contagem de palavras (a mesma regra do JS) |
+| | `app/services/writing_desafios.py` | Criar, autosave e envio, com o prazo no servidor |
+| | `app/services/writing_llm.py` | Prompts, chamadas ao `llm.gerar_json` e localização dos trechos |
+| | `app/services/writing_avaliacao.py` | Estados da correção, limite de tentativas e gravação do feedback |
+| | `app/services/writing_rewrite.py` | Seleção de frases, rodadas, comparação (`difflib`) e histórico |
+| Migrações | `migrations/versions/0301_writing_challenge.py` · `0302_writing_temas_iniciais.py` | Esquema · dados (24 temas) |
+| Tela | `app/templates/paginas/writing.html` | As 5 telas: início, editor, fim, resultado, rewrite |
+| | `app/static/js/paginas/writing.js` | Lógica da página (`registrarPagina("writing")`) |
+| | `app/static/js/nucleo/api-writing.js` | Cliente da API (`requisitarJSON`/`enviarJSON` da base) |
+| | `app/static/js/componentes/writing-destaques.js` | Funções puras dos destaques (testadas no Node.js) |
+| | `app/static/css/writing.css` | Estilos (só variáveis de tema da base) |
+| Testes | `tests/writing/` | Ver a seção "Testes" |
 
-| Camada | Arquivos |
-|---|---|
-| Modelos | `app/models_writing.py` |
-| Schemas (entrada/saída e contrato da LLM) | `app/schemas_writing.py` |
-| Rotas (`/api/writing/...` e página `/writing`) | `app/api/writing.py` |
-| Regras de negócio | `app/services/writing_temas.py`, `writing_texto.py`, `writing_desafios.py`, `writing_llm.py`, `writing_rewrite.py` |
-| Migrações | `migrations/versions/0301_*.py` (esquema), `0302_*.py` (temas iniciais) |
-| Tela | `app/templates/paginas/writing.html`, `app/static/js/paginas/writing.js`, `app/static/js/nucleo/api-writing.js`, `app/static/css/writing.css` |
-| Testes | `tests/writing/` |
+Fluxo: tela (`writing.js`) → `api-writing.js` → `app/api/writing.py` (login, dono, cota) → `services/writing_*.py`
+→ banco (SQLModel) e LLM (`llm.gerar_json` da base, sem alteração; prompts em `writing_llm.py`).
 
 Pontos de encaixe usados (só o bloco `Membro 3 (Writing)` de cada um): `app/models.py`, `app/main.py`,
-`app/static/js/main.js`, `app/templates/base.html` (CSS e botão da navbar).
+`app/static/js/main.js` e `app/templates/base.html` (CSS). Antes e depois na seção "Encaixes na base".
 
 Fluxo: tela (`writing.js`) → `api-writing.js` (`requisitarJSON`/`enviarJSON`) → `app/api/writing.py` (login, dono,
 cota) → `services/writing_*.py` → banco (SQLModel) e LLM (`llm.gerar_json`, prompts em `writing_llm.py`).
@@ -240,6 +250,10 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D25 | 21/11/2026 | Na rodada 2, o campo vem com **a reescrita da rodada 1** | Continua de onde parou |
 | D26 | 21/11/2026 | **Enviar reescritas** só libera quando todas as frases foram **alteradas** em relação ao texto com que o campo começou | Não gastar uma chamada à LLM com frases não mexidas |
 
+| D27 | 21/11/2026 | A medição com a LLM real vira um **teste opcional** no repositório (`tests/writing/test_llm_real.py`, só com `LLM_REAL=1`) | O Membro 4 consegue medir os tempos no servidor de produção com o mesmo código. É o único lugar que contorna, de propósito e só com a variável, a fixture `llm_desligada` da base (por `monkeypatch`, sem alterar o `conftest.py`) |
+| D28 | 21/11/2026 | Rodar a suíte no **PostgreSQL** → revisto: **fica para a integração do Membro 4** | É o banco de produção, mas o Docker não está instalado na máquina; instalar o Docker Desktop (WSL2, administrador) só para isso não compensa, já que o Membro 4 roda a suíte no Postgres na integração |
+| D29 | 21/11/2026 | **E2E no navegador** (`tests/writing/test_e2e_writing.py`, só com `E2E=1`): autosave + recarregar, resultado com destaques, Rewrite | Única validação automática da tela; no padrão do E2E da base |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -274,8 +288,8 @@ W1 Modelos + migração 0301 (esquema)
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | ✅ concluído (inclui teste real com o Gemini) |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | ✅ concluído |
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | ✅ concluído |
-| W9 | Tela do Rewrite | Interface do Rewrite Challenge | ✅ concluído (falta o teste manual) |
-| W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | pendente |
+| W9 | Tela do Rewrite | Interface do Rewrite Challenge | ✅ concluído |
+| W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | ✅ concluído (Postgres fica para a integração do Membro 4) |
 
 ### Cronograma (2 dias)
 
@@ -610,19 +624,69 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   botão, em vermelho, com "As suas reescritas continuam aqui: tente enviar de novo"), e não mais no modal da base.
   O modal continua para os casos sem texto a perder (abrir o Rewrite, rodada já gravada). A mensagem some ao editar
   um campo ou reenviar. Base não alterada.
-- **Próxima ação:** refazer a etapa 8 do teste manual; depois, Etapa A do W10 (integração e entrega).
+- **Etapa 8 refeita (usuário):** o erro aparece na própria tela, os textos ficam nos campos e a rodada não é gasta. ✅
+- **Próxima ação:** Etapa A do W10 (integração e entrega).
+
+#### W10 — Integração e entrega ao Membro 4
+- **Status:** concluído (21/11/2026): SQLite, E2E e `LLM_REAL` aprovados. **Postgres não executado** (Docker não
+  instalado; por decisão do usuário, fica para a integração do Membro 4).
+- **Tarefas atendidas:** testes unitários do sistema de avaliação (fechamento, guiado pela cobertura); testes de
+  integração da sequência completa de Writing.
+- **Arquivos:** `tests/writing/test_fluxo_completo.py`, `tests/writing/test_e2e_writing.py` e
+  `tests/writing/test_llm_real.py` (novos); `tests/writing/test_rewrite.py` (casos de frase sem pontuação e a premissa
+  da comparação), `tests/writing/test_temas.py` (APIs descontinuadas trocadas), `app/services/writing_rewrite.py`
+  (código morto removido); `README_MEMBRO3.md` (arquitetura final e "Para o Membro 4").
+- **Decisões do usuário:** D27 (medição com a LLM real como teste opcional `LLM_REAL=1`), D28 (rodar no Postgres),
+  D29 (E2E no navegador).
+- **Fluxo completo (`test_fluxo_completo.py`, 2 testes):** criar (cota −1) → autosave → recarregar → enviar →
+  correção → Rewrite rodada 1 → rodada 2 → concluído, conferindo no banco o texto original intacto, 1 feedback e 5
+  reescritas (nada sobrescrito), modelo e versões; e o cenário falha da correção → avaliar de novo → Rewrite.
+- **Cobertura dos arquivos do Writing:** **100%** em todos (`api/writing.py`, `models_writing.py`,
+  `schemas_writing.py` e os 6 `services/writing_*.py`). As 2 linhas que faltavam no `writing_rewrite.py`: uma era
+  alcançável e ganhou teste (frase sem pontuação, com espaços antes da quebra); a outra era **código morto** (juntar
+  dois pedaços seguidos do mesmo tipo na comparação, o que o `difflib` nunca produz) e foi removida, com um teste que
+  garante a premissa. Cobertura não prova qualidade: as mutações continuam sendo a prova.
+- **Mutações do fluxo completo (5, todas detectadas):** rewrite gravando sempre na rodada 1; envio sem congelar o
+  texto; criar sem gastar cota; correção sem gravar o modelo; avaliar de novo sem mudar para `avaliada`.
+- **`LLM_REAL` (D27):** sem a variável, pulado (conferido). Com `LLM_REAL=1`, no terminal do assistente a chamada ao
+  Google falhou na verificação do certificado SSL (`CERTIFICATE_VERIFY_FAILED`), o mesmo problema de rede do
+  `git fetch` do início da sessão. A verificação SSL não foi desligada (seria inseguro). **No terminal do usuário:
+  3 passed** (`gemini-3.1-flash-lite`): correção curta (57 palavras) **3,1 s**, nota 2,8, 5 trechos, 0 descartados;
+  correção média (157 palavras) **3,7 s**, nota 4,6, 6 trechos, 0 descartados; Rewrite (2 frases) **1,1 s**, com
+  o veredito esperado (`[True, False]`).
+- **E2E (D29):** Chromium do Playwright instalado. Sem `E2E=1`, pulado (conferido). Com `E2E=1`, no terminal do
+  assistente a página não terminava de carregar: requisições ao **servidor local** ficavam pendentes de forma não
+  determinística (numa rodada os estáticos, na outra a do HTMX), enquanto os CDNs respondiam. O código do Writing
+  não está envolvido (os mesmos arquivos e rotas passam no `TestClient`); a hipótese era a restrição de rede do
+  terminal do assistente. **No terminal do usuário: 3 passed em ~20 s** (hipótese confirmada). Avisos de
+  descontinuação vindos de bibliotecas da base (`starlette`, `websockets`, `uvicorn`), sem relação com o Writing.
+- **Postgres (D28):** o Docker não está instalado nesta máquina (o comando `docker` não existe), então não foi possível
+  subir o `shadowing_teste`. **Não executado; decisão do usuário: fica para a integração do Membro 4** (que tem o
+  Docker), em vez de instalar o Docker Desktop agora. O teste da base que sobe e desce todas as migrações (agora com a
+  `0301` e a `0302`) roda lá. Ver "Para o Membro 4".
+- **Suíte inteira (SQLite):** **454 coletados, 450 aprovados, 4 pulados** (E2E e Postgres da base; E2E e `LLM_REAL`
+  do Writing, todos opcionais), **0 falhas**; `ruff` limpo; `test_base_protegida` verde.
 
 ## Testes
 
 ```powershell
 .\venv\Scripts\Activate.ps1
-python -m pytest              # suíte inteira (SQLite temporário)
-python -m pytest tests/writing   # só os testes do Writing
+python -m pytest                    # suíte inteira (SQLite temporário)
+python -m pytest tests/writing      # só os testes do Writing
 python -m ruff check .
+
+# Opcionais (desligados por padrão):
+$env:E2E="1"; python -m pytest tests/writing/test_e2e_writing.py --no-cov       # navegador (Chromium + internet)
+$env:LLM_REAL="1"; python -m pytest tests/writing/test_llm_real.py -s --no-cov  # Gemini de verdade (LLM_CHAVE)
 ```
+
+Cobertura dos arquivos do Writing: **100%** (W10).
 
 | Arquivo | O que cobre |
 |---|---|
+| `tests/writing/test_fluxo_completo.py` | Integração: a sequência inteira (criar → autosave → enviar → correção → Rewrite → histórico) e o caminho com falha da correção, conferindo no banco que nada foi sobrescrito |
+| `tests/writing/test_e2e_writing.py` | **Opcional (`E2E=1`)**: no Chromium, autosave + recarregar; envio → resultado com os destaques e o detalhe; Rewrite com comparação e veredito, rodada 2 e F5 |
+| `tests/writing/test_llm_real.py` | **Opcional (`LLM_REAL=1`)**: 2 correções e 1 avaliação de Rewrite com a LLM de verdade, com os tempos impressos |
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
 | `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`), paridade da contagem de palavras JS × Python e os destaques do resultado (`partesDoTexto` executada no Node.js; os testes com Node são pulados se ele não estiver instalado) |
 | `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
@@ -740,14 +804,31 @@ Nenhuma. (Esta seção é para mudanças **fora** dos pontos de encaixe, que exi
 
 ## Para o Membro 4
 
-_(preenchido ao longo dos blocos; checklist da seção 10 do `CLAUDE.md`)_
+Checklist da seção 10 do `CLAUDE.md`:
 
-- Dependências novas: nenhuma prevista (`difflib` é da biblioteca padrão).
-- Variáveis de ambiente novas: nenhuma (usa as da LLM que já existem).
+| Item | Situação |
+|---|---|
+| **Dependências novas** (Python e de sistema) | **Nenhuma.** O `difflib` é da biblioteca padrão. Nada baixa modelos. O **Node.js** é opcional e só para desenvolvimento: 3 testes de JS o usam e são pulados sem ele. O **Chromium do Playwright** (já previsto no `requirements-dev.txt` da base) só para o E2E opcional |
+| **Variáveis de ambiente novas** | **Nenhuma.** Usa as da LLM que já existem (`LLM_CHAVE`, `LLM_MODELO`...). Sem `LLM_CHAVE`, o app sobe e o Writing funciona até o envio; a correção responde 503 `llm_nao_configurada`, com a redação salva |
+| **URLs externas** | Só o provedor da LLM (Gemini: `https://generativelanguage.googleapis.com/v1beta/openai/`, o padrão da base) |
+| **Migrações** | `0301` (esquema: 4 tabelas novas, nenhuma tabela da base alterada) e `0302` (**dados**: 24 temas). A `0301` tem `down_revision = "0006"`. Na integração, juntar as cabeças das três faixas com `alembic merge` **antes** de `python -m app.migrar` (com várias cabeças, `migrar.revisao_mais_recente()`, que usa `get_current_head()`, falha) |
+| **Alterações na base** | **Nenhuma.** Só os 4 encaixes (5 linhas), listados com antes e depois em "Encaixes na base" |
+| **CPU, memória e tempos** | Leve no servidor (sem processamento pesado). Tempo dominado pela LLM: ver abaixo |
+| **Suíte final** | SQLite: **454 coletados, 450 aprovados, 4 pulados (opcionais), 0 falhas**; `ruff` limpo; cobertura do Writing 100%. **E2E (`E2E=1`): 3 passed.** **`LLM_REAL=1`: 3 passed** (correção 3,1 a 3,7 s; Rewrite 1,1 s). **Postgres: não executado** (Docker ausente na máquina do Membro 3; **rodar na integração**) |
+
+Detalhes:
+
+- **Postgres:** rode a suíte com `TEST_DATABASE_URL` no `shadowing_teste` (README da base). Inclui o teste que sobe e
+  desce todas as migrações, agora com a `0301` (FKs e UNIQUEs nomeados) e a `0302` (o downgrade apaga só os 24 temas
+  e recusa se houver redação usando algum). Os tipos usados são os mesmos da base (JSON, DateTime, AutoString), e o
+  sorteio usa `func.random()`, que existe nos dois bancos.
 - **Tempo de uma correção real (para os timeouts do servidor e do proxy):** com `gemini-3.1-flash-lite`, **3 a 4 s**
   numa chamada "aquecida" e **~24 s** na primeira (ver W6). Com modelos sobrecarregados, a chamada chega ao limite de
   `LLM_TIMEOUT_SEGUNDOS` (60 s). O envio espera a correção (D7), então o proxy de produção precisa aceitar pelo menos
-  **~65 s** em `POST /api/writing/attempts/{id}/submissao` e `.../avaliacao`.
+  **~65 s** em `POST /api/writing/attempts/{id}/submissao`, `.../avaliacao` e `.../rewrite`. Para medir no servidor
+  de produção: `LLM_REAL=1 python -m pytest tests/writing/test_llm_real.py -s --no-cov`.
+- **Custo da LLM por redação:** 1 chamada na correção (até 3 com "avaliar de novo", D4) + até 2 no Rewrite (uma por
+  rodada, D22). A cota diária (10 por feature) só conta a criação do desafio.
 - **Modelo do Gemini em produção (decisão do Membro 4):** o padrão da base (`gemini-flash-latest`) estava
   sobrecarregado no teste (503), o `gemini-2.5-flash` não está mais disponível para contas novas (404) e o
   `gemini-3.8-flash` deu timeouts; o **`gemini-3.1-flash-lite` funcionou bem**. Prefira um modelo com versão no nome
@@ -766,6 +847,6 @@ _(preenchido ao longo dos blocos; checklist da seção 10 do `CLAUDE.md`)_
   alterar qualquer JS/CSS existente (inclusive no merge das três branches) e com os usuários depois de cada deploy.
   Possíveis soluções (alteração na base, fora do escopo do Membro 3): versão na URL dos arquivos
   (`main.js?v=<commit>`) ou `Cache-Control: no-cache` no `/static` (revalida com o ETag que já é enviado).
-- Migrações: `0301` (esquema) e `0302` (dados: temas iniciais). Na integração, juntar as cabeças das três faixas com
-  `alembic merge` **antes** de rodar `python -m app.migrar` (com várias cabeças, `migrar.revisao_mais_recente()`,
-  que usa `get_current_head()`, falha).
+- **Merge sem conflito esperado:** os arquivos do Writing são todos novos (`*writing*`, `tests/writing/`), e os
+  encaixes estão só nos blocos `Membro 3 (Writing)`. Conferir com
+  `git --no-pager diff Membro4 --stat` (só arquivos novos + 4 arquivos de encaixe + `README_MEMBRO3.md`).
