@@ -82,6 +82,19 @@ texto, palavras, iniciada_em, prazo, segundos_restantes, salva_em, enviada_em, u
 avaliacoes_restantes, feedback` (`feedback`: `null` até ser avaliada; senão `notas, nota_geral, resumo, trechos,
 modelo, versao_prompt, criado_em`). Na lista, cada item tem também `nota_geral` (`null` se não avaliada).
 
+**Rewrite Challenge (W8):**
+
+| Rota | Entrada | Saída | Erros próprios |
+|---|---|---|---|
+| `GET /api/writing/attempts/{id}/rewrite` | — | desafio | 404 · 409 `redacao_nao_avaliada` · 409 `sem_problemas` |
+| `POST /api/writing/attempts/{id}/rewrite` | `{reescritas: [{indice, texto (1–1.000)}]}` (uma por problema da rodada) | desafio atualizado | 404 · 409 `redacao_nao_avaliada` · 409 `sem_problemas` · 409 `rewrite_concluido` · 409 `rodada_ja_enviada` · 422 `reescritas_invalidas` · 422 · 502/503/504 `llm_*` (nada gravado) |
+
+**Desafio (resposta):** `concluido, rodada_atual (null se concluído), rodadas_restantes, problemas[]` (`indice,
+categoria, gravidade, citacao, frase, explicacao, instrucao`) e `historico[]` (`rodada, indice, categoria,
+frase_original, instrucao, reescrita, avaliacao {melhorou, nota, comentario}, comparacao [{tipo: igual | removido |
+adicionado, texto}], criado_em`). Lógica em `app/services/writing_rewrite.py`; o prompt da avaliação em
+`writing_llm.py` (`VERSAO_PROMPT_REWRITE = 1`). Não gasta a cota diária.
+
 **Envio e correção (W6):** o envio grava o texto (commit) e **só então** chama a LLM. Sucesso → `WritingFeedback` e
 estado `avaliada`. Falha da LLM → estado `erro_avaliacao` e a resposta é o erro da LLM (D17), com a mensagem "A sua
 redação foi salva; tente avaliar de novo." O "avaliar de novo" aceita `enviada` ou `erro_avaliacao`, até 3 chamadas à
@@ -108,6 +121,11 @@ Criados com `ErroDaApi(..., codigo=...)`, sem alterar `app/erros.py`. Testados e
 | 409 | `redacao_ja_avaliada` | "Avaliar de novo" numa redação já avaliada (inclusive o duplo clique, pelo `UNIQUE` do feedback) | — |
 | 409 | `redacao_nao_enviada` | "Avaliar de novo" num rascunho | — |
 | 409 | `limite_de_avaliacoes` | A redação já usou as 3 chamadas à LLM (D4) | — |
+| 409 | `redacao_nao_avaliada` | Rewrite antes da correção | — |
+| 409 | `sem_problemas` | Rewrite numa redação cuja correção não apontou trechos | — |
+| 409 | `rewrite_concluido` | Rewrite depois da 2ª rodada, ou com tudo já melhorado | — |
+| 409 | `rodada_ja_enviada` | A mesma rodada enviada duas vezes (corrida; `UNIQUE` da tabela) | — |
+| 422 | `reescritas_invalidas` | A rodada não traz exatamente uma reescrita para cada problema dela | — |
 
 Os demais (`nao_encontrado`, `dados_invalidos`, `nao_autenticado`, `limite_de_desafios`) são os da base.
 
@@ -208,6 +226,11 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D18 | 21/11/2026 | Na tela de resultado, a **sugestão** (versão corrigida) fica escondida atrás de **"Ver sugestão"**; primeiro a explicação e a instrução | Não entregar a resposta de cara; o Rewrite Challenge (W8/W9) pede para reescrever justamente esses trechos |
 | D19 | 21/11/2026 | Layout do resultado: **redação à esquerda, notas à direita** no computador; no celular, empilhado (notas primeiro) | A redação destacada é o centro da tela; menos rolagem |
 
+| D20 | 21/11/2026 | No Rewrite, a pessoa reescreve a **frase inteira** que contém o trecho apontado | Atende "selecionar frases problemáticas"; reescrever só o trecho seria trivial |
+| D21 | 21/11/2026 | A **rodada 2** traz só os problemas que **não melhoraram** na rodada 1; tudo melhorado = fim | Treina o que ainda falta, sem repetir o que já foi resolvido |
+| D22 | 21/11/2026 | A rodada é enviada **inteira** (uma reescrita por problema), avaliada numa **chamada só** à LLM | Controle de custo (D4) |
+| D23 | 21/11/2026 | Falha da LLM no Rewrite: **nada é gravado e a rodada não é gasta**; a tela mantém os textos para reenviar | Gravar "pendente" exigiria uma migração nova (a avaliação é obrigatória na tabela) para um caso raro |
+
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
 que cria o desafio.
@@ -241,7 +264,7 @@ W1 Modelos + migração 0301 (esquema)
 | W5 | Serviço de avaliação | Contrato JSON; prompt das 5 categorias; serviço de avaliação; validação Pydantic; score por categoria | ✅ concluído |
 | W6 | Avaliação na API | Persistência do feedback e da versão original; timeout e resposta inválida; testes de tamanhos e tipos | ✅ concluído (inclui teste real com o Gemini) |
 | W7 | Tela de resultado | Interface de resultado; destaque dos trechos problemáticos | ✅ concluído |
-| W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | pendente |
+| W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | ✅ concluído |
 | W9 | Tela do Rewrite | Interface do Rewrite Challenge | pendente |
 | W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | pendente |
 
@@ -514,6 +537,38 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
   (`VERSAO_PROMPT = 2`), não proposto agora.
 - **Próxima ação:** Etapa A do W8 (Rewrite no backend).
 
+#### W8 — Rewrite Challenge no backend
+- **Status:** concluído (21/11/2026) nos testes automáticos (a tela e o teste com o Gemini real vêm no W9).
+- **Tarefas atendidas:** algoritmo para selecionar frases problemáticas da redação; geração do comando de
+  reescrita específico para cada problema (a `instrucao_reescrita` de cada trecho, gerada na correção do W5, exposta
+  por problema); endpoint para submissão da versão reescrita; comparação entre frase original e reescrita;
+  avaliação automática da segunda versão; persistência do histórico original → feedback → rewrite.
+- **Arquivos:** `app/services/writing_rewrite.py` e `tests/writing/test_rewrite.py` (novos);
+  `app/services/writing_llm.py` (prompt e `avaliar_reescritas`), `app/schemas_writing.py` (contrato
+  `AvaliacaoReescritasLLM` e formatos da API), `app/api/writing.py` (`GET` e `POST .../rewrite`). Nenhum arquivo da
+  base; nenhum encaixe; **nenhuma migração** (a tabela `writingrewrite` do W1 já tinha todas as colunas).
+- **Decisões do usuário:** D20 (frase inteira), D21 (rodada 2 só com os não melhorados), D22 (rodada inteira numa
+  chamada) e D23 (falha não grava nem gasta a rodada).
+- **Decisões técnicas:** seleção pura e determinística (não precisa ser gravada; a linha guarda o índice e a cópia
+  da frase); extração da frase por `. ! ?` seguidos de espaço ou quebra de linha (o "3.5" não corta; abreviações como
+  "e.g." cortam: limitação documentada); comparação por `difflib` em pedaços (palavras, espaços e pontuação), com
+  as garantias de reconstrução, calculada ao ler; índices devolvidos pela LLM conferidos (diferente →
+  `llm_resposta_invalida`); delimitadores digitados nas frases neutralizados; `IntegrityError` do `UNIQUE` → 409.
+- **Testes:** `test_rewrite.py`, 36 testes: frase (7 casos), seleção (prioridade + variedade + frase única;
+  variedade trocando um erro grave repetido; determinismo; menos trechos), comparação (reconstrução em 5 casos; o que
+  mudou), mensagem (prompt injection), API (desafio inicial; rodada 1 com uma linha por problema e a original
+  intacta; rodada 2 e fim; tudo melhorado; problemas faltando, a mais, fora da rodada, repetidos; texto vazio e
+  longo; antes da correção; sem trechos; índices errados da LLM; timeout sem gravar nem gastar a rodada; envio duplo;
+  outra conta → 404; não gasta cota). O `test_protecao_api` cobre as 2 rotas novas. Suíte inteira: **446
+  coletados, 444 aprovados, 2 pulados, 0 falhas**; `ruff` limpo.
+- **Mutações (9, todas detectadas):** (1) seleção sem variar categorias; (2) repetir a frase; (3) comparação sem o
+  texto removido; (4) rodada 2 com todos; (5) aceitar índices errados da LLM; (6) aceitar rodada incompleta; (7) sem
+  limite de rodadas; (8) frase cortada no "3.5"; (9) sem neutralizar delimitadores.
+- **Problemas encontrados:** a mutação 1 passou na primeira rodada: os dados do teste davam a mesma seleção com e sem
+  a regra de variar as categorias (coincidência). Acrescentado um teste em que a regra muda o resultado. Também
+  troquei, no teste do envio duplo, uma substituição manual de função por `monkeypatch` (padrão do projeto).
+- **Próxima ação:** Etapa A do W9 (tela do Rewrite).
+
 ## Testes
 
 ```powershell
@@ -529,6 +584,7 @@ python -m ruff check .
 | `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`), paridade da contagem de palavras JS × Python e os destaques do resultado (`partesDoTexto` executada no Node.js; os testes com Node são pulados se ele não estiver instalado) |
 | `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
 | `tests/writing/test_api_avaliacao.py` | Envio que corrige, falhas da LLM (redação nunca se perde), "avaliar de novo" e seus limites, duplo clique, isolamento e tamanhos/tipos de redação no fluxo completo |
+| `tests/writing/test_rewrite.py` | Rewrite: extração da frase, seleção dos problemas, comparação, mensagem para a LLM, rodadas, validações, falhas da LLM, envio duplo e isolamento |
 | `tests/writing/test_api_desafio.py` | API do desafio: criar (cota, sorteio, prazo), ler, listar, autosave, envio, regras de tempo (D2, D10), limites e isolamento entre contas |
 | `tests/writing/test_modelos.py` | Modelos (padrões, JSON, UNIQUEs) e a migração 0301 (sobe/desce, FKs nomeadas) |
 | `tests/writing/test_temas.py` | Categorias, sorteio do tema e a migração de dados 0302 (conteúdo, downgrade e trava) |

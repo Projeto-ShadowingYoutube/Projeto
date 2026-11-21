@@ -151,3 +151,85 @@ class FeedbackWriting(BaseModel):
 
 
 TentativaWriting.model_rebuild()  # resolve a referência a FeedbackWriting, definido depois
+
+
+# --- Rewrite Challenge (W8) ---
+
+MAX_CARACTERES_REESCRITA = 1000  # uma frase reescrita (protege o banco e o custo da LLM)
+
+
+class AvaliacaoReescrita(BaseModel):
+    """Contrato: o julgamento da LLM sobre UMA frase reescrita."""
+    indice: int = Field(ge=0, description="O número do problema, exatamente como recebido.")
+    melhorou: bool = Field(
+        description="true se o problema apontado foi resolvido sem criar erros novos e sem mudar o sentido da frase.",
+    )
+    nota: int = Field(ge=0, le=10, description="Qualidade da frase reescrita, de 0 a 10.")
+    comentario: str = Field(min_length=1, max_length=400, description="Comentário em português do Brasil.")
+
+
+class AvaliacaoReescritasLLM(BaseModel):
+    """Contrato: uma avaliação por problema enviado (até 3), numa chamada só."""
+    avaliacoes: list[AvaliacaoReescrita] = Field(min_length=1, max_length=3)
+
+
+class ReescritaEnviada(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    indice: int = Field(ge=0)
+    texto: str = Field(min_length=1, max_length=MAX_CARACTERES_REESCRITA)
+
+    @field_validator("texto")
+    @classmethod
+    def nao_vazio(cls, valor):
+        if not valor.strip():
+            raise ValueError("a reescrita não pode ficar em branco")
+        return valor
+
+
+class NovasReescritas(BaseModel):
+    """Uma rodada inteira: uma reescrita para cada problema dela (D22)."""
+    model_config = ConfigDict(extra="forbid")
+
+    reescritas: list[ReescritaEnviada] = Field(min_length=1, max_length=3)
+
+
+class ProblemaRewrite(BaseModel):
+    indice: int  # posição do trecho em feedback.trechos
+    categoria: str
+    gravidade: int
+    citacao: str  # o trecho apontado na correção (fica dentro da frase)
+    frase: str  # a frase inteira que a pessoa vai reescrever (D20)
+    explicacao: str
+    instrucao: str
+
+
+class PedacoComparado(BaseModel):
+    tipo: Literal["igual", "removido", "adicionado"]
+    texto: str
+
+
+class AvaliacaoDaReescrita(BaseModel):
+    melhorou: bool
+    nota: int
+    comentario: str
+
+
+class ReescritaFeita(BaseModel):
+    rodada: int
+    indice: int
+    categoria: str
+    frase_original: str
+    instrucao: str
+    reescrita: str
+    avaliacao: AvaliacaoDaReescrita
+    comparacao: list[PedacoComparado]  # calculada ao ler (difflib), não gravada
+    criado_em: datetime
+
+
+class DesafioRewrite(BaseModel):
+    concluido: bool
+    rodada_atual: int | None  # null quando concluído
+    rodadas_restantes: int
+    problemas: list[ProblemaRewrite]  # os desta rodada (vazio quando concluído)
+    historico: list[ReescritaFeita]  # todas as reescritas já feitas, por rodada

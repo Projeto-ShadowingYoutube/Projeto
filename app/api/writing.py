@@ -18,12 +18,14 @@ from app.models_writing import WritingAttempt, WritingPrompt
 from app.schemas_writing import (
     AutosaveSalvo,
     CategoriaWriting,
+    DesafioRewrite,
+    NovasReescritas,
     NovoDesafio,
     ResumoTentativa,
     TentativaWriting,
     TextoRedacao,
 )
-from app.services import writing_avaliacao, writing_desafios
+from app.services import writing_avaliacao, writing_desafios, writing_rewrite
 from app.services.writing_avaliacao import LimiteDeAvaliacoes, RedacaoJaAvaliada, RedacaoNaoEnviada
 from app.services.writing_desafios import (
     MIN_PALAVRAS_ENVIO,
@@ -32,6 +34,13 @@ from app.services.writing_desafios import (
     RedacaoCurta,
     RedacaoJaEnviada,
     SemTemas,
+)
+from app.services.writing_rewrite import (
+    RedacaoNaoAvaliada,
+    ReescritasInvalidas,
+    RewriteConcluido,
+    RodadaJaEnviada,
+    SemProblemas,
 )
 from app.services.writing_temas import CATEGORIAS
 
@@ -54,6 +63,11 @@ _ERROS = {
     RedacaoJaAvaliada: (status.HTTP_409_CONFLICT, "redacao_ja_avaliada"),
     RedacaoNaoEnviada: (status.HTTP_409_CONFLICT, "redacao_nao_enviada"),
     LimiteDeAvaliacoes: (status.HTTP_409_CONFLICT, "limite_de_avaliacoes"),
+    RedacaoNaoAvaliada: (status.HTTP_409_CONFLICT, "redacao_nao_avaliada"),
+    SemProblemas: (status.HTTP_409_CONFLICT, "sem_problemas"),
+    RewriteConcluido: (status.HTTP_409_CONFLICT, "rewrite_concluido"),
+    RodadaJaEnviada: (status.HTTP_409_CONFLICT, "rodada_ja_enviada"),
+    ReescritasInvalidas: (422, "reescritas_invalidas"),
 }
 
 
@@ -176,3 +190,26 @@ def avaliar_de_novo(tentativa: WritingAttempt = Depends(_tentativa), session: Se
     except ErroDesafio as erro:
         raise _erro_da_api(erro) from erro
     return _resposta(session, tentativa)
+
+
+# --- Rewrite Challenge (W8) ---
+
+@router.get("/attempts/{attempt_id}/rewrite", response_model=DesafioRewrite)
+def obter_rewrite(tentativa: WritingAttempt = Depends(_tentativa), session: Session = Depends(get_session)):
+    try:
+        return writing_rewrite.desafio(session, tentativa)
+    except ErroDesafio as erro:
+        raise _erro_da_api(erro) from erro
+
+
+@router.post("/attempts/{attempt_id}/rewrite", response_model=DesafioRewrite)
+def enviar_rewrite(
+    corpo: NovasReescritas, tentativa: WritingAttempt = Depends(_tentativa), session: Session = Depends(get_session),
+):
+    """Uma rodada inteira (uma reescrita por problema), avaliada numa chamada à LLM. Falha da LLM: nada é gravado e a
+    rodada não é gasta (D23); a resposta é o erro da LLM. Não gasta a cota diária."""
+    try:
+        writing_rewrite.enviar(session, tentativa, [(r.indice, r.texto) for r in corpo.reescritas])
+        return writing_rewrite.desafio(session, tentativa)
+    except ErroDesafio as erro:
+        raise _erro_da_api(erro) from erro
