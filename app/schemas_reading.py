@@ -1,6 +1,6 @@
 """Reading Challenge (Membro 1): schemas Pydantic da feature.
 
-Bloco R5: entrada e saída da API (fim do arquivo).
+Blocos R5 e R6: entrada e saída da API (fim do arquivo).
 
 Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 - vai para a LLM como JSON Schema (o llm.gerar_json o anexa às instruções) e valida a resposta dela;
@@ -127,8 +127,31 @@ class ResumoDesafio(BaseModel):
     iniciado_em: datetime
     leitura_encerrada_em: datetime | None
     usou_reserva: bool
+    segundos_restantes: int  # calculado no servidor (R6): o timer da tela não depende do relógio do navegador
 
 
 class DesafioCriado(ResumoDesafio):
     """Resposta da criação: o texto para ler. As perguntas ficam no servidor até a leitura terminar (R6)."""
     texto: TextoDoDesafio
+
+
+# --- Bloco R6: leitura com o tempo validado no servidor ---
+
+class TextoParaLer(TextoDoDesafio):
+    """GET /api/reading/challenges/{id}/texto: o texto de novo (ex.: F5), só dentro do prazo."""
+    segundos_restantes: int
+
+
+class PerguntaParaResponder(BaseModel):
+    """A pergunta como a pessoa a vê: sem a resposta correta e sem a justificativa (só no resultado, R7)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    ordem: int
+    tipo: str
+    enunciado: str
+    alternativas: list[str]
+
+
+class LeituraEncerrada(ResumoDesafio):
+    """POST /api/reading/challenges/{id}/encerrar-leitura."""
+    perguntas: list[PerguntaParaResponder]

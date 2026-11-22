@@ -28,9 +28,17 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 | Rota | Entrada | Saída | Erros |
 |---|---|---|---|
 | `POST /api/reading/challenges` (gasta 1 da cota) | `{"modalidade": "multipla_escolha" \| "aberta", "fonte"?: "wikipedia" \| "gutenberg", "ppm"?: 150 \| 200 \| 250}` (padrões `wikipedia` e 200; campo extra → 422) | 201: `id, estado, modalidade, ppm, limite_segundos, iniciado_em, leitura_encerrada_em, usou_reserva, texto{titulo, conteudo, palavras, fonte, url, credito}`. **Sem as perguntas** | 422 `dados_invalidos`; 429 `limite_de_desafios`; 502 `texto_indisponivel`; 502/503/504 `llm_*` (LLM falhou e não há reserva) |
-| `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas) | 404 `nao_encontrado` (inexistente ou de outra conta) |
+| `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas), com `segundos_restantes` | 404 `nao_encontrado` (inexistente ou de outra conta) |
+| `GET /api/reading/challenges/{id}/texto` | — | 200: `titulo, conteudo, palavras, fonte, url, credito, segundos_restantes`; só em `lendo` e até o prazo + 5 s | 409 `leitura_encerrada`; 404 |
+| `POST /api/reading/challenges/{id}/encerrar-leitura` (idempotente) | — | 200: o resumo (`estado: "respondendo"`) + `perguntas[{ordem, tipo, enunciado, alternativas}]`, **sem** resposta correta e sem justificativa | 404 |
 
-**Códigos próprios:** `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco.
+Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servidor (0 fora da leitura).
+
+**Códigos próprios:**
+- `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco.
+- `leitura_encerrada` (409): o texto foi pedido depois do prazo de leitura (+ tolerância) ou depois de encerrar.
+
+**Estados do desafio:** `lendo` → `respondendo` (R6) → próximos estados no R7/R8.
 
 ## Banco de dados
 
@@ -64,6 +72,9 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 | DR19 | 21/11/2026 | Desafios simultâneos são permitidos: um desafio novo não cancela o anterior, que expira pelo tempo (R6) | Bloquear exigiria a regra e a tela de "abandonar desafio" |
 | DR20 | 21/11/2026 | `fonte` opcional no corpo (padrão `wikipedia`); a tela do R9 mostra o seletor | Simples para o cliente; a Wikipedia é a fonte padrão (DR1) |
 | DR21 | 21/11/2026 | `GET /challenges/{id}` já no R5, só com o resumo (sem texto e sem perguntas); o texto durante a leitura fica para o R6 | Testa o isolamento desde já; as regras de tempo são do R6 |
+| DR22 | 22/11/2026 | Tolerância de 5 s depois do prazo para entregar o texto | Cobre a latência entre o timer zerar na tela e a requisição chegar |
+| DR23 | 22/11/2026 | Encerrar a leitura antes do tempo é permitido (botão "Terminei de ler"); o tempo real fica gravado | Tempo de leitura real entra no resultado (R7) |
+| DR24 | 22/11/2026 | Prazo vencido sem encerrar (aba fechada): as perguntas continuam disponíveis e a leitura conta como o limite | Coerente com a DR6 (sem limite para responder) |
 
 ## Plano e progresso
 
@@ -81,8 +92,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11) |
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
-| R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11), aguardando commit |
-| R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | Planejado |
+| R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11) |
+| R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11), aguardando commit |
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | Planejado |
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | Planejado |
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | Planejado |
@@ -244,6 +255,34 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 - **Próxima ação:** R6 (leitura com o tempo validado no servidor: texto só enquanto o tempo não acaba, encerrar a
   leitura e liberar as perguntas sem as respostas).
 
+### R6 — Leitura com o tempo validado no servidor (✅ 22/11/2026)
+
+- **Arquivos:** `app/services/reading_desafios.py` (funções de tempo, `encerrar_leitura`, `perguntas_do_desafio`),
+  `app/api/reading.py` (rotas `/texto` e `/encerrar-leitura`; resumo com `segundos_restantes`), `app/schemas_reading.py`
+  (`TextoParaLer`, `PerguntaParaResponder`, `LeituraEncerrada`; `segundos_restantes` no `ResumoDesafio`),
+  `tests/reading/test_reading_leitura.py` (novo). Nenhum arquivo da base, nenhuma migração (os campos existem desde o R1).
+- **Como funciona:** prazo = `iniciado_em + limite_segundos`. O bloqueio é calculado a cada requisição (sem tarefa
+  agendada): `leitura_disponivel` = estado `lendo` e agora ≤ prazo + 5 s. `encerrar_leitura` faz um **UPDATE
+  condicional** (`WHERE estado = 'lendo'`) que grava `estado="respondendo"` e `leitura_encerrada_em = min(agora,
+  prazo)`: com duas requisições ao mesmo tempo, só a primeira grava; chamar de novo não muda nada (idempotente).
+  As perguntas saem na ordem 1–5, só com `ordem, tipo, enunciado, alternativas`. `segundos_restantes` arredonda para
+  cima e é 0 fora da leitura; o timer da tela (R9) usa esse número, e não o relógio do navegador.
+- **Testes:** 25 novos, com relógio falso (`rd.agora`), sem `sleep`: texto dentro do prazo; limite exato, limite + 5 s,
+  + 6 s e 1 h; texto depois de encerrar; encerrar antes (horário real) e depois do prazo (fim do prazo); perguntas sem
+  resposta e sem justificativa (MC e aberta); idempotência; duas sessões simultâneas; resumo; isolamento nas duas rotas
+  (e o desafio da Ana continua em `lendo`); funções puras (arredondamento, estado); ordem com perguntas gravadas fora de
+  ordem. O `test_protecao_api` cobre as 2 rotas novas. Suíte: **436 aprovados, 2 pulados, 0 falhas** (SQLite); `ruff`
+  limpo. Postgres e E2E não executados.
+- **Mutações (15; 14 detectadas e 1 equivalente; arquivos restaurados e conferidos com `cmp`):** sem tolerância;
+  tolerância infinita; texto depois de encerrar; sem o `min`; encerrar sobrescrevendo o horário; perguntas sem ordenar;
+  restantes sem arredondar para cima; restantes ignorando o estado; perguntas com `resposta_correta`; com justificativa;
+  texto sem checar o prazo; `/texto` e `/encerrar-leitura` sem checar o dono; resumo com o limite no lugar do restante.
+  **Equivalente:** tirar o `session.refresh` do `encerrar_leitura` não muda nada, porque o `commit()` já expira os
+  objetos da sessão (`expire_on_commit`, padrão do `get_session`); o `refresh` ficou para deixar a releitura explícita.
+- **Problemas encontrados:** a mutação "sem tolerância" passou na 1ª versão: o teste lia `rd.TOLERANCIA_SEGUNDOS` e se
+  ajustava à constante mutada. Agora usa os valores fixos da decisão DR22 (140 s e 141 s).
+- **Próxima ação:** R7 (submissão e correção da múltipla escolha: pontuação, tempos, acertos, modalidade, persistência).
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -255,6 +294,7 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_fontes.py` | R3: fontes com HTTP falso, artigos salvos, reserva, crédito, migração 0102 |
 | `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
 | `test_reading_api.py` | R5: criação do desafio pela API (cota, validação, erros, reserva, transação, relógio), resumo e isolamento |
+| `test_reading_leitura.py` | R6: texto só dentro do prazo, encerrar a leitura (idempotente, concorrente), perguntas sem resposta, isolamento |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o

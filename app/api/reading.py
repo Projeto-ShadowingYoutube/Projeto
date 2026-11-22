@@ -5,6 +5,9 @@ conta responde 404, igual a um inexistente (padrão _deck de app/api/decks.py).
 
 A rota que cria o desafio gasta 1 da cota diária (exigir_cota("reading")) e é "def": a busca do texto e a LLM
 bloqueiam, e o FastAPI a roda numa thread à parte.
+
+Leitura (R6): o texto só sai dentro do prazo (senão 409 "leitura_encerrada"); encerrar a leitura libera as perguntas
+sem as respostas. As regras de tempo ficam em app/services/reading_desafios.py.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -15,7 +18,14 @@ from app.db import get_session
 from app.erros import ErroDaApi
 from app.models import Usuario
 from app.models_reading import ReadingChallenge, ReadingText
-from app.schemas_reading import DesafioCriado, NovoDesafio, ResumoDesafio
+from app.schemas_reading import (
+    DesafioCriado,
+    LeituraEncerrada,
+    NovoDesafio,
+    PerguntaParaResponder,
+    ResumoDesafio,
+    TextoParaLer,
+)
 from app.services import reading_desafios as rd
 from app.services import reading_fontes as rf
 
@@ -46,12 +56,34 @@ def criar_desafio(corpo: NovoDesafio, usuario: Usuario = Depends(usuario_atual),
 
 @router.get("/challenges/{desafio_id}", response_model=ResumoDesafio)
 def obter_desafio(desafio: ReadingChallenge = Depends(_desafio)):
-    return desafio
+    return _resumo(desafio)
+
+
+@router.get("/challenges/{desafio_id}/texto", response_model=TextoParaLer)
+def obter_texto(desafio: ReadingChallenge = Depends(_desafio), session: Session = Depends(get_session)):
+    momento = rd.agora()
+    if not rd.leitura_disponivel(desafio, momento):
+        raise ErroDaApi(409, "O tempo de leitura deste desafio acabou.", codigo="leitura_encerrada")
+    texto = session.get(ReadingText, desafio.texto_id)
+    return {**_texto(texto), "segundos_restantes": rd.segundos_restantes(desafio, momento)}
+
+
+@router.post("/challenges/{desafio_id}/encerrar-leitura", response_model=LeituraEncerrada)
+def encerrar_leitura(desafio: ReadingChallenge = Depends(_desafio), session: Session = Depends(get_session)):
+    desafio = rd.encerrar_leitura(session, desafio)
+    perguntas = [PerguntaParaResponder.model_validate(p) for p in rd.perguntas_do_desafio(session, desafio)]
+    return {**_resumo(desafio), "perguntas": perguntas}
+
+
+def _resumo(desafio: ReadingChallenge) -> dict:
+    return ResumoDesafio.model_validate(
+        {**desafio.model_dump(), "segundos_restantes": rd.segundos_restantes(desafio)}).model_dump()
+
+
+def _texto(texto: ReadingText) -> dict:
+    return {"titulo": texto.titulo, "conteudo": texto.conteudo, "palavras": texto.palavras, "fonte": texto.fonte,
+            "url": texto.url, "credito": rf.credito(texto)}
 
 
 def _criado(desafio: ReadingChallenge, texto: ReadingText) -> dict:
-    return {
-        **ResumoDesafio.model_validate(desafio).model_dump(),
-        "texto": {"titulo": texto.titulo, "conteudo": texto.conteudo, "palavras": texto.palavras,
-                  "fonte": texto.fonte, "url": texto.url, "credito": rf.credito(texto)},
-    }
+    return {**_resumo(desafio), "texto": _texto(texto)}
