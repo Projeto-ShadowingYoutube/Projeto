@@ -1,6 +1,6 @@
 """Reading Challenge (Membro 1): schemas Pydantic da feature.
 
-Blocos R5 e R6: entrada e saída da API (fim do arquivo).
+Blocos R5 a R7: entrada e saída da API (fim do arquivo).
 
 Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 - vai para a LLM como JSON Schema (o llm.gerar_json o anexa às instruções) e valida a resposta dela;
@@ -155,3 +155,46 @@ class PerguntaParaResponder(BaseModel):
 class LeituraEncerrada(ResumoDesafio):
     """POST /api/reading/challenges/{id}/encerrar-leitura."""
     perguntas: list[PerguntaParaResponder]
+
+
+# --- Bloco R7: respostas e resultado ---
+
+LIMITE_RESPOSTA_DO_USUARIO = 1000  # a resposta aberta é de uma ou duas frases; protege o banco e o custo da LLM (R8)
+
+RespostaDoUsuario = Annotated[str, StringConstraints(strip_whitespace=True, max_length=LIMITE_RESPOSTA_DO_USUARIO)]
+
+
+class RespostasEnviadas(BaseModel):
+    """Corpo de POST /api/reading/challenges/{id}/respostas: uma resposta por pergunta, na ordem 1 a 5.
+    Texto vazio ("") é uma pergunta não respondida e conta como erro (DR25)."""
+    model_config = ConfigDict(extra="forbid")
+
+    respostas: list[RespostaDoUsuario] = Field(min_length=QUANTIDADE_PERGUNTAS, max_length=QUANTIDADE_PERGUNTAS)
+
+
+class PerguntaCorrigida(BaseModel):
+    ordem: int
+    tipo: str
+    enunciado: str
+    alternativas: list[str]
+    resposta: str                 # a da pessoa ("" = não respondida)
+    correta: bool | None          # None enquanto a aberta não foi corrigida (R8)
+    resposta_correta: str
+    justificativa: str
+    comentario: str | None = None  # comentário da correção da aberta (R8)
+
+
+class ResultadoDesafio(BaseModel):
+    """POST /respostas e GET /resultado. A leitura acabou: o texto volta, para conferir as justificativas (DR26)."""
+    id: int
+    estado: str
+    modalidade: str
+    usou_reserva: bool
+    acertos: int | None
+    nota: float | None  # 0 a 10 (cada acerto vale 2, DR27)
+    tempo_leitura_segundos: int
+    tempo_resposta_segundos: int
+    enviado_em: datetime
+    avaliado_em: datetime | None
+    texto: TextoDoDesafio
+    perguntas: list[PerguntaCorrigida]

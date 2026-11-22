@@ -31,14 +31,26 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 | `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas), com `segundos_restantes` | 404 `nao_encontrado` (inexistente ou de outra conta) |
 | `GET /api/reading/challenges/{id}/texto` | — | 200: `titulo, conteudo, palavras, fonte, url, credito, segundos_restantes`; só em `lendo` e até o prazo + 5 s | 409 `leitura_encerrada`; 404 |
 | `POST /api/reading/challenges/{id}/encerrar-leitura` (idempotente) | — | 200: o resumo (`estado: "respondendo"`) + `perguntas[{ordem, tipo, enunciado, alternativas}]`, **sem** resposta correta e sem justificativa | 404 |
+| `POST /api/reading/challenges/{id}/respostas` | `{"respostas": [5 textos]}` (na ordem; `""` = não respondida; até 1000 caracteres; campo extra → 422) | 201: o resultado (abaixo) | 422 `dados_invalidos`; 422 `resposta_invalida` (+ `ordem`: na MC, fora das alternativas); 409 `leitura_em_andamento`; 409 `ja_respondido`; 404 |
+| `GET /api/reading/challenges/{id}/resultado` | — | 200: o resultado | 409 `sem_resultado`; 404 |
+
+**Resultado:** `id, estado, modalidade, usou_reserva, acertos, nota (0–10), tempo_leitura_segundos,
+tempo_resposta_segundos, enviado_em, avaliado_em, texto{...}, perguntas[{ordem, tipo, enunciado, alternativas,
+resposta, correta, resposta_correta, justificativa, comentario}]`. Na aberta, antes da correção (R8): `correta`,
+`acertos`, `nota` e `avaliado_em` são `null`.
 
 Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servidor (0 fora da leitura).
 
 **Códigos próprios:**
 - `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco.
 - `leitura_encerrada` (409): o texto foi pedido depois do prazo de leitura (+ tolerância) ou depois de encerrar.
+- `leitura_em_andamento` (409): respostas enviadas com o desafio ainda em `lendo`.
+- `ja_respondido` (409): o desafio já tem uma tentativa.
+- `resposta_invalida` (422, com `ordem`): na múltipla escolha, a resposta não é uma das alternativas.
+- `sem_resultado` (409): resultado pedido antes do envio das respostas.
 
-**Estados do desafio:** `lendo` → `respondendo` (R6) → próximos estados no R7/R8.
+**Estados do desafio:** `lendo` → `respondendo` (R6) → `corrigido` (múltipla escolha, R7) ou `avaliando` (aberta,
+R7; a correção pela LLM é o R8).
 
 ## Banco de dados
 
@@ -75,6 +87,10 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR22 | 22/11/2026 | Tolerância de 5 s depois do prazo para entregar o texto | Cobre a latência entre o timer zerar na tela e a requisição chegar |
 | DR23 | 22/11/2026 | Encerrar a leitura antes do tempo é permitido (botão "Terminei de ler"); o tempo real fica gravado | Tempo de leitura real entra no resultado (R7) |
 | DR24 | 22/11/2026 | Prazo vencido sem encerrar (aba fechada): as perguntas continuam disponíveis e a leitura conta como o limite | Coerente com a DR6 (sem limite para responder) |
+| DR25 | 22/11/2026 | Resposta em branco (`""`) é aceita como "não respondida" e conta como erro | A pessoa pode enviar sem responder todas |
+| DR26 | 22/11/2026 | O resultado traz o texto de novo (título, conteúdo e crédito) | A leitura acabou; serve para conferir as justificativas |
+| DR27 | 22/11/2026 | Nota de 0 a 10: cada acerto vale 2 | Escala prevista no modelo (`nota`) |
+| DR28 | 22/11/2026 | Respostas com o desafio em `lendo` → 409 `leitura_em_andamento` (sem encerrar automaticamente) | A tela sempre encerra antes; encerrar sozinho esconderia um erro do front |
 
 ## Plano e progresso
 
@@ -93,8 +109,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11) |
-| R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11), aguardando commit |
-| R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | Planejado |
+| R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11) |
+| R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11), aguardando commit |
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | Planejado |
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | Planejado |
 | R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | Planejado |
@@ -283,6 +299,40 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   ajustava à constante mutada. Agora usa os valores fixos da decisão DR22 (140 s e 141 s).
 - **Próxima ação:** R7 (submissão e correção da múltipla escolha: pontuação, tempos, acertos, modalidade, persistência).
 
+### R7 — Submissão e correção da múltipla escolha (✅ 22/11/2026)
+
+- **Arquivos:** `app/services/reading_correcao.py` (novo), `app/api/reading.py` (rotas `/respostas` e `/resultado`),
+  `app/schemas_reading.py` (`RespostasEnviadas`, `PerguntaCorrigida`, `ResultadoDesafio`),
+  `tests/reading/test_reading_respostas.py` (novo). Nenhum arquivo da base, nenhuma migração (`ReadingAttempt` é do R1).
+- **Como funciona:** `enviar_respostas(session, desafio, respostas)`: em `lendo` → `LeituraEmAndamento` (409); já
+  respondido (estado ≠ `respondendo` ou tentativa existente) → `JaRespondido` (409) **antes** de corrigir. Múltipla
+  escolha: `corrigir_multipla_escolha` (função pura) exige cada resposta entre as alternativas ou `""`
+  (`RespostaInvalida` → 422 com a `ordem`) e compara com a grafia exata; `acertos`, `nota = acertos × 2`,
+  `avaliado_em`, estado `corrigido`. Aberta: grava as respostas e o estado vai para `avaliando` (R8). Tempos: leitura =
+  `leitura_encerrada_em − iniciado_em`, resposta = envio − fim da leitura. A tentativa e o estado vão num único commit;
+  a corrida entre dois envios é decidida pelo UNIQUE (`IntegrityError` → rollback → `JaRespondido`). O resultado
+  (POST e GET iguais) traz por pergunta a resposta da pessoa, se acertou, a resposta correta e a justificativa, e o
+  texto com o crédito (DR26).
+- **Testes:** 30 novos, com relógio falso: nota 10 e resultado completo; 4 combinações de acertos (com respostas em
+  branco); gravação no banco; prazo vencido (leitura = limite); GET igual ao POST; 409 `sem_resultado`; 6 corpos
+  inválidos; `resposta_invalida` sem gravar nada; 409 em `lendo`; segundo envio recusado sem alterar o primeiro e sem
+  refazer a correção; corrida entre duas sessões; aberta gravada em `avaliando` sem chamar a LLM; isolamento nas duas
+  rotas; funções puras (grafia exata, uma resposta por pergunta, nota). O `test_protecao_api` cobre as 2 rotas novas.
+  Suíte: **468 aprovados, 2 pulados, 0 falhas** (SQLite); `ruff` limpo. Postgres e E2E não executados.
+- **Mutações (18; 17 detectadas e 1 equivalente; arquivos restaurados e conferidos com `cmp`):** nota em escala
+  errada; sempre acerta; branco como certa; resposta fora das alternativas; envio em `lendo`; segundo envio sem
+  checagem prévia; corrida sem tratar o `IntegrityError`; tempos trocados; estado não atualizado; aberta corrigida
+  como MC; sem `avaliado_em`; 4 respostas; sem limite de tamanho; campo extra; resultado sem checar o dono; resultado
+  sem o texto; resultado sem justificativa. **Equivalente:** comparar ignorando maiúsculas, porque a resposta já tem de
+  ser uma das alternativas (grafia exata) e o R4 garante alternativas diferentes mesmo ignorando maiúsculas.
+- **Problemas encontrados:** (1) duas mutações passaram na 1ª rodada: "resultado sem o texto" (o teste conferia
+  título e crédito, não o conteúdo) e "segundo envio sem checagem prévia" (o UNIQUE ainda recusava, mas depois de
+  corrigir de novo; no R8 seria uma chamada à LLM gasta à toa). Os dois testes foram reforçados. (2) A rodada inteira
+  de mutações passou do tempo limite do terminal e terminou em segundo plano; os arquivos foram conferidos com `cmp`
+  depois.
+- **Próxima ação:** R8 (correção das abertas pela LLM, com as respostas gravadas antes da chamada e o estado
+  `erro_avaliacao` com nova tentativa).
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -295,6 +345,7 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
 | `test_reading_api.py` | R5: criação do desafio pela API (cota, validação, erros, reserva, transação, relógio), resumo e isolamento |
 | `test_reading_leitura.py` | R6: texto só dentro do prazo, encerrar a leitura (idempotente, concorrente), perguntas sem resposta, isolamento |
+| `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, aberta em `avaliando`, isolamento |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o

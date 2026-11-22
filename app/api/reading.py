@@ -8,6 +8,9 @@ bloqueiam, e o FastAPI a roda numa thread à parte.
 
 Leitura (R6): o texto só sai dentro do prazo (senão 409 "leitura_encerrada"); encerrar a leitura libera as perguntas
 sem as respostas. As regras de tempo ficam em app/services/reading_desafios.py.
+
+Respostas (R7): POST /respostas grava a tentativa (e corrige a múltipla escolha); GET /resultado devolve o mesmo
+resultado. As regras ficam em app/services/reading_correcao.py.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -23,9 +26,12 @@ from app.schemas_reading import (
     LeituraEncerrada,
     NovoDesafio,
     PerguntaParaResponder,
+    RespostasEnviadas,
+    ResultadoDesafio,
     ResumoDesafio,
     TextoParaLer,
 )
+from app.services import reading_correcao as rc
 from app.services import reading_desafios as rd
 from app.services import reading_fontes as rf
 
@@ -73,6 +79,53 @@ def encerrar_leitura(desafio: ReadingChallenge = Depends(_desafio), session: Ses
     desafio = rd.encerrar_leitura(session, desafio)
     perguntas = [PerguntaParaResponder.model_validate(p) for p in rd.perguntas_do_desafio(session, desafio)]
     return {**_resumo(desafio), "perguntas": perguntas}
+
+
+@router.post("/challenges/{desafio_id}/respostas", response_model=ResultadoDesafio,
+             status_code=status.HTTP_201_CREATED)
+def enviar_respostas(corpo: RespostasEnviadas, desafio: ReadingChallenge = Depends(_desafio),
+                     session: Session = Depends(get_session)):
+    try:
+        tentativa = rc.enviar_respostas(session, desafio, corpo.respostas)
+    except rc.LeituraEmAndamento:
+        raise ErroDaApi(409, "Encerre a leitura antes de enviar as respostas.",
+                        codigo="leitura_em_andamento") from None
+    except rc.JaRespondido:
+        raise ErroDaApi(409, "As respostas deste desafio já foram enviadas.", codigo="ja_respondido") from None
+    except rc.RespostaInvalida as erro:
+        raise ErroDaApi(422, f"A resposta da pergunta {erro.ordem} não é uma das alternativas.",
+                        codigo="resposta_invalida", ordem=erro.ordem) from None
+    return _resultado(session, desafio, tentativa)
+
+
+@router.get("/challenges/{desafio_id}/resultado", response_model=ResultadoDesafio)
+def obter_resultado(desafio: ReadingChallenge = Depends(_desafio), session: Session = Depends(get_session)):
+    tentativa = rc.tentativa_do_desafio(session, desafio)
+    if tentativa is None:
+        raise ErroDaApi(409, "Este desafio ainda não tem respostas.", codigo="sem_resultado")
+    return _resultado(session, desafio, tentativa)
+
+
+def _resultado(session: Session, desafio: ReadingChallenge, tentativa) -> dict:
+    session.refresh(desafio)
+    por_ordem = {item["ordem"]: item for item in tentativa.avaliacao}
+    perguntas = []
+    for pergunta, resposta in zip(rd.perguntas_do_desafio(session, desafio), tentativa.respostas, strict=True):
+        avaliacao = por_ordem.get(pergunta.ordem, {})
+        perguntas.append({
+            "ordem": pergunta.ordem, "tipo": pergunta.tipo, "enunciado": pergunta.enunciado,
+            "alternativas": pergunta.alternativas, "resposta": resposta, "correta": avaliacao.get("correta"),
+            "resposta_correta": pergunta.resposta_correta, "justificativa": pergunta.justificativa,
+            "comentario": avaliacao.get("comentario"),
+        })
+    return {
+        "id": desafio.id, "estado": desafio.estado, "modalidade": tentativa.modalidade,
+        "usou_reserva": desafio.usou_reserva, "acertos": tentativa.acertos, "nota": tentativa.nota,
+        "tempo_leitura_segundos": tentativa.tempo_leitura_segundos,
+        "tempo_resposta_segundos": tentativa.tempo_resposta_segundos,
+        "enviado_em": tentativa.enviado_em, "avaliado_em": tentativa.avaliado_em,
+        "texto": _texto(session.get(ReadingText, desafio.texto_id)), "perguntas": perguntas,
+    }
 
 
 def _resumo(desafio: ReadingChallenge) -> dict:
