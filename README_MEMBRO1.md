@@ -23,7 +23,14 @@ Fluxo previsto:
 
 ## API
 
-_A preencher a partir do bloco R5._
+Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}`.
+
+| Rota | Entrada | Saída | Erros |
+|---|---|---|---|
+| `POST /api/reading/challenges` (gasta 1 da cota) | `{"modalidade": "multipla_escolha" \| "aberta", "fonte"?: "wikipedia" \| "gutenberg", "ppm"?: 150 \| 200 \| 250}` (padrões `wikipedia` e 200; campo extra → 422) | 201: `id, estado, modalidade, ppm, limite_segundos, iniciado_em, leitura_encerrada_em, usou_reserva, texto{titulo, conteudo, palavras, fonte, url, credito}`. **Sem as perguntas** | 422 `dados_invalidos`; 429 `limite_de_desafios`; 502 `texto_indisponivel`; 502/503/504 `llm_*` (LLM falhou e não há reserva) |
+| `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas) | 404 `nao_encontrado` (inexistente ou de outra conta) |
+
+**Códigos próprios:** `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco.
 
 ## Banco de dados
 
@@ -54,6 +61,9 @@ _A preencher a partir do bloco R5._
 | DR16 | 21/11/2026 | Enunciados e alternativas em inglês; justificativa em português, citando entre aspas o trecho do texto em inglês. As justificativas da reserva foram traduzidas **editando a própria 0102** (decisão do usuário), e não numa migração nova | Treino de leitura em inglês, explicação na língua de quem aprende. A 0102 ainda não saiu desta branch; um banco que já a aplicou continua com as justificativas antigas (ver registro do R4) |
 | DR17 | 21/11/2026 | Qualquer falha da LLM, inclusive LLM não configurada (sem `LLM_CHAVE`), leva a um texto de reserva com as perguntas prontas (`usou_reserva=True`, aviso no log). Sem reserva, o `ErroLLM` sobe (502/503/504) | O app funciona para quem ainda não criou a chave; a tela pode avisar "perguntas prontas" |
 | DR18 | 21/11/2026 | Perguntas de nível intermediário (B1–B2). Nível escolhido pelo usuário fica para depois, se houver tempo | Os textos são autênticos (Wikipedia/Gutenberg) |
+| DR19 | 21/11/2026 | Desafios simultâneos são permitidos: um desafio novo não cancela o anterior, que expira pelo tempo (R6) | Bloquear exigiria a regra e a tela de "abandonar desafio" |
+| DR20 | 21/11/2026 | `fonte` opcional no corpo (padrão `wikipedia`); a tela do R9 mostra o seletor | Simples para o cliente; a Wikipedia é a fonte padrão (DR1) |
+| DR21 | 21/11/2026 | `GET /challenges/{id}` já no R5, só com o resumo (sem texto e sem perguntas); o texto durante a leitura fica para o R6 | Testa o isolamento desde já; as regras de tempo são do R6 |
 
 ## Plano e progresso
 
@@ -70,8 +80,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11) |
 | R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11) |
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
-| R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11), aguardando commit |
-| R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | Planejado |
+| R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
+| R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11), aguardando commit |
 | R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | Planejado |
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | Planejado |
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | Planejado |
@@ -195,11 +205,44 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   novo teste confere a mensagem. (2) O gerador da 0102 (scratchpad) tinha o downgrade antigo, sem `sa.null()`;
   corrigido antes de gerar de novo, e o diff da 0102 mostra só o docstring e as justificativas. (3) **O banco de
   desenvolvimento (`dados/estudos.db`) já estava na 0102 e continua com as justificativas em inglês**: o Alembic não
-  roda de novo uma migração aplicada. Nenhum desafio usa a reserva ainda.
+  roda de novo uma migração aplicada. Nenhum desafio usa a reserva ainda. **Resolvido:** o usuário rodou o downgrade
+  para a 0101 e o `migrar` (backup `estudos-20261121-215758-730617.db`); os 5 textos têm as justificativas em português.
   (4) 8 `DeprecationWarning` do SQLModel nos testes do R1 (`session.query`, estilo antigo do SQLAlchemy): trocados por
   `session.exec(select(...))` em `test_reading_modelos.py`, mesmo comportamento. Resta 1 warning, preexistente da base
   (`StarletteDeprecationWarning` do `TestClient`, importado pelo `tests/conftest.py`).
 - **Próxima ação:** R5 (rota `POST /api/reading/challenges`: cota, texto, perguntas, gravação e isolamento).
+
+### R5 — Criação do desafio (API) (✅ 21/11/2026)
+
+- **Arquivos:** `app/api/reading.py` (novo), `app/services/reading_desafios.py` (novo), `app/schemas_reading.py`
+  (`NovoDesafio`, `TextoDoDesafio`, `ResumoDesafio`, `DesafioCriado`), `tests/reading/test_reading_api.py` (novo).
+  **Ponto de encaixe:** 2 linhas no bloco "Membro 1 (Reading)" de `app/main.py` (`from app.api import reading` +
+  `rotas += [reading.router]`; o router da página entra no R9). Nenhum outro arquivo da base.
+- **Como funciona:** `POST /api/reading/challenges` → `usuario_atual` (401) → `exigir_cota("reading")` (429) →
+  `NovoDesafio` (422) → `reading_desafios.criar_desafio`: `obter_texto` (R3) → `perguntas_para_o_desafio` (R4) →
+  `limite_leitura_segundos` com o texto **usado** (o de reserva, se a LLM falhou) → `ReadingChallenge` +
+  5 `ReadingQuestion` (ordem 1–5) num único commit (`flush` para obter o id, depois `commit`). `iniciado_em` é marcado
+  depois da geração (a espera não conta como leitura). `TextoIndisponivel` → 502 `texto_indisponivel`; `ErroLLM`
+  sobe para o handler da base. A resposta traz o texto e o crédito, nunca as perguntas.
+- **Isolamento:** `_desafio()` (padrão `_deck`): de outra conta ou inexistente → 404 com a mesma resposta.
+- **Testes:** 20 novos (integração FastAPI + serviços + banco, com fonte falsa em `rf.FONTES` e `llm_falsa`): criação
+  e gravação, resposta sem as perguntas, padrões e escolhas, 6 corpos inválidos, 401, cota (10 + 429, por conta), 502
+  sem texto, reserva quando a LLM falha (limite com o texto de reserva), 504 sem reserva sem gravar nada, desafios
+  simultâneos, relógio depois da geração, falha ao gravar sem desafio pela metade, ppm inválido antes da busca, resumo,
+  isolamento. O `test_protecao_api` passou a cobrir as 2 rotas novas sozinho. Suíte: **409 aprovados, 2 pulados,
+  0 falhas** (SQLite); `ruff` limpo. Postgres e E2E não executados.
+- **Mutações (15, todas detectadas; arquivos restaurados e conferidos com `cmp`):** sem cota; `_desafio` sem checar o
+  dono; dono errado com 403; `TextoIndisponivel` sem tratamento; sem crédito; perguntas na resposta; campo extra
+  aceito; ppm livre; `iniciado_em` antes da LLM; commit antes das perguntas; limite com o texto original; ordem a
+  partir de 0; ppm sem checagem antes da busca; `usou_reserva` fixo; router não registrado.
+- **Problemas encontrados:** (1) um teste esperava 300 palavras, mas o texto de exemplo tinha 299 (erro no teste;
+  o código estava certo). (2) O script de mutação quebrou ao ler uma linha de erro do pytest e deixou
+  `app/api/reading.py` mutado; restaurado na hora (conferido com `cmp`), e o script passou a restaurar com
+  `try/finally`. (3) **Achado na base:** uma requisição com corpo inválido (422) **gasta 1 da cota**: o FastAPI roda a
+  dependência `exigir_cota` antes de validar o corpo. Conferido com um teste temporário (restaram 9 de 10). Vale para
+  as três features; registrado em "Para o Membro 4".
+- **Próxima ação:** R6 (leitura com o tempo validado no servidor: texto só enquanto o tempo não acaba, encerrar a
+  leitura e liberar as perguntas sem as respostas).
 
 ## Testes
 
@@ -211,6 +254,7 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_textos.py` | R2: limpeza (Wikipedia e Gutenberg), seleção do trecho, contagem e tempo de leitura |
 | `test_reading_fontes.py` | R3: fontes com HTTP falso, artigos salvos, reserva, crédito, migração 0102 |
 | `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
+| `test_reading_api.py` | R5: criação do desafio pela API (cota, validação, erros, reserva, transação, relógio), resumo e isolamento |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o
@@ -235,3 +279,12 @@ a raiz; `python -m pytest` funciona porque acrescenta o diretório atual. Corre�
  addopts = "-q --cov=app --cov-report=term-missing"
 +pythonpath = ["."]
 ```
+
+**Achado na base (R5, não corrigido nesta branch):** `exigir_cota` é dependência da rota, e o FastAPI resolve as
+dependências antes de validar o corpo: uma requisição com corpo inválido (422) gasta 1 desafio da cota. Vale para
+Reading, Writing e Speaking. Pela interface (corpo montado pelo JS) isso não acontece na prática. Se o Membro 4 quiser
+corrigir: chamar a função devolvida por `exigir_cota(...)` dentro da rota, depois da validação, ou validar o corpo
+numa dependência anterior à cota.
+
+**Warning preexistente da base:** `StarletteDeprecationWarning` (o `TestClient` do FastAPI usa `httpx`; a Starlette
+pede `httpx2`). Inofensivo com as versões fixas do `requirements.txt`; vira problema só ao atualizar a Starlette.

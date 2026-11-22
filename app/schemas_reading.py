@@ -1,5 +1,7 @@
 """Reading Challenge (Membro 1): schemas Pydantic da feature.
 
+Bloco R5: entrada e saída da API (fim do arquivo).
+
 Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 - vai para a LLM como JSON Schema (o llm.gerar_json o anexa às instruções) e valida a resposta dela;
 - valida as perguntas prontas dos textos de reserva (migração 0102), para as duas origens terem a mesma garantia.
@@ -7,6 +9,7 @@ Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 Um schema por modalidade (e não um genérico com "tipo"): a LLM recebe a forma exata do que deve devolver, e a
 validação recusa, por exemplo, uma pergunta aberta com alternativas.
 """
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -89,3 +92,43 @@ SCHEMA_DA_MODALIDADE: dict[str, type[PerguntasMultiplaEscolha] | type[PerguntasA
     "multipla_escolha": PerguntasMultiplaEscolha,
     "aberta": PerguntasAbertas,
 }
+
+
+# --- Bloco R5: criação do desafio (API) ---
+
+class NovoDesafio(BaseModel):
+    """Corpo de POST /api/reading/challenges. Campo desconhecido é recusado (422), para um erro de digitação no front
+    não passar despercebido."""
+    model_config = ConfigDict(extra="forbid")
+
+    modalidade: Literal["multipla_escolha", "aberta"]
+    fonte: Literal["wikipedia", "gutenberg"] = "wikipedia"
+    ppm: Literal[150, 200, 250] = 200  # palavras por minuto (DR4)
+
+
+class TextoDoDesafio(BaseModel):
+    titulo: str
+    conteudo: str
+    palavras: int
+    fonte: str
+    url: str | None
+    credito: str  # crédito e licença, obrigatórios na tela (CC BY-SA da Wikipedia)
+
+
+class ResumoDesafio(BaseModel):
+    """O desafio sem o texto e sem as perguntas (GET /api/reading/challenges/{id})."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    estado: str
+    modalidade: str
+    ppm: int
+    limite_segundos: int
+    iniciado_em: datetime
+    leitura_encerrada_em: datetime | None
+    usou_reserva: bool
+
+
+class DesafioCriado(ResumoDesafio):
+    """Resposta da criação: o texto para ler. As perguntas ficam no servidor até a leitura terminar (R6)."""
+    texto: TextoDoDesafio

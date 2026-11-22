@@ -29,6 +29,8 @@ def _rotas_das_features() -> list:
     rotas = []
 
     # Membro 1 (Reading)
+    from app.api import reading
+    rotas += [reading.router]
 
     # Membro 2 (Speaking)
 
