@@ -6,7 +6,8 @@ Criada em: 2026-11-21
 
 Cinco trechos de artigos da Wikipedia em inglês, já limpos e selecionados pelas regras do R2, cada um com cinco
 perguntas prontas (enunciado, 4 alternativas, resposta correta e justificativa). São usados quando a busca de textos
-falha e não há artigo salvo, ou quando a LLM não consegue gerar as perguntas (decisões DR3 e DR12).
+falha e não há artigo salvo, ou quando a LLM não consegue gerar as perguntas (decisões DR3 e DR12). Enunciados e
+alternativas em inglês; justificativas em português, citando o trecho do texto em inglês (decisão DR16).
 
 Crédito e licença: os textos são da Wikipedia (https://en.wikipedia.org), licença CC BY-SA 4.0
 (https://creativecommons.org/licenses/by-sa/4.0/). Cada linha guarda o título e a URL do artigo; o trecho é uma
@@ -73,28 +74,29 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                       'nests?',
                          'alternativas': ['Secreted wax', 'Mud and saliva', 'Chewed wood fibers', 'Dry leaves'],
                          'resposta_correta': 'Secreted wax',
-                         'justificativa': 'The text says their nests contain "hexagonal cells made of secreted '
-                                          'wax".'},
+                         'justificativa': 'O texto diz que os ninhos têm "hexagonal cells made of secreted wax" '
+                                          '(células hexagonais feitas de cera secretada).'},
                         {'enunciado': 'Roughly how many species of bees are known?',
                          'alternativas': ['About 2,000', 'About 200', 'About 20,000', 'About 200,000'],
                          'resposta_correta': 'About 20,000',
-                         'justificativa': 'Honey bees are "only a small fraction of the roughly 20,000 known '
-                                          'species of bees".'},
+                         'justificativa': 'As abelhas-melíferas são "only a small fraction of the roughly 20,000 '
+                                          'known species of bees" (cerca de 20 mil espécies conhecidas).'},
                         {'enunciado': 'Which honey bee species is the best known?',
                          'alternativas': ['The eastern honey bee (Apis cerana)',
                                           'The western honey bee (Apis mellifera)',
                                           'The dammar bee (Tetragonula iridipennis)',
                                           'The stingless bees of the genus Melipona'],
                          'resposta_correta': 'The western honey bee (Apis mellifera)',
-                         'justificativa': '"The best-known honey bee species is the western honey bee (Apis '
-                                          'mellifera)."'},
+                         'justificativa': 'O texto afirma: "The best-known honey bee species is the western honey '
+                                          'bee (Apis mellifera)."'},
                         {'enunciado': 'Where is the eastern honey bee raised?',
                          'alternativas': ['In Western Europe',
                                           'In North America',
                                           'In southern Africa',
                                           'In South, Southeast and East Asia'],
                          'resposta_correta': 'In South, Southeast and East Asia',
-                         'justificativa': 'The eastern honey bee is raised "in South, Southeast and East Asia".'},
+                         'justificativa': 'A abelha-melífera oriental é criada "in South, Southeast and East Asia" '
+                                          '(no Sul, Sudeste e Leste da Ásia).'},
                         {'enunciado': 'Besides honey and wax, which honey bee secretions are used '
                                       'pharmaceutically?',
                          'alternativas': ['Nectar and pollen',
@@ -102,8 +104,8 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'Propolis and resin',
                                           'Honeydew and sap'],
                          'resposta_correta': 'Royal jelly and bee venom',
-                         'justificativa': '"Other honey bee secretions such as royal jelly and bee venom are used '
-                                          'pharmaceutically."'}]},
+                         'justificativa': 'O texto diz: "Other honey bee secretions such as royal jelly and bee '
+                                          'venom are used pharmaceutically" (geleia real e veneno).'}]},
  {'id_origem': '604727',
   'titulo': 'Coffee',
   'url': 'https://en.wikipedia.org/wiki/Coffee',
@@ -140,33 +142,34 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'Because it is served hot',
                                           'Because of the roasting process'],
                          'resposta_correta': 'Because of its caffeine content',
-                         'justificativa': 'Coffee "has a stimulating effect on humans due to its caffeine '
-                                          'content".'},
+                         'justificativa': 'O café "has a stimulating effect on humans due to its caffeine content" '
+                                          '(efeito estimulante por causa da cafeína).'},
                         {'enunciado': 'Where do the earliest reports of coffee drinking come from?',
                          'alternativas': ['Brazil', 'Java', 'Vietnam', 'Yemen, in southern Arabia'],
                          'resposta_correta': 'Yemen, in southern Arabia',
-                         'justificativa': 'The earliest reports "pertain to the plant\'s use among the Sufis of '
-                                          'Yemen in southern Arabia".'},
+                         'justificativa': 'Os primeiros relatos "pertain to the plant\'s use among the Sufis of '
+                                          'Yemen in southern Arabia" (no Iêmen).'},
                         {'enunciado': "Until when was most of the world's coffee imported from Yemen?",
                          'alternativas': ['Until the middle of the 15th century',
                                           'Until the end of the 17th century',
                                           'Until the end of the 18th century',
                                           'Until 2023'],
                          'resposta_correta': 'Until the end of the 17th century',
-                         'justificativa': '"Up to the end of the 17th century, most of the world\'s coffee was '
-                                          'imported from Yemen."'},
+                         'justificativa': 'O texto diz: "Up to the end of the 17th century, most of the world\'s '
+                                          'coffee was imported from Yemen" (até o fim do século XVII).'},
                         {'enunciado': 'Which country was the leading grower of coffee beans in 2023?',
                          'alternativas': ['Vietnam', 'Yemen', 'Brazil', 'India'],
                          'resposta_correta': 'Brazil',
-                         'justificativa': '"In 2023, Brazil was the leading grower of coffee beans, producing 31% '
-                                          'of the world\'s total."'},
+                         'justificativa': 'O texto diz: "In 2023, Brazil was the leading grower of coffee beans" '
+                                          '(o Brasil foi o maior produtor).'},
                         {'enunciado': 'What have critics of the coffee industry pointed to?',
                          'alternativas': ['Its negative impact on the environment',
                                           'The high price of coffee in shops',
                                           'The lack of coffee substitutes',
                                           'The bitter taste of the beans'],
                          'resposta_correta': 'Its negative impact on the environment',
-                         'justificativa': 'Critics "have pointed to its negative impact on the environment".'}]},
+                         'justificativa': 'Os críticos "have pointed to its negative impact on the environment" (o '
+                                          'impacto negativo no meio ambiente).'}]},
  {'id_origem': '32571',
   'titulo': 'Volcano',
   'url': 'https://en.wikipedia.org/wiki/Volcano',
@@ -209,8 +212,8 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'In polar regions',
                                           'In the middle of continents'],
                          'resposta_correta': 'Underwater',
-                         'justificativa': 'Because most plate boundaries are underwater, "most volcanoes are found '
-                                          'underwater".'},
+                         'justificativa': 'Como a maioria dos limites entre placas fica sob o mar, "most volcanoes '
+                                          'are found underwater" (debaixo d\'água).'},
                         {'enunciado': 'What kind of eruptions do volcanoes caused by convergent tectonic plates '
                                       'usually have?',
                          'alternativas': ['Nonexplosive eruptions',
@@ -218,14 +221,15 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'Violent eruptions',
                                           'Only small gas eruptions'],
                          'resposta_correta': 'Violent eruptions',
-                         'justificativa': 'Volcanoes from convergent tectonic activity "cause violent eruptions".'},
+                         'justificativa': 'Os vulcões de placas convergentes "cause violent eruptions" (causam '
+                                          'erupções violentas).'},
                         {'enunciado': 'What is the Hawaiian hotspot an example of?',
                          'alternativas': ['Hotspot (intraplate) volcanism',
                                           'A mid-ocean ridge',
                                           'A transform tectonic boundary',
                                           'An extinct volcano'],
                          'resposta_correta': 'Hotspot (intraplate) volcanism',
-                         'justificativa': 'The text describes hotspot or intraplate volcanism, "of which the '
+                         'justificativa': 'O texto descreve o vulcanismo de hotspot (intraplaca), "of which the '
                                           'Hawaiian hotspot is an example".'},
                         {'enunciado': 'Why are extinct volcanoes not capable of eruption?',
                          'alternativas': ['They are covered by ice',
@@ -233,13 +237,13 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'They have not erupted for 12,000 years',
                                           'They have no magma source'],
                          'resposta_correta': 'They have no magma source',
-                         'justificativa': 'Extinct volcanoes "are not capable of eruption at all as they have no '
-                                          'magma source".'},
+                         'justificativa': 'Os vulcões extintos "are not capable of eruption at all as they have no '
+                                          'magma source" (não têm fonte de magma).'},
                         {'enunciado': 'On which planet are volcanoes described as very numerous?',
                          'alternativas': ['Mars', 'Venus', 'Jupiter', 'Mercury'],
                          'resposta_correta': 'Venus',
-                         'justificativa': '"Volcanoes are very numerous on Venus." Mars is only said to have '
-                                          'significant volcanoes.'}]},
+                         'justificativa': 'O texto diz: "Volcanoes are very numerous on Venus." Sobre Marte, diz '
+                                          'apenas que tem vulcões importantes.'}]},
  {'id_origem': '19331',
   'titulo': 'Moon',
   'url': 'https://en.wikipedia.org/wiki/Moon',
@@ -280,32 +284,34 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
   'perguntas_reserva': [{'enunciado': 'How often does the Moon complete an orbit in relation to Earth and the Sun?',
                          'alternativas': ['Every 29.5 days', 'Every 24 hours', 'Every 7 days', 'Every 365 days'],
                          'resposta_correta': 'Every 29.5 days',
-                         'justificativa': 'It completes an orbit (lunar month) "every 29.5 days".'},
+                         'justificativa': 'A Lua completa uma órbita (o mês lunar) "every 29.5 days" (a cada 29,5 '
+                                          'dias).'},
                         {'enunciado': "What is the main driver of Earth's tides?",
                          'alternativas': ['The wind over the oceans',
                                           'The heat of the Sun',
                                           'The tidal forces between the Moon and Earth',
                                           "The Moon's magnetic field"],
                          'resposta_correta': 'The tidal forces between the Moon and Earth',
-                         'justificativa': 'The gravitational attraction creates tidal forces, which "are the main '
-                                          'driver of Earth\'s tides".'},
+                         'justificativa': 'A atração gravitacional cria forças de maré, que "are the main driver '
+                                          'of Earth\'s tides" (a principal causa das marés).'},
                         {'enunciado': "How strong is the Moon's surface gravity compared with Earth's?",
                          'alternativas': ["About half of Earth's",
                                           "About one-sixth of Earth's",
                                           "About the same as Earth's",
                                           "About one-quarter of Earth's"],
                          'resposta_correta': "About one-sixth of Earth's",
-                         'justificativa': '"Its surface gravity is about one-sixth of Earth\'s."'},
+                         'justificativa': 'O texto diz: "Its surface gravity is about one-sixth of Earth\'s" '
+                                          '(cerca de um sexto da gravidade da Terra).'},
                         {'enunciado': 'What are the dark plains called maria made of?',
                          'alternativas': ['Ice', 'Regolith dust', 'Asphalt', 'Basalt'],
                          'resposta_correta': 'Basalt',
-                         'justificativa': 'Lava formed "the today prominently visible dark plains of basalt called '
-                                          'maria".'},
+                         'justificativa': 'A lava formou "the today prominently visible dark plains of basalt '
+                                          'called maria" (planícies escuras de basalto).'},
                         {'enunciado': "How much of the Moon's surface is visible from Earth?",
                          'alternativas': ['About 59%', 'Exactly 50%', 'All of it', 'About 1.2%'],
                          'resposta_correta': 'About 59%',
-                         'justificativa': '"About 59% of the surface of the Moon is visible from Earth", because '
-                                          'of libration.'}]},
+                         'justificativa': 'O texto diz: "About 59% of the surface of the Moon is visible from '
+                                          'Earth", por causa da libração.'}]},
  {'id_origem': '23878',
   'titulo': 'Penguin',
   'url': 'https://en.wikipedia.org/wiki/Penguin',
@@ -362,13 +368,13 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'Swimming under the ice',
                                           'Huddling together to keep warm'],
                          'resposta_correta': 'Sliding on their bellies across the snow',
-                         'justificativa': 'Penguins "slide on their bellies across the snow", a movement called '
-                                          '"tobogganing".'},
+                         'justificativa': 'Os pinguins "slide on their bellies across the snow" (deslizam de '
+                                          'barriga na neve): é o "tobogganing".'},
                         {'enunciado': 'What do penguins mainly use to locate prey and avoid predators?',
                          'alternativas': ['Their hearing', 'Their sense of smell', 'Their eyes', 'Their feathers'],
                          'resposta_correta': 'Their eyes',
-                         'justificativa': 'Their eyes "are their primary means of locating prey and avoiding '
-                                          'predators".'},
+                         'justificativa': 'Os olhos "are their primary means of locating prey and avoiding '
+                                          'predators" (o principal meio de achar presas).'},
                         {'enunciado': 'What do male emperor penguins do during the Antarctic winter while the '
                                       'females are at sea?',
                          'alternativas': ['They fish for food near the coast',
@@ -376,22 +382,24 @@ TEXTOS_RESERVA = [{'id_origem': '58261',
                                           'They migrate to warmer climates',
                                           'They build nests of stones'],
                          'resposta_correta': 'They huddle together and rotate positions to keep warm',
-                         'justificativa': 'The males "often huddle together to keep warm and rotate positions".'},
+                         'justificativa': 'Os machos "often huddle together to keep warm and rotate positions" (se '
+                                          'amontoam e trocam de posição).'},
                         {'enunciado': 'Why can penguins drink salt water?',
                          'alternativas': ['Their feathers absorb the salt',
                                           'Their flippers remove the salt',
                                           'They only drink it in summer',
                                           'A gland filters excess salt from their bloodstream'],
                          'resposta_correta': 'A gland filters excess salt from their bloodstream',
-                         'justificativa': '"Their supraorbital gland filters excess salt from the bloodstream."'},
+                         'justificativa': 'O texto diz: "Their supraorbital gland filters excess salt from the '
+                                          'bloodstream" (uma glândula filtra o sal).'},
                         {'enunciado': 'What are isabelline penguins?',
                          'alternativas': ['Penguins born with brown rather than black plumage',
                                           'Penguins with albinism',
                                           'The largest penguins',
                                           'Penguins that live in warmer climates'],
                          'resposta_correta': 'Penguins born with brown rather than black plumage',
-                         'justificativa': 'About one in 50,000 penguins "are born with brown rather than black '
-                                          'plumage"; these are isabelline.'}]}]
+                         'justificativa': 'Cerca de um em 50 mil pinguins "are born with brown rather than black '
+                                          'plumage"; esses são os isabelinos.'}]}]
 
 
 def upgrade() -> None:

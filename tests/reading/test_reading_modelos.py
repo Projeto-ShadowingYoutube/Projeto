@@ -97,13 +97,13 @@ def test_grava_e_le_todos_os_modelos_com_json(engine_teste):
         ids = desafio.id, desafio.usuario_id
 
     with Session(engine_teste) as session:  # sessão nova: lê do banco, não da memória
-        pergunta = session.query(ReadingQuestion).one()
+        pergunta = session.exec(select(ReadingQuestion)).one()
         assert pergunta.alternativas == ["Honey", "Milk", "Wax paper", "Silk"]
-        tentativa = session.query(ReadingAttempt).one()
+        tentativa = session.exec(select(ReadingAttempt)).one()
         assert (tentativa.desafio_id, tentativa.usuario_id) == ids
         assert tentativa.respostas == ["Honey"] * 5
         assert tentativa.avaliacao == [{"ordem": 1, "correta": True, "comentario": "Isso."}]
-        reserva = session.query(ReadingText).filter_by(id_origem="reserva-1").one()
+        reserva = session.exec(select(ReadingText).where(ReadingText.id_origem == "reserva-1")).one()
         assert reserva.perguntas_reserva == perguntas_reserva
 
 
@@ -119,9 +119,9 @@ def test_valores_padrao(engine_teste):
         assert desafio.usou_reserva is False
         assert desafio.iniciado_em is not None
         assert desafio.leitura_encerrada_em is None
-        assert session.query(ReadingText).one().perguntas_reserva is None
-        assert session.query(ReadingQuestion).one().alternativas == []  # pergunta aberta: sem alternativas
-        tentativa = session.query(ReadingAttempt).one()
+        assert session.exec(select(ReadingText)).one().perguntas_reserva is None
+        assert session.exec(select(ReadingQuestion)).one().alternativas == []  # pergunta aberta: sem alternativas
+        tentativa = session.exec(select(ReadingAttempt)).one()
         assert tentativa.avaliacao == [] and tentativa.nota is None and tentativa.avaliado_em is None
 
 
@@ -145,7 +145,7 @@ def test_textos_diferentes_da_mesma_fonte_convivem(engine_teste):
     with Session(engine_teste) as session:
         _texto(session, id_origem="123")
         _texto(session, id_origem="456")
-        assert session.query(ReadingText).count() == 2
+        assert len(session.exec(select(ReadingText)).all()) == 2
 
 
 def test_um_desafio_nao_tem_duas_perguntas_na_mesma_ordem(engine_teste):
@@ -163,7 +163,7 @@ def test_um_desafio_tem_cinco_perguntas_em_ordens_diferentes(engine_teste):
         desafio = _desafio(session)
         session.add_all(_pergunta(desafio.id, ordem) for ordem in range(1, 6))
         session.commit()
-        assert session.query(ReadingQuestion).filter_by(desafio_id=desafio.id).count() == 5
+        assert len(session.exec(select(ReadingQuestion).where(ReadingQuestion.desafio_id == desafio.id)).all()) == 5
 
 
 def test_um_desafio_aceita_no_maximo_uma_tentativa(engine_teste):

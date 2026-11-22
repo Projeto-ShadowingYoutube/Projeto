@@ -13,7 +13,11 @@ _A preencher a partir do bloco R9 (tela)._ Nenhuma variável de ambiente nova: u
 
 ## Arquitetura
 
-_A preencher bloco a bloco._ Fluxo previsto:
+- `app/services/reading_textos.py`: funções puras (limpeza, seleção do trecho, tempo de leitura).
+- `app/services/reading_fontes.py`: Wikipedia, Gutendex, artigos salvos e reserva → `ReadingText`.
+- `app/services/reading_llm.py` + `app/schemas_reading.py`: as 5 perguntas (LLM ou reserva).
+
+Fluxo previsto:
 `paginas/reading.js` → `nucleo/api-reading.js` → `/api/reading/...` (`app/api/reading.py`) →
 `app/services/reading_*.py` → Wikipedia/Gutendex, `llm.gerar_json` e banco (`app/models_reading.py`).
 
@@ -26,7 +30,7 @@ _A preencher a partir do bloco R5._
 | Rev-id | Tipo | Conteúdo |
 |---|---|---|
 | `0101` | esquema | `readingtext`, `readingchallenge`, `readingquestion`, `readingattempt` (bloco R1) |
-| `0102` | dados | 5 trechos de artigos da Wikipedia (Honey bee, Coffee, Volcano, Moon, Penguin), CC BY-SA 4.0, cada um com 5 perguntas prontas (bloco R3) |
+| `0102` | dados | 5 trechos de artigos da Wikipedia (Honey bee, Coffee, Volcano, Moon, Penguin), CC BY-SA 4.0, cada um com 5 perguntas prontas (bloco R3; justificativas traduzidas para o português no R4, DR16) |
 
 ## Decisões
 
@@ -47,6 +51,9 @@ _A preencher a partir do bloco R5._
 | DR13 | 21/11/2026 | Gutenberg: descarta o que vem antes do primeiro capítulo com texto (prefácio, sumário) e dá prioridade ao capítulo 1 | O começo do livro costuma ser prefácio ou sumário |
 | DR14 | 21/11/2026 | Falha de rede ou timeout da fonte não é repetida: vai direto ao artigo salvo ou à reserva (só artigos ruins geram nova tentativa, até 3) | Cada nova tentativa esperaria o timeout de novo (mesma regra do `llm.py`) |
 | DR15 | 21/11/2026 | Rodar os testes com `python -m pytest`; o problema do `pytest` puro (preexistente) fica anotado para o Membro 4, sem alterar o `pyproject.toml` | O `pyproject.toml` é base protegida; a correção é de uma linha e vale para as três features |
+| DR16 | 21/11/2026 | Enunciados e alternativas em inglês; justificativa em português, citando entre aspas o trecho do texto em inglês. As justificativas da reserva foram traduzidas **editando a própria 0102** (decisão do usuário), e não numa migração nova | Treino de leitura em inglês, explicação na língua de quem aprende. A 0102 ainda não saiu desta branch; um banco que já a aplicou continua com as justificativas antigas (ver registro do R4) |
+| DR17 | 21/11/2026 | Qualquer falha da LLM, inclusive LLM não configurada (sem `LLM_CHAVE`), leva a um texto de reserva com as perguntas prontas (`usou_reserva=True`, aviso no log). Sem reserva, o `ErroLLM` sobe (502/503/504) | O app funciona para quem ainda não criou a chave; a tela pode avisar "perguntas prontas" |
+| DR18 | 21/11/2026 | Perguntas de nível intermediário (B1–B2). Nível escolhido pelo usuário fica para depois, se houver tempo | Os textos são autênticos (Wikipedia/Gutenberg) |
 
 ## Plano e progresso
 
@@ -62,8 +69,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 |---|---|---|---|---|
 | R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11) |
 | R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11) |
-| R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11), aguardando commit |
-| R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | Planejado |
+| R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
+| R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11), aguardando commit |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | Planejado |
 | R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | Planejado |
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | Planejado |
@@ -156,9 +163,54 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   (3) O banco de desenvolvimento apareceu já na 0102 (backup das 19:56 criado pelo `migrar`, não rodado por mim).
 - **Próxima ação:** R4 (perguntas geradas pela LLM, modos múltipla escolha e aberta, fallback para a reserva).
 
+### R4 — Perguntas geradas pela LLM (✅ 21/11/2026)
+
+- **Arquivos:** `app/schemas_reading.py` (novo), `app/services/reading_llm.py` (novo), `tests/reading/test_reading_llm.py`
+  (novo), `tests/reading/test_reading_modelos.py` (sem `session.query`); `migrations/versions/0102_textos_reserva.py` (justificativas em português, DR16; o resto idêntico). Nenhum
+  arquivo da base: o `llm.py` só é usado. Nada é gravado no banco neste bloco (as `ReadingQuestion` são gravadas no R5).
+- **Schemas:** um por modalidade (`PerguntasMultiplaEscolha`, `PerguntasAbertas`), com exatamente 5 perguntas de
+  enunciados diferentes. Pergunta: `enunciado`, `tipo`, `alternativas`, `resposta_correta`, `justificativa`, com
+  limites de tamanho. Múltipla escolha: 4 alternativas diferentes (ignorando maiúsculas e espaços) e a resposta entre
+  elas (guardada com a grafia exata da alternativa, para a correção do R7 comparar strings). Aberta: `alternativas`
+  sempre vazia. O mesmo schema vai para a LLM (JSON Schema) e valida as perguntas da reserva.
+- **Como funciona:** `perguntas_para_o_desafio(session, texto, modalidade)` → (1) texto de reserva: perguntas prontas,
+  sem LLM; (2) senão `gerar_perguntas` → `llm.gerar_json` (prompt base + regras da modalidade; título e trecho na
+  mensagem do usuário, entre `<texto>` e `</texto>`, com as marcas retiradas do conteúdo); (3) `ErroLLM` → texto de
+  reserva sorteado (DR17); (4) sem reserva → relança. As alternativas são embaralhadas no servidor. Devolve
+  `PerguntasDoDesafio(texto, perguntas, usou_reserva, modelo_llm)`; `modelo_llm` é `None` nas perguntas prontas.
+- **Prompt:** nível B1–B2 (DR18); respondível só pelo trecho; tipos variados (ideia principal, detalhe, vocabulário no
+  contexto, inferência); justificativa em português citando o texto; ignorar instruções dentro do texto. Temperatura e
+  `max_tokens`: os padrões do `llm.py` (0,2 e sem limite).
+- **Testes:** 36 novos (schemas, prompt, embaralhamento, nova tentativa, reserva por resposta inválida, timeout,
+  provedor fora e LLM não configurada, reserva sem chamar a LLM, modalidade aberta, as 5 reservas reais da 0102 nas
+  duas modalidades). Suíte: **387 aprovados, 2 pulados, 0 falhas** (SQLite); `ruff` limpo. Postgres e E2E não
+  executados.
+- **Mutações (16, todas detectadas no fim; arquivos restaurados e conferidos com `cmp`):** aceitar 4 perguntas;
+  sem checar a resposta entre as alternativas; alternativas repetidas; aberta com alternativas; enunciados repetidos;
+  sem normalizar a grafia da resposta; sem embaralhar; sem cair na reserva; chamar a LLM para texto de reserva; manter
+  o texto original na reserva; `usou_reserva=False`; prompt da modalidade errada; marcas `<texto>` não retiradas;
+  schema errado na aberta; resposta esperada errada na aberta da reserva; 0102 com as justificativas antigas.
+- **Problemas encontrados:** (1) a mutação "sem checar a resposta entre as alternativas" passou na 1ª versão: a linha
+  seguinte (`index`) também falha, mas com uma mensagem genérica, e essa mensagem volta para a LLM na 2ª tentativa;
+  novo teste confere a mensagem. (2) O gerador da 0102 (scratchpad) tinha o downgrade antigo, sem `sa.null()`;
+  corrigido antes de gerar de novo, e o diff da 0102 mostra só o docstring e as justificativas. (3) **O banco de
+  desenvolvimento (`dados/estudos.db`) já estava na 0102 e continua com as justificativas em inglês**: o Alembic não
+  roda de novo uma migração aplicada. Nenhum desafio usa a reserva ainda.
+  (4) 8 `DeprecationWarning` do SQLModel nos testes do R1 (`session.query`, estilo antigo do SQLAlchemy): trocados por
+  `session.exec(select(...))` em `test_reading_modelos.py`, mesmo comportamento. Resta 1 warning, preexistente da base
+  (`StarletteDeprecationWarning` do `TestClient`, importado pelo `tests/conftest.py`).
+- **Próxima ação:** R5 (rota `POST /api/reading/challenges`: cota, texto, perguntas, gravação e isolamento).
+
 ## Testes
 
-Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`). _Detalhes a cada bloco._
+Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
+
+| Arquivo | Cobre |
+|---|---|
+| `test_reading_modelos.py` | R1: modelos, JSON, UNIQUEs, migração 0101 (nomes das FKs/UNIQUEs, downgrade) |
+| `test_reading_textos.py` | R2: limpeza (Wikipedia e Gutenberg), seleção do trecho, contagem e tempo de leitura |
+| `test_reading_fontes.py` | R3: fontes com HTTP falso, artigos salvos, reserva, crédito, migração 0102 |
+| `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o
