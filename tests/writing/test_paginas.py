@@ -39,7 +39,24 @@ def test_logado_recebe_a_pagina_com_todas_as_telas(entrar_como):
     for tela in ("inicio", "editor", "fim", "resultado", "rewrite"):
         assert f'data-tela="{tela}"' in miolo.text
     assert "data-res-rewrite" in miolo.text  # o caminho do resultado para o Rewrite Challenge
-    assert 'data-rw-erro role="alert"' in miolo.text  # erro do envio do Rewrite na própria tela (não no modal)
+
+
+def test_cada_tela_tem_o_seu_espaco_de_erro(entrar_como):
+    """Os erros aparecem na tela aberta (avisar() no writing.js): cada tela precisa do seu [data-erro]."""
+    miolo = entrar_como("ana@exemplo.com").get("/writing", headers=HTMX).text
+    telas = re.findall(r'<section[^>]*data-tela="(\w+)"[^>]*>(.*?)</section>', miolo, re.DOTALL)
+
+    assert [nome for nome, _ in telas] == ["inicio", "editor", "fim", "resultado", "rewrite"]
+    for nome, conteudo in telas:
+        assert conteudo.count('<p class="writing-erro" data-erro role="alert" hidden></p>') == 1, nome
+
+
+def test_writing_nao_usa_o_modal_de_erro_da_base():
+    """O botão "início" do modal da base (mostrarErro) leva para a tela do Shadowing, fora do Writing, e faria perder
+    o que estiver digitado. Os erros do Writing ficam na própria tela (avisar)."""
+    js = JS_DA_PAGINA.read_text(encoding="utf-8")
+    assert not re.search(r"\bmostrarErro\s*\(", js)  # nenhuma chamada (o nome pode aparecer num comentário)
+    assert not re.search(r"import\s*\{[^}]*\bmostrarErro\b", js)  # nem o import
 
 
 def test_recarregar_com_a_redacao_na_url_entrega_a_pagina(entrar_como):

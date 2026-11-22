@@ -1,5 +1,7 @@
-<!-- Writing Challenge (Membro 3): o JavaScript está em static/js/paginas/writing.js, que alterna as três telas.
-     Só estrutura fixa aqui: tudo o que vem do servidor (tema, texto, nomes) entra pelo JS com textContent. -->
+<!-- Writing Challenge (Membro 3): o JavaScript está em static/js/paginas/writing.js, que alterna as telas.
+     Só estrutura fixa aqui: tudo o que vem do servidor (tema, texto, nomes) entra pelo JS com textContent.
+     Cada tela tem o seu [data-erro]: os erros aparecem na própria tela, e não no modal da base, cujo botão
+     "início" levaria para fora do Writing (e, no Rewrite, faria perder as reescritas digitadas). -->
 <div class="pagina writing" data-pagina="writing">
 
     <section class="writing-tela animate-fade-in" data-tela="inicio">
@@ -10,6 +12,7 @@
         <div data-aviso-ia></div>
         <p class="writing-instrucao">Escolha uma categoria. O tema é sorteado dentro dela.</p>
         <div class="writing-categorias" data-categorias></div>
+        <p class="writing-erro" data-erro role="alert" hidden></p>
         <h3 class="writing-subtitulo">Redações recentes</h3>
         <div class="writing-recentes" data-recentes></div>
     </section>
@@ -30,6 +33,7 @@
             <span class="writing-salvo" data-salvo aria-live="polite"></span>
         </div>
         <div data-aviso-ia-envio></div>
+        <p class="writing-erro" data-erro role="alert" hidden></p>
         <div class="writing-acoes">
             <button type="button" class="writing-botao" data-sair>Salvar e voltar</button>
             <span class="writing-dica" data-dica></span>
@@ -41,6 +45,7 @@
         <h2 class="writing-titulo" data-fim-titulo></h2>
         <p class="writing-fim-texto" data-fim-texto></p>
         <p class="writing-fim-aviso" data-fim-aviso></p>
+        <p class="writing-erro" data-erro role="alert" hidden></p>
         <div class="writing-acoes">
             <button type="button" class="writing-botao" data-voltar>Voltar ao início</button>
             <button type="button" class="writing-botao principal" data-avaliar hidden>Avaliar de novo</button>
@@ -73,6 +78,7 @@
                 <p class="writing-resumo" data-res-resumo></p>
             </aside>
         </div>
+        <p class="writing-erro" data-erro role="alert" hidden></p>
         <div class="writing-acoes">
             <button type="button" class="writing-botao" data-res-voltar>Voltar ao início</button>
             <button type="button" class="writing-botao principal" data-res-rewrite hidden>Rewrite Challenge →</button>
@@ -86,8 +92,7 @@
         </header>
         <p class="writing-instrucao" data-rw-intro></p>
         <div class="writing-rw-problemas" data-rw-problemas></div>
-        <!-- Erro do envio na própria tela (não no modal da base, cujo botão "início" faria perder as reescritas). -->
-        <p class="writing-rw-erro" data-rw-erro role="alert" hidden></p>
+        <p class="writing-erro" data-erro role="alert" hidden></p>
         <div class="writing-acoes" data-rw-envio>
             <span class="writing-dica" data-rw-dica></span>
             <button type="button" class="writing-botao principal" data-rw-enviar disabled>Enviar reescritas</button>

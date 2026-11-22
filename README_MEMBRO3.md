@@ -253,6 +253,7 @@ usuario ──1:N──► writingattempt ──N:1──► writingprompt   (te
 | D27 | 21/11/2026 | A medição com a LLM real vira um **teste opcional** no repositório (`tests/writing/test_llm_real.py`, só com `LLM_REAL=1`) | O Membro 4 consegue medir os tempos no servidor de produção com o mesmo código. É o único lugar que contorna, de propósito e só com a variável, a fixture `llm_desligada` da base (por `monkeypatch`, sem alterar o `conftest.py`) |
 | D28 | 21/11/2026 | Rodar a suíte no **PostgreSQL** → revisto: **fica para a integração do Membro 4** | É o banco de produção, mas o Docker não está instalado na máquina; instalar o Docker Desktop (WSL2, administrador) só para isso não compensa, já que o Membro 4 roda a suíte no Postgres na integração |
 | D29 | 21/11/2026 | **E2E no navegador** (`tests/writing/test_e2e_writing.py`, só com `E2E=1`): autosave + recarregar, resultado com destaques, Rewrite | Única validação automática da tela; no padrão do E2E da base |
+| D30 | 21/11/2026 | O Writing **não usa o modal de erro da base**: todo erro aparece na tela aberta (`[data-erro]` de cada tela, função `avisar`). Corrigidos os 6 usos de uma vez | O botão "início" do modal leva para a tela do Shadowing (fora do Writing). Mudar o modal seria alteração na base e afetaria as três features |
 
 Todas as decisões respeitam a base protegida: os limites viram constantes nos serviços `writing_*.py` (nada em
 `app/config.py`), nenhuma variável de ambiente ou dependência nova, `llm.py` usado sem alteração e a cota só na rota
@@ -290,6 +291,7 @@ W1 Modelos + migração 0301 (esquema)
 | W8 | Rewrite no backend | Seleção dos problemas; comando por problema; endpoint da reescrita; comparação; avaliação da 2ª versão; histórico | ✅ concluído |
 | W9 | Tela do Rewrite | Interface do Rewrite Challenge | ✅ concluído |
 | W10 | Integração e entrega | Testes unitários da avaliação (fechamento); testes de integração da sequência completa | ✅ concluído (Postgres fica para a integração do Membro 4) |
+| W10.1 | Erros na própria tela | Correção: o modal de erro da base levava para fora do Writing | ✅ concluído |
 
 ### Cronograma (2 dias)
 
@@ -667,6 +669,37 @@ visual. Se o prazo apertar, a proposta é um 3º dia curto para o W10, sem corta
 - **Suíte inteira (SQLite):** **454 coletados, 450 aprovados, 4 pulados** (E2E e Postgres da base; E2E e `LLM_REAL`
   do Writing, todos opcionais), **0 falhas**; `ruff` limpo; `test_base_protegida` verde.
 
+#### W10.1 — Erros na própria tela (correção)
+- **Status:** concluído (21/11/2026): testes automáticos e teste manual do usuário aprovados.
+- **Problema relatado:** com a cota esgotada, clicar numa categoria abria o modal de erro da base ("Você já fez os 10
+  desafios de hoje…"), e o botão **"início"** dele levava para a tela do Shadowing. O "×" mantinha no Writing.
+- **Causa:** o modal é global da base (`app/templates/base.html`, `#botaoErro` com `hx-get="/inicio"
+  hx-push-url="/"`), feito para voltar à tela do Shadowing. O `writing.js` o usava (`mostrarErro`) em 6 lugares. A
+  mensagem em si (429 `limite_de_desafios`) estava correta: a conta tinha usado os 10 desafios do dia nos testes.
+- **Correção (D30):** cada uma das 5 telas ganhou um `<p class="writing-erro" data-erro role="alert" hidden>`;
+  `avisar(mensagem)` escreve (com `textContent`) no da tela visível, e `limparAviso()` esconde todos (chamado por
+  `mostrarTela()`, ao tentar de novo e ao editar uma reescrita). Quando o erro leva a outra tela, a troca vem
+  **antes** do aviso. O par `mostrarErroDoRewrite`/`esconderErroDoRewrite` (W9) virou um caso dessas funções, e a
+  classe `.writing-rw-erro` passou a se chamar `.writing-erro`.
+- **Os 6 casos:** (1) criar desafio (ex.: 429) → aviso no início; (2) abrir redação inexistente (404) → início + aviso;
+  (3) erro inesperado no envio → aviso no editor, texto editável; (4) erro inesperado no "avaliar de novo" → aviso na
+  tela "Redação enviada"; (5) erro ao abrir o Rewrite → resultado + aviso; (6) rodada do Rewrite já gravada →
+  recarrega o Rewrite + aviso.
+- **Arquivos:** `app/templates/paginas/writing.html`, `app/static/js/paginas/writing.js`, `app/static/css/writing.css`,
+  `tests/writing/test_paginas.py`. Nenhum arquivo da base; nenhum encaixe.
+- **Testes:** `test_paginas.py` com 16 testes (+ cada tela tem exatamente um `[data-erro]`; + o `writing.js` não
+  chama nem importa `mostrarErro`; o teste antigo do `data-rw-erro` foi substituído). `node --check` no `writing.js`.
+  Suíte inteira: **456 coletados, 452 aprovados, 4 pulados, 0 falhas**; `ruff` limpo; `test_base_protegida` verde.
+- **Mutações (3, todas detectadas, arquivos restaurados e conferidos por hash):** (1) criar desafio volta a chamar
+  `mostrarErro`; (2) o import de `mostrarErro` volta; (3) a tela "fim" sem o espaço de erro.
+- **Problemas encontrados:** (1) o primeiro teste "sem `mostrarErro`" procurava o nome em qualquer lugar e falhou por
+  causa do comentário que explica a decisão; passou a procurar a chamada e o import. (2) O script de mutação falhou
+  duas vezes ao ler a saída do pytest (codificação do Windows e a falta da linha de resumo com `-q`), sem afetar os
+  arquivos (restaurados no `finally`); corrigido e refeito.
+- **Teste manual (usuário): aprovado.** Roteiro: caso 1 com a cota esgotada (clicar numa categoria: aviso vermelho abaixo das
+  categorias, sem modal); caso 2 abrindo `/writing?redacao=99999`; tema claro/escuro. Os casos 3 a 6 são difíceis de
+  provocar à mão: cobertos pela revisão e pela trava do teste.
+
 ## Testes
 
 ```powershell
@@ -688,7 +721,7 @@ Cobertura dos arquivos do Writing: **100%** (W10).
 | `tests/writing/test_e2e_writing.py` | **Opcional (`E2E=1`)**: no Chromium, autosave + recarregar; envio → resultado com os destaques e o detalhe; Rewrite com comparação e veredito, rodada 2 e F5 |
 | `tests/writing/test_llm_real.py` | **Opcional (`LLM_REAL=1`)**: 2 correções e 1 avaliação de Rewrite com a LLM de verdade, com os tempos impressos |
 | `tests/writing/conftest.py` | Fixtures `temas` (o `create_all` dos testes não roda a migração de dados) e `cota_nova` (automática: limitador de cota novo a cada teste), e `criar_tema()` |
-| `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`), paridade da contagem de palavras JS × Python e os destaques do resultado (`partesDoTexto` executada no Node.js; os testes com Node são pulados se ele não estiver instalado) |
+| `tests/writing/test_paginas.py` | Página `/writing` (login, telas, F5), encaixes (CSS no `base.html`, `main.js`), paridade da contagem de palavras JS × Python, erros na própria tela (D30) e os destaques do resultado (`partesDoTexto` executada no Node.js; os testes com Node são pulados se ele não estiver instalado) |
 | `tests/writing/test_avaliacao_servico.py` | Serviço de avaliação com `llm_falsa`: contrato, respostas inválidas, falhas da LLM, mensagens (inclusive prompt injection), nota geral e localização dos trechos |
 | `tests/writing/test_api_avaliacao.py` | Envio que corrige, falhas da LLM (redação nunca se perde), "avaliar de novo" e seus limites, duplo clique, isolamento e tamanhos/tipos de redação no fluxo completo |
 | `tests/writing/test_rewrite.py` | Rewrite: extração da frase, seleção dos problemas, comparação, mensagem para a LLM, rodadas, validações, falhas da LLM, envio duplo e isolamento |
@@ -814,7 +847,7 @@ Checklist da seção 10 do `CLAUDE.md`:
 | **Migrações** | `0301` (esquema: 4 tabelas novas, nenhuma tabela da base alterada) e `0302` (**dados**: 24 temas). A `0301` tem `down_revision = "0006"`. Na integração, juntar as cabeças das três faixas com `alembic merge` **antes** de `python -m app.migrar` (com várias cabeças, `migrar.revisao_mais_recente()`, que usa `get_current_head()`, falha) |
 | **Alterações na base** | **Nenhuma.** Só os 4 encaixes (5 linhas), listados com antes e depois em "Encaixes na base" |
 | **CPU, memória e tempos** | Leve no servidor (sem processamento pesado). Tempo dominado pela LLM: ver abaixo |
-| **Suíte final** | SQLite: **454 coletados, 450 aprovados, 4 pulados (opcionais), 0 falhas**; `ruff` limpo; cobertura do Writing 100%. **E2E (`E2E=1`): 3 passed.** **`LLM_REAL=1`: 3 passed** (correção 3,1 a 3,7 s; Rewrite 1,1 s). **Postgres: não executado** (Docker ausente na máquina do Membro 3; **rodar na integração**) |
+| **Suíte final** | SQLite (depois do W10.1): **456 coletados, 452 aprovados, 4 pulados (opcionais), 0 falhas**; `ruff` limpo; cobertura do Writing 100%. **E2E (`E2E=1`): 3 passed.** **`LLM_REAL=1`: 3 passed** (correção 3,1 a 3,7 s; Rewrite 1,1 s). **Postgres: não executado** (Docker ausente na máquina do Membro 3; **rodar na integração**) |
 
 Detalhes:
 

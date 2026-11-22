@@ -300,7 +300,8 @@
     font-weight: 600;
 }
 .writing-rw-comentario { color: var(--text-sub); }
-.writing-rw-erro {
+/* Erro na própria tela (todas as telas do Writing; ver avisar() no writing.js). */
+.writing-erro {
     margin: 12px 0 0;
     padding: 10px 14px;
     border-radius: 10px;
@@ -309,7 +310,7 @@
     color: #ef4444;
     text-align: left;
 }
-.writing-rw-erro[hidden] { display: none; }
+.writing-erro[hidden] { display: none; }
 
 @media (max-width: 800px) {
     .writing-resultado { grid-template-columns: 1fr; }

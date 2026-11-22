@@ -11,7 +11,7 @@ import {
 } from "../componentes/writing-destaques.js";
 import { api } from "../nucleo/api.js";
 import { apiWriting } from "../nucleo/api-writing.js";
-import { contagemRegressiva, formatarTempo, mostrarErro } from "../nucleo/interface.js";
+import { contagemRegressiva, formatarTempo } from "../nucleo/interface.js";
 import { registrarPagina } from "../nucleo/paginas.js";
 
 // MESMA regra de app/services/writing_texto.py (tests/writing/test_paginas.py confere que a expressão é a mesma).
@@ -53,7 +53,25 @@ registrarPagina("writing", (raiz) => {
     let categorias = [];
 
     function mostrarTela(nome) {
+        limparAviso();
         Object.entries(telas).forEach(([chave, tela]) => { tela.hidden = chave !== nome; });
+    }
+
+    // Erros na própria tela ([data-erro] de cada uma), e não no modal da base (mostrarErro): o botão "início" do
+    // modal leva para a tela do Shadowing, fora do Writing. Como mostrarTela() apaga o aviso, quem troca de tela por
+    // causa de um erro chama avisar() DEPOIS da troca.
+    function avisar(mensagem) {
+        const aviso = Object.values(telas).find((tela) => !tela.hidden)?.querySelector("[data-erro]");
+        if (!aviso) return;
+        aviso.textContent = mensagem;
+        aviso.hidden = false;
+    }
+
+    function limparAviso() {
+        raiz.querySelectorAll("[data-erro]").forEach((aviso) => {
+            aviso.hidden = true;
+            aviso.textContent = "";
+        });
     }
 
     function definirUrl(id, noRewrite = false) {
@@ -129,10 +147,11 @@ registrarPagina("writing", (raiz) => {
     async function criarDesafio(categoria) {
         const botoes = campo("categorias").querySelectorAll("button");
         botoes.forEach((botao) => { botao.disabled = true; });
+        limparAviso();
         try {
             abrirEditor(await apiWriting.criar(categoria));
         } catch (erro) {
-            mostrarErro(erro.message);  // ex.: 429, com o tempo até a cota renovar
+            avisar(erro.message);  // ex.: 429, com o tempo até a cota renovar
             carregarSituacao();
         } finally {
             botoes.forEach((botao) => { botao.disabled = false; });
@@ -191,8 +210,8 @@ registrarPagina("writing", (raiz) => {
         try {
             dados = await apiWriting.obter(id);
         } catch (erro) {
-            mostrarErro(erro.message);
             await abrirInicio();
+            avisar(erro.message);  // depois da troca de tela (ex.: 404 de /writing?redacao=99999)
             return;
         }
         mostrarRedacao(dados);
@@ -304,6 +323,7 @@ registrarPagina("writing", (raiz) => {
         // D11: confirma no botão; o envio automático do fim do tempo não pergunta.
         if (!automatico && !confirm("Enviar a redação? Depois de enviada, ela não pode mais ser editada.")) return;
         enviando = true;
+        limparAviso();
         clearTimeout(temporizador);
         botaoEnviar.disabled = true;
         botaoEnviar.textContent = "Enviando e corrigindo…";
@@ -331,7 +351,7 @@ registrarPagina("writing", (raiz) => {
                 pararEditor();
                 await recarregarDepoisDaFalha(erro);
             } else {
-                mostrarErro(erro.message);
+                avisar(erro.message);
                 texto.readOnly = false;  // o texto continua na tela; dá para tentar de novo
             }
         } finally {
@@ -380,6 +400,7 @@ registrarPagina("writing", (raiz) => {
         const botao = campo("avaliar");
         botao.disabled = true;
         botao.textContent = "Corrigindo…";
+        limparAviso();
         try {
             mostrarRedacao(await apiWriting.avaliar(redacao.id));
         } catch (erro) {
@@ -388,7 +409,7 @@ registrarPagina("writing", (raiz) => {
             } else if (erro.codigo === "redacao_ja_avaliada") {
                 await abrir(redacao.id);
             } else {
-                mostrarErro(erro.message);
+                avisar(erro.message);
                 botao.disabled = false;
                 botao.textContent = "Avaliar de novo";
             }
@@ -528,8 +549,8 @@ registrarPagina("writing", (raiz) => {
         try {
             desafio = await apiWriting.rewrite(id);
         } catch (erro) {
-            mostrarErro(erro.message);
             await abrir(id);
+            avisar(erro.message);  // depois da troca de tela
             return;
         }
         desenharRewrite(desafio);
@@ -556,7 +577,6 @@ registrarPagina("writing", (raiz) => {
             return cartaoDoProblema(problema, posicao + 1, manter[problema.indice] ?? inicial, inicial);
         }));
         campo("rw-envio").hidden = concluido;
-        esconderErroDoRewrite();
         atualizarEnvioDoRewrite();
 
         campo("rw-titulo-historico").hidden = historico.length === 0;
@@ -597,7 +617,7 @@ registrarPagina("writing", (raiz) => {
         campoTexto.dataset.indice = problema.indice;
         campoTexto.setAttribute("aria-label", `Reescrita da frase ${numero}`);
         campoTexto.addEventListener("input", () => {
-            esconderErroDoRewrite();
+            limparAviso();
             atualizarEnvioDoRewrite();
         });
         textoInicial.set(campoTexto, inicial);
@@ -630,35 +650,25 @@ registrarPagina("writing", (raiz) => {
                 : "";
     }
 
-    function mostrarErroDoRewrite(mensagem) {
-        const aviso = campo("rw-erro");
-        aviso.textContent = `Não foi possível avaliar agora: ${mensagem} As suas reescritas continuam aqui: `
-            + "tente enviar de novo.";
-        aviso.hidden = false;
-    }
-
-    function esconderErroDoRewrite() {
-        campo("rw-erro").hidden = true;
-    }
-
     async function enviarRewrite() {
         const campos = camposDoRewrite();
         const reescritas = campos.map((c) => ({ indice: Number(c.dataset.indice), texto: c.value }));
         const botao = campo("rw-enviar");
         botao.disabled = true;
         botao.textContent = "Avaliando…";
-        esconderErroDoRewrite();
+        limparAviso();
         campos.forEach((c) => { c.readOnly = true; });
         try {
             desenharRewrite(await apiWriting.enviarRewrite(rewriteId, reescritas));
         } catch (erro) {
             if (erro.codigo === "rewrite_concluido" || erro.codigo === "rodada_ja_enviada") {
-                mostrarErro(erro.message);  // a rodada já está gravada: não há texto a perder, só recarregar
+                // A rodada já está gravada: não há texto a perder. Recarrega e avisa (depois da troca de tela).
                 await abrirRewrite(rewriteId);
+                avisar(erro.message);
             } else {
-                // D23: nada foi gravado e a rodada não foi gasta. O erro fica NA TELA (não no modal da base, cujo
-                // botão "início" levaria para fora da página e faria perder as reescritas digitadas).
-                mostrarErroDoRewrite(erro.message);
+                // D23: nada foi gravado e a rodada não foi gasta. O erro fica na tela, e os textos, nos campos.
+                avisar(`Não foi possível avaliar agora: ${erro.message} As suas reescritas continuam aqui: `
+                    + "tente enviar de novo.");
                 campos.forEach((c) => { c.readOnly = false; });
                 atualizarEnvioDoRewrite();
             }
