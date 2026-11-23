@@ -1,6 +1,6 @@
 """Reading Challenge (Membro 1): schemas Pydantic da feature.
 
-Blocos R5 a R7: entrada e saída da API (fim do arquivo).
+Blocos R5 a R8: entrada e saída da API (fim do arquivo).
 
 Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 - vai para a LLM como JSON Schema (o llm.gerar_json o anexa às instruções) e valida a resposta dela;
@@ -179,6 +179,7 @@ class PerguntaCorrigida(BaseModel):
     alternativas: list[str]
     resposta: str                 # a da pessoa ("" = não respondida)
     correta: bool | None          # None enquanto a aberta não foi corrigida (R8)
+    pontuacao: float | None       # 1, 0,5 (só na aberta: parcialmente correta, DR29) ou 0; None antes da correção
     resposta_correta: str
     justificativa: str
     comentario: str | None = None  # comentário da correção da aberta (R8)
@@ -191,10 +192,43 @@ class ResultadoDesafio(BaseModel):
     modalidade: str
     usou_reserva: bool
     acertos: int | None
-    nota: float | None  # 0 a 10 (cada acerto vale 2, DR27)
+    nota: float | None  # 0 a 10: soma das pontuações × 2 (DR27, DR29)
     tempo_leitura_segundos: int
     tempo_resposta_segundos: int
     enviado_em: datetime
     avaliado_em: datetime | None
     texto: TextoDoDesafio
     perguntas: list[PerguntaCorrigida]
+
+
+# --- Bloco R8: correção das abertas pela LLM ---
+
+LIMITE_COMENTARIO = 400
+
+
+class CorrecaoAberta(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    ordem: int = Field(ge=1, le=QUANTIDADE_PERGUNTAS)
+    pontuacao: Literal[0, 0.5, 1] = Field(description="1 = correta; 0.5 = parcialmente correta; 0 = errada.")
+    comentario: str = Field(min_length=1, max_length=LIMITE_COMENTARIO,
+                            description="Em português, uma ou duas frases: o que estava certo e o que faltou.")
+
+    @field_validator("pontuacao", mode="before")
+    @classmethod
+    def _numero_e_nao_booleano(cls, valor):
+        if isinstance(valor, bool):  # true/false seria "correta", não pontuação
+            raise ValueError("a pontuacao é um número: 0, 0.5 ou 1")
+        return valor
+
+
+class CorrecoesAbertas(BaseModel):
+    """Resposta da LLM: uma correção por pergunta, com as ordens 1 a 5 (devolvidas em ordem)."""
+    correcoes: list[CorrecaoAberta] = Field(min_length=QUANTIDADE_PERGUNTAS, max_length=QUANTIDADE_PERGUNTAS)
+
+    @field_validator("correcoes")
+    @classmethod
+    def _uma_por_pergunta(cls, correcoes: list[CorrecaoAberta]) -> list[CorrecaoAberta]:
+        if sorted(c.ordem for c in correcoes) != list(range(1, QUANTIDADE_PERGUNTAS + 1)):
+            raise ValueError("deve haver exatamente uma correção para cada ordem de 1 a 5")
+        return sorted(correcoes, key=lambda c: c.ordem)

@@ -33,11 +33,16 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 | `POST /api/reading/challenges/{id}/encerrar-leitura` (idempotente) | — | 200: o resumo (`estado: "respondendo"`) + `perguntas[{ordem, tipo, enunciado, alternativas}]`, **sem** resposta correta e sem justificativa | 404 |
 | `POST /api/reading/challenges/{id}/respostas` | `{"respostas": [5 textos]}` (na ordem; `""` = não respondida; até 1000 caracteres; campo extra → 422) | 201: o resultado (abaixo) | 422 `dados_invalidos`; 422 `resposta_invalida` (+ `ordem`: na MC, fora das alternativas); 409 `leitura_em_andamento`; 409 `ja_respondido`; 404 |
 | `GET /api/reading/challenges/{id}/resultado` | — | 200: o resultado | 409 `sem_resultado`; 404 |
+| `POST /api/reading/challenges/{id}/avaliar` | — | 200: o resultado já corrigido (nova correção da aberta pela LLM) | 409 `avaliacao_indisponivel`; 502/503/504 `llm_*`; 404 |
+
+Na aberta, `POST /respostas` grava as respostas e **depois** chama a LLM: se ela falhar, sai o erro padrão da LLM
+(502/503/504), as respostas continuam gravadas e o desafio fica em `erro_avaliacao` (o `GET /resultado` mostra).
 
 **Resultado:** `id, estado, modalidade, usou_reserva, acertos, nota (0–10), tempo_leitura_segundos,
 tempo_resposta_segundos, enviado_em, avaliado_em, texto{...}, perguntas[{ordem, tipo, enunciado, alternativas,
-resposta, correta, resposta_correta, justificativa, comentario}]`. Na aberta, antes da correção (R8): `correta`,
-`acertos`, `nota` e `avaliado_em` são `null`.
+resposta, correta, pontuacao, resposta_correta, justificativa, comentario}]`. `pontuacao`: 1, 0,5 (só na aberta) ou
+0; `correta` = pontuação 1; `acertos` = quantas valem 1; `nota` = soma das pontuações × 2. Enquanto a aberta não foi
+corrigida: `correta`, `pontuacao`, `acertos`, `nota` e `avaliado_em` são `null`.
 
 Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servidor (0 fora da leitura).
 
@@ -48,9 +53,11 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 - `ja_respondido` (409): o desafio já tem uma tentativa.
 - `resposta_invalida` (422, com `ordem`): na múltipla escolha, a resposta não é uma das alternativas.
 - `sem_resultado` (409): resultado pedido antes do envio das respostas.
+- `avaliacao_indisponivel` (409): nova correção pedida fora de `erro_avaliacao` (ou de `avaliando` há mais de 5 min).
 
-**Estados do desafio:** `lendo` → `respondendo` (R6) → `corrigido` (múltipla escolha, R7) ou `avaliando` (aberta,
-R7; a correção pela LLM é o R8).
+**Estados do desafio:** `lendo` → `respondendo` (R6) → `corrigido` (múltipla escolha, R7). Aberta: `respondendo` →
+`avaliando` (respostas gravadas) → `corrigido`, ou `erro_avaliacao` se a LLM falhar → (`/avaliar`) `avaliando` →
+`corrigido` (R8).
 
 ## Banco de dados
 
@@ -91,6 +98,10 @@ R7; a correção pela LLM é o R8).
 | DR26 | 22/11/2026 | O resultado traz o texto de novo (título, conteúdo e crédito) | A leitura acabou; serve para conferir as justificativas |
 | DR27 | 22/11/2026 | Nota de 0 a 10: cada acerto vale 2 | Escala prevista no modelo (`nota`) |
 | DR28 | 22/11/2026 | Respostas com o desafio em `lendo` → 409 `leitura_em_andamento` (sem encerrar automaticamente) | A tela sempre encerra antes; encerrar sozinho esconderia um erro do front |
+| DR29 | 22/11/2026 | **Crédito parcial** na aberta (decisão do usuário): a LLM dá 1, 0,5 ou 0 por pergunta, com comentário em português. Nota = soma × 2 (0 a 10); `acertos` conta só as que valem 1. Julga o sentido, não a gramática | Mais justo com respostas incompletas; a escala da nota continua a mesma da múltipla escolha |
+| DR30 | 22/11/2026 | A correção recebe o texto inteiro, além da resposta esperada | Aceita respostas certas escritas de outro jeito (≈ 600 tokens a mais) |
+| DR31 | 22/11/2026 | Nova correção (`/avaliar`) em `erro_avaliacao`, ou em `avaliando` há mais de 5 minutos (servidor caiu no meio da chamada) | Ninguém fica com o desafio travado |
+| DR32 | 22/11/2026 | Falha da LLM ao corrigir: grava `erro_avaliacao` e relança o `ErroLLM` (502/503/504) | Convenção documentada no `llm.py`; o front já trata `erro.codigo` |
 
 ## Plano e progresso
 
@@ -110,8 +121,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11) |
 | R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11) |
-| R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11), aguardando commit |
-| R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | Planejado |
+| R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11) |
+| R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11), aguardando commit |
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | Planejado |
 | R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | Planejado |
 | R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | Planejado |
@@ -333,6 +344,43 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 - **Próxima ação:** R8 (correção das abertas pela LLM, com as respostas gravadas antes da chamada e o estado
   `erro_avaliacao` com nova tentativa).
 
+### R8 — Correção das abertas pela LLM (✅ 22/11/2026)
+
+- **Arquivos:** `app/services/reading_avaliacao.py` (novo: prompt, `avaliar_abertas`, `reavaliar`,
+  `mensagem_da_correcao`), `app/schemas_reading.py` (`CorrecaoAberta`, `CorrecoesAbertas`; `pontuacao` na
+  `PerguntaCorrigida`), `app/api/reading.py` (o envio da aberta chama a correção; rota `/avaliar`; `pontuacao` no
+  resultado, derivada do acerto na múltipla escolha), `tests/reading/test_reading_avaliacao.py` (novo),
+  `tests/reading/test_reading_respostas.py` (os 2 testes da aberta "sem correção" do R7 saíram: o comportamento mudou
+  de propósito e está coberto no R8). Nenhum arquivo da base, nenhuma migração.
+- **Como funciona:** o R7 grava as respostas (estado `avaliando`); em seguida `avaliar_abertas` chama
+  `llm.gerar_json(sistema=PROMPT_CORRECAO, modelo=CorrecoesAbertas)`. A mensagem leva o texto (DR30) e, por pergunta,
+  o enunciado, a resposta esperada e a resposta da pessoa entre `<resposta_do_aluno>` (marcas retiradas do conteúdo).
+  O schema exige 5 correções com as ordens 1–5, pontuação 0, 0,5 ou 1 (booleano recusado) e comentário. O servidor
+  força 0 nas respostas em branco e calcula `acertos` e `nota` (DR29); com tudo em branco, nem chama a LLM. Sucesso →
+  `avaliacao`, `modelo_llm`, `avaliado_em`, estado `corrigido`. `ErroLLM` → `erro_avaliacao` (commit) e relança (DR32).
+  `reavaliar`: em `erro_avaliacao`, um UPDATE condicional reserva o desafio (`erro_avaliacao` → `avaliando`) antes da
+  chamada; em `avaliando` há mais de 5 minutos, segue direto (DR31); outros casos → `AvaliacaoIndisponivel` (409).
+- **Testes:** 31 novos: crédito parcial (nota 7 com 1+0,5+0+1+1), gravação, GET igual; prompt (texto, perguntas,
+  respostas esperadas, delimitação, injeção); branco vale 0 mesmo com a LLM dizendo 1; tudo em branco sem LLM; texto
+  livre; nova tentativa do `llm.py`; múltipla escolha sem LLM; 5 respostas inválidas da LLM (respostas preservadas e
+  `erro_avaliacao`); timeout, provedor fora e LLM não configurada; `/avaliar` depois de falha (falha de novo e depois
+  corrige); 4 casos de `/avaliar` indisponível; múltipla escolha forçada a `erro_avaliacao`; desafio preso há 5 min;
+  dois cliques (a 2ª é recusada enquanto a 1ª espera a LLM); isolamento; schema. Suíte: **498 aprovados, 2 pulados,
+  0 falhas** (SQLite); `ruff` limpo. Postgres e E2E não executados.
+- **Mutações (23, todas detectadas no fim; arquivos restaurados e conferidos):** branco aceito; LLM chamada com tudo
+  em branco; sem `erro_avaliacao`; erro engolido; nota sem o parcial; acertos contando o parcial; sem `modelo_llm`;
+  estado não vira `corrigido`; UPDATE sem condição; `/avaliar` aceitando a múltipla escolha; preso sem esperar; preso
+  nunca liberado; prompt sem o texto, sem a resposta esperada, sem retirar as marcas, sem a regra de injeção; schema
+  aceitando booleano, ordens repetidas, sem ordenar, comentário vazio; envio da aberta sem corrigir; `/avaliar` sem
+  checar o dono; pontuação da múltipla escolha ignorada.
+- **Problemas encontrados:** (1) a mutação "`/avaliar` aceitando a múltipla escolha" passou na 1ª rodada: hoje a
+  múltipla escolha nunca chega a `erro_avaliacao`, e o UPDATE condicional já recusava. A checagem é uma defesa extra;
+  novo teste força esse estado. (2) Risco aceito: dois `/avaliar` simultâneos num desafio **preso** há mais de 5 min
+  podem chamar a LLM duas vezes (sem coluna para marcar a reserva, a condição "preso" continua verdadeira). Só acontece
+  depois de uma queda do servidor no meio da chamada; o resultado fica correto (a última correção vale).
+- **Próxima ação:** R9 (tela de início e leitura com timer, aviso de IA e cota; pontos de encaixe no `base.html` e no
+  `main.js`).
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -345,7 +393,8 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
 | `test_reading_api.py` | R5: criação do desafio pela API (cota, validação, erros, reserva, transação, relógio), resumo e isolamento |
 | `test_reading_leitura.py` | R6: texto só dentro do prazo, encerrar a leitura (idempotente, concorrente), perguntas sem resposta, isolamento |
-| `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, aberta em `avaliando`, isolamento |
+| `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, isolamento |
+| `test_reading_avaliacao.py` | R8: correção das abertas pela LLM (crédito parcial), prompt, falhas, `erro_avaliacao`, `/avaliar`, concorrência |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o

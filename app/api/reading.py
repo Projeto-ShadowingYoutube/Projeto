@@ -11,6 +11,10 @@ sem as respostas. As regras de tempo ficam em app/services/reading_desafios.py.
 
 Respostas (R7): POST /respostas grava a tentativa (e corrige a múltipla escolha); GET /resultado devolve o mesmo
 resultado. As regras ficam em app/services/reading_correcao.py.
+
+Abertas (R8): o POST /respostas grava as respostas e só depois chama a LLM para corrigir; se a LLM falhar, o estado
+fica "erro_avaliacao", o erro padrão da LLM sai (502/503/504) e POST /avaliar tenta de novo
+(app/services/reading_avaliacao.py).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -31,6 +35,7 @@ from app.schemas_reading import (
     ResumoDesafio,
     TextoParaLer,
 )
+from app.services import reading_avaliacao as ra
 from app.services import reading_correcao as rc
 from app.services import reading_desafios as rd
 from app.services import reading_fontes as rf
@@ -95,6 +100,18 @@ def enviar_respostas(corpo: RespostasEnviadas, desafio: ReadingChallenge = Depen
     except rc.RespostaInvalida as erro:
         raise ErroDaApi(422, f"A resposta da pergunta {erro.ordem} não é uma das alternativas.",
                         codigo="resposta_invalida", ordem=erro.ordem) from None
+    if tentativa.modalidade == "aberta":
+        tentativa = ra.avaliar_abertas(session, desafio, tentativa)  # ErroLLM: respostas já gravadas
+    return _resultado(session, desafio, tentativa)
+
+
+@router.post("/challenges/{desafio_id}/avaliar", response_model=ResultadoDesafio)
+def avaliar_de_novo(desafio: ReadingChallenge = Depends(_desafio), session: Session = Depends(get_session)):
+    try:
+        tentativa = ra.reavaliar(session, desafio)
+    except ra.AvaliacaoIndisponivel:
+        raise ErroDaApi(409, "Este desafio não está aguardando uma nova correção.",
+                        codigo="avaliacao_indisponivel") from None
     return _resultado(session, desafio, tentativa)
 
 
@@ -115,6 +132,7 @@ def _resultado(session: Session, desafio: ReadingChallenge, tentativa) -> dict:
         perguntas.append({
             "ordem": pergunta.ordem, "tipo": pergunta.tipo, "enunciado": pergunta.enunciado,
             "alternativas": pergunta.alternativas, "resposta": resposta, "correta": avaliacao.get("correta"),
+            "pontuacao": _pontuacao(avaliacao),
             "resposta_correta": pergunta.resposta_correta, "justificativa": pergunta.justificativa,
             "comentario": avaliacao.get("comentario"),
         })
@@ -126,6 +144,15 @@ def _resultado(session: Session, desafio: ReadingChallenge, tentativa) -> dict:
         "enviado_em": tentativa.enviado_em, "avaliado_em": tentativa.avaliado_em,
         "texto": _texto(session.get(ReadingText, desafio.texto_id)), "perguntas": perguntas,
     }
+
+
+def _pontuacao(avaliacao: dict) -> float | None:
+    """A aberta grava a pontuação (R8); na múltipla escolha ela sai do acerto (1 ou 0)."""
+    if "pontuacao" in avaliacao:
+        return avaliacao["pontuacao"]
+    if "correta" in avaliacao:
+        return 1.0 if avaliacao["correta"] else 0.0
+    return None
 
 
 def _resumo(desafio: ReadingChallenge) -> dict:

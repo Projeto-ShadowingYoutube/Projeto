@@ -244,28 +244,7 @@ def test_corrida_entre_dois_envios_grava_uma_tentativa(engine_teste, relogio, mo
     assert tentativa.respostas == CERTAS
 
 
-# --- Aberta (a correção pela LLM é o R8) ---
-
-def test_aberta_e_gravada_aguardando_avaliacao(entrar_como, relogio, engine_teste, llm_falsa):
-    """A fila da llm_falsa está vazia: qualquer chamada à LLM reprovaria o teste."""
-    ana = entrar_como("ana@exemplo.com")
-    desafio_id = _pronto(ana, relogio, modalidade="aberta")
-
-    corpo = _enviar(ana, desafio_id, ["  Bees make honey.  ", "", "Wax.", "Yes.", "No."]).json()
-
-    assert corpo["estado"] == "avaliando" and corpo["acertos"] is None and corpo["nota"] is None
-    assert corpo["avaliado_em"] is None
-    assert all(p["correta"] is None and p["alternativas"] == [] for p in corpo["perguntas"])
-    assert corpo["perguntas"][0]["resposta"] == "Bees make honey."  # espaços das pontas retirados
-    [tentativa] = _tentativas(engine_teste)
-    assert tentativa.modalidade == "aberta" and tentativa.avaliacao == []
-    assert _estado(engine_teste, desafio_id) == "avaliando" and llm_falsa.chamadas == []
-
-
-def test_aberta_aceita_texto_livre(entrar_como, relogio):
-    ana = entrar_como("ana@exemplo.com")
-    resposta = _enviar(ana, _pronto(ana, relogio, modalidade="aberta"), ["Qualquer coisa."] * 5)
-    assert resposta.status_code == 201  # sem alternativas para conferir
+# A modalidade aberta (respostas gravadas e corrigidas pela LLM) fica em test_reading_avaliacao.py (R8).
 
 
 # --- Isolamento ---
