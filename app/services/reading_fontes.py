@@ -7,7 +7,8 @@ a rota). A limpeza e a seleção do trecho são as funções puras de reading_te
 
 Ordem (decisões DR1, DR12):
 1. Até TENTATIVAS_BUSCA artigos da fonte: os curtos, longos demais (sem bloco válido) ou inadequados são pulados.
-   Falha de rede ou timeout não é repetida (cada nova tentativa esperaria o timeout de novo).
+   Falha de rede, timeout ou limite de uso (429) não é repetida (cada nova tentativa esperaria o timeout de novo, ou
+   insistiria no limite). Na Wikipedia, o sorteio é entre os "Good articles" (R3b).
 2. Não deu: um artigo da mesma fonte já salvo no banco (a LLM gera as perguntas normalmente).
 3. Nenhum salvo: um texto de reserva (migração 0102), que já tem as perguntas prontas.
 4. Nem reserva (banco sem a 0102): TextoIndisponivel, que a rota transforma num 502.
@@ -37,6 +38,9 @@ LIMITE_BYTES_LIVRO = 3 * 1024 * 1024  # lê no máximo 3 MB do livro (o trecho s
 PAGINAS_GUTENDEX = 20  # sorteia entre as 20 primeiras páginas (os livros mais baixados, 32 por página)
 
 URL_WIKIPEDIA = "https://en.wikipedia.org/w/api.php"
+# Sorteio entre os "Good articles" (≈ 40 mil artigos revisados, longos e bem escritos): o sorteio de qualquer artigo
+# trazia quase sempre artigos curtos demais para um trecho de 250–600 palavras (bloco R3b, decisão DR37).
+CATEGORIA_WIKIPEDIA = "Good_articles"
 URL_GUTENDEX = "https://gutendex.com/books/"
 URL_LIVRO_GUTENBERG = "https://www.gutenberg.org/ebooks/{id}"
 
@@ -76,10 +80,14 @@ class TextoBruto:
 # --- Fontes ---
 
 def buscar_wikipedia() -> TextoBruto:
-    """Um artigo aleatório da Wikipedia em inglês, numa única chamada (texto e URL juntos)."""
+    """Um artigo da Wikipedia em inglês sorteado entre os da CATEGORIA_WIKIPEDIA, numa única chamada (texto e URL).
+
+    A busca (CirrusSearch) com gsrsort=random devolve um artigo diferente a cada chamada; gsrnamespace=0 deixa só
+    artigos (sem páginas de usuário, discussão etc.)."""
     parametros = {
         "action": "query", "format": "json", "formatversion": 2,
-        "generator": "random", "grnnamespace": 0, "grnlimit": 1,  # só artigos (sem páginas de usuário etc.)
+        "generator": "search", "gsrsearch": f"incategory:{CATEGORIA_WIKIPEDIA}", "gsrsort": "random",
+        "gsrlimit": 1, "gsrnamespace": 0,
         "prop": "extracts|info", "explaintext": 1, "exlimit": 1, "inprop": "url",
     }
     resposta = _get(URL_WIKIPEDIA, params=parametros, timeout=TIMEOUT_API)

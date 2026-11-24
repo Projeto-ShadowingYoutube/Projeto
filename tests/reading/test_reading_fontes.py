@@ -109,8 +109,30 @@ def test_artigo_bom_e_gravado_e_devolvido(http, session):
 
     url, parametros = http.chamadas[0]
     assert url == rf.URL_WIKIPEDIA
-    assert parametros["params"]["generator"] == "random" and parametros["params"]["grnnamespace"] == 0
     assert parametros["timeout"] == rf.TIMEOUT_API
+
+
+def test_wikipedia_sorteia_entre_os_good_articles(http):
+    """R3b (DR37): o sorteio de qualquer artigo trazia quase sempre artigos curtos demais."""
+    http.respostas = [artigo(1, "Honey bee", BOM)]
+    rf.buscar_wikipedia()
+    [(url, parametros)] = http.chamadas
+    p = parametros["params"]
+    assert url == rf.URL_WIKIPEDIA
+    assert (p["generator"], p["gsrsearch"], p["gsrsort"]) == ("search", "incategory:Good_articles", "random")
+    assert p["gsrlimit"] == 1 and p["gsrnamespace"] == 0  # um artigo por chamada, só do espaço dos artigos
+    assert p["prop"] == "extracts|info" and p["explaintext"] == 1 and p["inprop"] == "url"
+    assert "grnnamespace" not in p and "grnlimit" not in p
+
+
+def test_limite_de_uso_da_wikipedia_nao_e_repetido(http, session):
+    """429 (limite da API, com Retry-After): não insiste; usa um artigo salvo (e depois a reserva)."""
+    limite = _artigo_com_status(429)
+    limite.headers = {"Retry-After": "5"}
+    http.respostas = [limite]
+    salvo = _salvar(session, id_origem="salvo")
+    assert rf.obter_texto(session, "wikipedia").id == salvo.id
+    assert len(http.chamadas) == 1
 
 
 def test_artigos_curtos_ou_inadequados_sao_pulados(http, session):

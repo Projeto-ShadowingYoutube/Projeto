@@ -9,13 +9,29 @@ LLM), conforme a modalidade escolhida.
 
 ## Como usar
 
-_A preencher a partir do bloco R9 (tela)._ Nenhuma variável de ambiente nova: usa as `LLM_*` que já existem.
+1. Entre na conta e clique em **📖 Reading** na barra do topo (ou abra `/reading`).
+2. Leia o aviso de IA e veja quantos desafios restam hoje (10 por dia).
+3. Escolha o tipo de pergunta (múltipla escolha ou aberta), o texto (Wikipedia ou livro do Project Gutenberg) e a
+   velocidade (150, 200 ou 250 palavras por minuto) e clique em **COMEÇAR**.
+4. Leia o texto antes de o tempo acabar. Clique em **TERMINEI DE LER** quando quiser; no zero, a leitura acaba sozinha
+   e o texto some.
+5. Responda às 5 perguntas (tela do bloco R10).
+
+Um F5 no meio do desafio volta ao mesmo ponto (a URL guarda `?desafio=ID`). Sem `LLM_CHAVE`, os desafios usam os
+textos de reserva, com perguntas prontas.
+
+Nenhuma variável de ambiente nova: usa as `LLM_*` que já existem.
 
 ## Arquitetura
 
 - `app/services/reading_textos.py`: funções puras (limpeza, seleção do trecho, tempo de leitura).
 - `app/services/reading_fontes.py`: Wikipedia, Gutendex, artigos salvos e reserva → `ReadingText`.
 - `app/services/reading_llm.py` + `app/schemas_reading.py`: as 5 perguntas (LLM ou reserva).
+- `app/services/reading_desafios.py`: criação do desafio e o tempo da leitura.
+- `app/services/reading_correcao.py` e `reading_avaliacao.py`: respostas, correção da múltipla escolha e das abertas.
+- `app/api/reading.py`: rotas da API (`router`) e a página `/reading` (`paginas`).
+- Tela: `templates/paginas/reading.html`, `static/js/paginas/reading.js`, `static/js/nucleo/api-reading.js`,
+  `static/css/reading.css`.
 
 Fluxo previsto:
 `paginas/reading.js` → `nucleo/api-reading.js` → `/api/reading/...` (`app/api/reading.py`) →
@@ -102,6 +118,12 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR30 | 22/11/2026 | A correção recebe o texto inteiro, além da resposta esperada | Aceita respostas certas escritas de outro jeito (≈ 600 tokens a mais) |
 | DR31 | 22/11/2026 | Nova correção (`/avaliar`) em `erro_avaliacao`, ou em `avaliando` há mais de 5 minutos (servidor caiu no meio da chamada) | Ninguém fica com o desafio travado |
 | DR32 | 22/11/2026 | Falha da LLM ao corrigir: grava `erro_avaliacao` e relança o `ErroLLM` (502/503/504) | Convenção documentada no `llm.py`; o front já trata `erro.codigo` |
+| DR33 | 22/11/2026 | Chromium instalado (`python -m playwright install chromium`, fora do repositório) e E2E do Reading já no R9 (`E2E=1`) | O comportamento da tela (timer, F5, encerrar) só é testável num navegador |
+| DR34 | 22/11/2026 | F5 retoma o desafio: a URL guarda `?desafio=ID` | Sem isso, o F5 perderia o desafio já pago com a cota |
+| DR35 | 22/11/2026 | Copiar/selecionar o texto não é bloqueado | Atrapalha a acessibilidade e não impede a burla; o servidor garante prazo e tempo registrado |
+| DR36 | 22/11/2026 | Botão "📖 Reading" na navbar | Exemplo do CLAUDE.md, estilo dos outros botões |
+| DR37 | 22/11/2026 | Wikipedia: sorteio entre os **"Good articles"** (`generator=search`, `incategory:Good_articles`, `gsrsort=random`), e não entre todos os artigos | Medição real: 1 de 6 artigos aleatórios aproveitáveis × 7 de 8 Good articles; continua uma chamada por tentativa |
+| DR38 | 22/11/2026 | Temas de história militar são aceitos; o filtro `eh_inadequado` continua barrando só termos fortes | Conteúdo enciclopédico comum; filtrar "war"/"battle" descartaria muitos artigos bons |
 
 ## Plano e progresso
 
@@ -118,12 +140,13 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11) |
 | R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11) |
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
+| R3b | Artigos da Wikipedia com tamanho suficiente | Serviço MediaWiki (qualidade do sorteio) | R3 | ✅ Concluído (22/11), aguardando commit |
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11) |
 | R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11) |
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11) |
-| R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11), aguardando commit |
-| R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | Planejado |
+| R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11) |
+| R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11), aguardando commit |
 | R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | Planejado |
 | R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | Planejado |
 
@@ -381,6 +404,66 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 - **Próxima ação:** R9 (tela de início e leitura com timer, aviso de IA e cota; pontos de encaixe no `base.html` e no
   `main.js`).
 
+### R9 — Tela: início e leitura com timer (✅ 22/11/2026)
+
+- **Arquivos novos:** `app/templates/paginas/reading.html`, `app/static/js/paginas/reading.js`,
+  `app/static/js/nucleo/api-reading.js`, `app/static/css/reading.css`, `tests/reading/test_reading_pagina.py`,
+  `tests/reading/test_reading_e2e.py`. **Alterados:** `app/api/reading.py` (router `paginas` com `GET /reading`, via
+  `pagina_protegida`). **Pontos de encaixe** (uma linha no bloco do Membro 1 em cada): `app/main.py`
+  (`rotas += [reading.router, reading.paginas]`), `app/templates/base.html` (`<link>` do `reading.css` e o botão
+  📖 Reading), `app/static/js/main.js` (`import "./paginas/reading.js";`). Nenhum outro arquivo da base.
+- **Como funciona:** início → `api.situacaoLLM()` → `criarAvisoIA` (antes de qualquer envio), cota do reading (zerada:
+  botão desativado e quando renova; sem IA configurada: avisa das perguntas prontas) → COMEÇAR → `POST /challenges`
+  (aviso de carregamento; erro em português na tela, com a cota atualizada) → `?desafio=ID` na URL (`replaceState`) →
+  leitura: parágrafos e crédito por `textContent`, link do original só se a URL começa com `https://`,
+  `contagemRegressiva(segundos_restantes)` (tempo do servidor) → no zero ou em TERMINEI DE LER → o texto sai da tela →
+  `POST /encerrar-leitura` → etapa das perguntas (por enquanto um aviso "Leitura encerrada"; a tela é o R10). F5:
+  `GET /challenges/ID` → em `lendo` com tempo, `GET /texto`; prazo vencido ou `respondendo`, vai às perguntas;
+  inexistente ou de outra conta, volta ao início com "Desafio não encontrado.". A limpeza cancela o timer e os
+  listeners (`AbortController`); respostas que chegam depois de sair da página são ignoradas.
+- **Testes:** 11 da página (Python: login, miolo HTMX, padrões marcados, aviso antes do botão, `?desafio` mantido no
+  F5, estáticos, `main.js`, **nenhum `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write`/`eval` nos JS do
+  Reading**, e as rotas do `api-reading.js` existem na API) + 6 E2E no Chromium (`E2E=1`): início → leitura → F5 →
+  terminei; encerramento sozinho no zero; voltar depois do prazo vai às perguntas; cota esgotada desativa o botão;
+  erro da API em português; texto com HTML aparece como texto, sem executar nada e sem link `javascript:`. Os E2E
+  também reprovam qualquer erro de JavaScript na página. Suíte: **509 aprovados, 3 pulados, 0 falhas** (SQLite; o 3º
+  pulado é o E2E do Reading sem `E2E=1`); com `E2E=1`: Reading **6/6** e **E2E da base 13/13** (o `base.html` e o
+  `main.js` mudaram); `ruff` limpo. Postgres não executado.
+- **Mutações (13, todas detectadas pelo navegador; arquivos restaurados e conferidos):** no zero não encerra; título e
+  parágrafos com `innerHTML`; link sem checar `https`; desafio fora da URL; F5 ignorando `?desafio`; F5 com o tempo
+  cheio; encerrar sem tirar o texto; cota zerada sem desativar; sem aviso de IA; erro da criação sem aparecer; voltar
+  depois do prazo mostrando o início; `main.js` sem importar a página.
+- **Problemas encontrados:** (1) o teste de `innerHTML` pegou a palavra num comentário do próprio JS; o comentário foi
+  reescrito (o teste continua estrito). (2) O 1º teste de XSS no navegador usava um artigo falso da fonte, mas com a
+  LLM sem chave a criação troca o texto pela reserva (DR17, comportamento certo); o texto malicioso passou a ser a
+  única reserva do banco. (3) Uma contagem errada no teste das rotas do cliente (esperava 7, são 6). (4) Os E2E
+  mostram 2 avisos de depreciação do `uvicorn`/`websockets` (bibliotecas; também aparecem nos E2E da base).
+  (5) No teste manual, o COMEÇAR "não fazia nada": era o navegador usando um `main.js` antigo do cache (sem o JS, o
+  formulário só recarregava a página). Confirmado num Chromium limpo contra uma cópia do app (201, texto na tela) e
+  resolvido com Ctrl+Shift+R. Causa na base (estáticos sem `Cache-Control`), anotada em "Para o Membro 4". O mesmo
+  teste mostrou que o sorteio da Wikipedia quase sempre traz artigos curtos demais (todos descartados → reserva):
+  bloco R3b.
+- **Próxima ação:** R10 (perguntas, resultado e histórico: múltipla escolha e aberta, nova correção depois de falha,
+  `criarEstadoVazio`, sem `innerHTML`).
+
+### R3b — Artigos da Wikipedia com tamanho suficiente (✅ 22/11/2026)
+
+- **Motivo:** no teste manual do R9, os 3 artigos sorteados foram descartados por serem curtos e o desafio caiu na
+  reserva. Medição real com o sorteio antigo (`generator=random`): 1 de 6 aproveitáveis; entre os Good articles: 7 de
+  8 (as chamadas seguidas da medição levaram a um 429 da Wikipedia; a medição parou aí).
+- **Arquivos:** `app/services/reading_fontes.py` (`CATEGORIA_WIKIPEDIA` e os parâmetros de `buscar_wikipedia`),
+  `tests/reading/test_reading_fontes.py`. Nenhum arquivo da base. Limpeza, seleção, crédito e gravação não mudaram (a
+  resposta tem o mesmo formato, `query.pages[0]`).
+- **Como funciona:** `GET api.php?action=query&generator=search&gsrsearch=incategory:Good_articles&gsrsort=random&
+  gsrlimit=1&gsrnamespace=0&prop=extracts|info&explaintext=1&exlimit=1&inprop=url` → o mesmo caminho do R3. 429 (limite
+  de uso) → `FonteIndisponivel` → artigo salvo → reserva, sem repetir.
+- **Testes:** 2 novos (parâmetros do sorteio; 429 com `Retry-After` não é repetido e usa um artigo salvo); o teste do
+  R3 que conferia `generator=random` foi ajustado. Suíte: **511 aprovados, 3 pulados, 0 falhas**; E2E do Reading 6/6;
+  `ruff` limpo. **Verificação real** (uma chamada, banco temporário): "Yam fortress", 488 palavras, sem reserva.
+- **Mutações (5, todas detectadas; arquivo restaurado):** volta ao `generator=random`; categoria errada; sem
+  `gsrsort=random`; sem `gsrnamespace`; 429 repetindo a busca.
+- **Próxima ação:** R10.
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -395,8 +478,11 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_leitura.py` | R6: texto só dentro do prazo, encerrar a leitura (idempotente, concorrente), perguntas sem resposta, isolamento |
 | `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, isolamento |
 | `test_reading_avaliacao.py` | R8: correção das abertas pela LLM (crédito parcial), prompt, falhas, `erro_avaliacao`, `/avaliar`, concorrência |
+| `test_reading_pagina.py` | R9: página `/reading`, pontos de encaixe, estáticos, JS sem `innerHTML`, rotas do cliente |
+| `test_reading_e2e.py` | R9 (`E2E=1`, Chromium): início, leitura, timer, F5, encerrar, cota, erros, XSS |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
+Navegador (opcional): `python -m playwright install chromium` uma vez e `E2E=1 python -m pytest tests/reading/test_reading_e2e.py`.
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o
 Membro 4"). Decisão DR15.
 
@@ -425,6 +511,13 @@ dependências antes de validar o corpo: uma requisição com corpo inválido (42
 Reading, Writing e Speaking. Pela interface (corpo montado pelo JS) isso não acontece na prática. Se o Membro 4 quiser
 corrigir: chamar a função devolvida por `exigir_cota(...)` dentro da rota, depois da validação, ou validar o corpo
 numa dependência anterior à cota.
+
+**Achado na base (R9, não corrigido nesta branch): cache dos arquivos estáticos.** O `/static` é servido sem
+`Cache-Control`; o navegador pode guardar um `main.js` antigo (heurística pelo `Last-Modified`) e não carregar o JS
+novo de uma feature. Sintoma visto no Reading: o botão COMEÇAR "não fazia nada" (sem o JS, o formulário fazia o envio
+padrão do HTML e só recarregava a página); resolveu com Ctrl+Shift+R. Vale para as três features e para o deploy.
+Correções possíveis (base): versão na URL dos estáticos no `base.html` (ex.: `main.js?v=<commit>`) ou
+`Cache-Control: no-cache` no `/static` (o navegador revalida pelo ETag, sem baixar de novo se não mudou).
 
 **Warning preexistente da base:** `StarletteDeprecationWarning` (o `TestClient` do FastAPI usa `httpx`; a Starlette
 pede `httpx2`). Inofensivo com as versões fixas do `requirements.txt`; vira problema só ao atualizar a Starlette.
