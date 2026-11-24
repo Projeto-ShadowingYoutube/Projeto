@@ -6,6 +6,8 @@ import { enviarJSON, requisitarJSON } from "./api.js";
 const BASE = "/api/reading/challenges";
 
 export const apiReading = {
+    // Histórico: os 50 desafios mais recentes da conta (mais novo primeiro).
+    historico: () => requisitarJSON(BASE),
     // { modalidade, fonte, ppm } → desafio com o texto (sem as perguntas). Gasta 1 da cota diária.
     criar: (escolhas) => enviarJSON(BASE, "POST", escolhas),
     resumo: (id) => requisitarJSON(`${BASE}/${id}`),

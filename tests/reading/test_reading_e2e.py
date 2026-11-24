@@ -1,9 +1,10 @@
-"""Bloco R9: a tela de início e leitura num navegador de verdade (Chromium, via Playwright).
+"""Blocos R9 e R10: a tela do Reading num navegador de verdade (Chromium, via Playwright).
 
 Opcional, como os E2E da base: E2E=1 python -m pytest tests/reading/test_reading_e2e.py
 (precisa de: python -m playwright install chromium). Servidor uvicorn real com banco migrado (tem os 5 textos de
 reserva da 0102). As fontes de texto ficam fora do ar e a LLM sem chave: os desafios saem da reserva, sem rede.
 """
+import json
 import os
 import re
 import socket
@@ -22,10 +23,11 @@ from limits.strategies import FixedWindowRateLimiter  # noqa: E402
 from playwright.sync_api import expect, sync_playwright  # noqa: E402
 from sqlmodel import Session, create_engine, select  # noqa: E402
 
-from app import db, migrar  # noqa: E402
+from app import config, db, migrar  # noqa: E402
 from app.api import llm as rota_llm  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models_reading import ReadingChallenge  # noqa: E402
+from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingQuestion  # noqa: E402
+from app.services import llm  # noqa: E402
 from app.services import reading_desafios as rd  # noqa: E402
 from app.services import reading_fontes as rf  # noqa: E402
 
@@ -135,7 +137,7 @@ def test_inicio_leitura_f5_e_terminei(aba, banco):
     assert _desafio_da_url(aba) == desafio_id and _segundos(aba) < antes
 
     aba.click("#readingTerminei")
-    expect(aba.locator("[data-etapa=perguntas]")).to_contain_text("Leitura encerrada")
+    expect(aba.locator("[data-etapa=perguntas] .reading-pergunta")).to_have_count(5)
     expect(aba.locator("[data-etapa=leitura]")).to_be_hidden()
     assert aba.locator("#readingConteudo p").count() == 0  # o texto saiu da tela
     assert _estado(banco, desafio_id) == "respondendo"
@@ -146,7 +148,7 @@ def test_no_zero_a_leitura_encerra_sozinha(aba, banco, monkeypatch):
     aba.goto(f"{aba.base}/reading")
     aba.click("#readingComecar")
     expect(aba.locator("#readingTimer")).to_be_visible()
-    expect(aba.locator("[data-etapa=perguntas]")).to_contain_text("Leitura encerrada", timeout=8000)
+    expect(aba.locator("[data-etapa=perguntas] .reading-pergunta")).to_have_count(5, timeout=8000)
     assert _estado(banco, _desafio_da_url(aba)) == "respondendo"
 
 
@@ -162,7 +164,7 @@ def test_voltar_depois_do_prazo_nao_mostra_o_texto(aba, banco, monkeypatch):
     assert _estado(banco, desafio_id) == "lendo"
 
     aba.goto(f"{aba.base}/reading?desafio={desafio_id}")
-    expect(aba.locator("[data-etapa=perguntas]")).to_contain_text("Leitura encerrada")
+    expect(aba.locator("[data-etapa=perguntas] .reading-pergunta")).to_have_count(5)
     assert aba.locator("#readingConteudo p").count() == 0
     assert _estado(banco, desafio_id) == "respondendo"
 
@@ -210,3 +212,180 @@ def test_conteudo_do_texto_nao_vira_html(aba, banco):
     assert aba.locator("#readingConteudo img, #readingConteudo script, #readingTituloTexto b").count() == 0
     assert aba.locator("#readingCredito a").count() == 0  # URL que não é https não vira link
     assert aba.evaluate("window.__xss") is None
+
+
+# --- R10: perguntas, resultado e histórico ---
+
+def _respostas_certas(banco, desafio_id: int) -> list[str]:
+    with Session(banco) as s:
+        consulta = (select(ReadingQuestion).where(ReadingQuestion.desafio_id == desafio_id)
+                    .order_by(ReadingQuestion.ordem))
+        return [p.resposta_correta for p in s.exec(consulta).all()]
+
+
+def _tentativas(banco) -> list[ReadingAttempt]:
+    with Session(banco) as s:
+        return list(s.exec(select(ReadingAttempt)).all())
+
+
+def _ate_as_perguntas(aba, modalidade: str = "multipla_escolha") -> int:
+    aba.goto(f"{aba.base}/reading")
+    aba.check(f"input[name=modalidade][value='{modalidade}']")
+    aba.click("#readingComecar")
+    expect(aba.locator("[data-etapa=leitura]")).to_be_visible()
+    aba.click("#readingTerminei")
+    expect(aba.locator(".reading-pergunta")).to_have_count(5)
+    return _desafio_da_url(aba)
+
+
+def _marcar(aba, ordem: int, alternativa: str) -> None:
+    aba.locator(f".reading-pergunta[data-ordem='{ordem}'] input[value=\"{alternativa}\"]").check()
+
+
+def _erradas(aba, ordem: int, certa: str) -> str:
+    valores = aba.locator(f".reading-pergunta[data-ordem='{ordem}'] input").evaluate_all("els => els.map(e => e.value)")
+    return next(v for v in valores if v != certa)
+
+
+def test_multipla_escolha_responder_e_ver_o_resultado(aba, banco):
+    desafio_id = _ate_as_perguntas(aba)
+    certas = _respostas_certas(banco, desafio_id)
+    for ordem in (1, 2, 3):
+        _marcar(aba, ordem, certas[ordem - 1])
+    _marcar(aba, 4, _erradas(aba, 4, certas[3]))  # a 5ª fica em branco
+    dialogos = []
+    aba.once("dialog", lambda dialogo: (dialogos.append(dialogo.message), dialogo.accept()))
+
+    aba.click("#readingEnviar")
+
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 6/10")
+    assert dialogos == ["Há 1 pergunta sem resposta. Enviar mesmo assim?"]
+    expect(aba.locator(".reading-acertos")).to_have_text("3 de 5 perguntas certas.")
+    expect(aba.locator(".reading-correcao.certo")).to_have_count(3)
+    expect(aba.locator(".reading-correcao.errado")).to_have_count(2)
+    expect(aba.locator(".reading-correcao[data-ordem='5']")).to_contain_text("Sem resposta")
+    expect(aba.locator(".reading-correcao[data-ordem='1']")).to_contain_text(f"Resposta correta: {certas[0]}")
+    expect(aba.locator(".reading-correcao[data-ordem='1'] .reading-justificativa")).not_to_be_empty()
+    expect(aba.locator(".reading-detalhes")).to_contain_text("Múltipla escolha")
+    expect(aba.locator(".reading-detalhes")).to_contain_text("Perguntas prontas")
+    aba.click(".reading-texto-resultado summary")  # o texto volta no resultado (DR26)
+    expect(aba.locator(".reading-texto-resultado .reading-credito")).to_contain_text("CC BY-SA 4.0")
+    [tentativa] = _tentativas(banco)
+    assert tentativa.nota == 6.0 and tentativa.respostas[4] == ""
+
+    aba.reload()  # o resultado continua no F5 (?desafio=ID)
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 6/10")
+
+
+def test_cancelar_o_aviso_de_perguntas_em_branco_nao_envia(aba, banco):
+    _ate_as_perguntas(aba)
+    aba.once("dialog", lambda dialogo: dialogo.dismiss())
+    aba.click("#readingEnviar")
+    expect(aba.locator(".reading-pergunta")).to_have_count(5)
+    expect(aba.locator("#readingEnviar")).to_be_enabled()
+    assert _tentativas(banco) == []
+
+
+def test_rascunho_volta_depois_do_f5(aba, banco):
+    desafio_id = _ate_as_perguntas(aba, "aberta")
+    aba.fill(".reading-pergunta[data-ordem='1'] textarea", "Bees make honey in the hive.")
+    aba.fill(".reading-pergunta[data-ordem='3'] textarea", "Wax.")
+    expect(aba.locator(".reading-pergunta[data-ordem='1'] .reading-contador")).to_have_text("28/1000")
+
+    aba.reload()
+    expect(aba.locator(".reading-pergunta")).to_have_count(5)
+    assert _desafio_da_url(aba) == desafio_id
+    expect(aba.locator(".reading-pergunta[data-ordem='1'] textarea")).to_have_value("Bees make honey in the hive.")
+    expect(aba.locator(".reading-pergunta[data-ordem='3'] textarea")).to_have_value("Wax.")
+    expect(aba.locator(".reading-pergunta[data-ordem='2'] textarea")).to_have_value("")
+
+
+def _llm_falsa(monkeypatch, *respostas):
+    """A LLM do servidor responde (em ordem) o texto dado ou levanta o erro; nada sai para a rede."""
+    fila = list(respostas)
+
+    def chamar(mensagens, temperatura, max_tokens):
+        proxima = fila.pop(0)
+        if isinstance(proxima, Exception):
+            raise proxima
+        return proxima
+
+    monkeypatch.setattr(config, "LLM_CHAVE", "chave-e2e")
+    monkeypatch.setattr(llm, "_chamar", chamar)
+
+
+def _correcoes(*pontos, comentario="Comentário {n}.") -> str:
+    return json.dumps({"correcoes": [{"ordem": n, "pontuacao": p, "comentario": comentario.format(n=n)}
+                                     for n, p in enumerate(pontos, start=1)]})
+
+
+def test_aberta_corrigida_pela_ia_com_credito_parcial(aba, banco, monkeypatch):
+    _llm_falsa(monkeypatch, _correcoes(1, 0.5, 0, 1, 1, comentario='<img src=x onerror="window.__xss=1"> {n}'))
+    _ate_as_perguntas(aba, "aberta")
+    expect(aba.locator("#readingAvisoRespostas .aviso-ia")).to_contain_text("provedor externo")  # antes do envio
+    for ordem in range(1, 6):
+        aba.fill(f".reading-pergunta[data-ordem='{ordem}'] textarea", f"Answer {ordem}.")
+
+    aba.click("#readingEnviar")
+
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 7/10")
+    expect(aba.locator(".reading-acertos")).to_contain_text("3 de 5 perguntas certas.")
+    expect(aba.locator(".reading-correcao.parcial")).to_have_count(1)
+    expect(aba.locator(".reading-correcao[data-ordem='2'] .reading-correcao-titulo")).to_contain_text("½")
+    expect(aba.locator(".reading-correcao[data-ordem='2']")).to_contain_text("Resposta esperada:")
+    comentario = aba.locator(".reading-correcao[data-ordem='2'] .reading-comentario")
+    expect(comentario).to_have_text('Comentário da correção: <img src=x onerror="window.__xss=1"> 2')  # texto, não HTML
+    assert aba.locator(".reading-correcao img").count() == 0 and aba.evaluate("window.__xss") is None
+
+
+def test_falha_da_ia_e_nova_correcao(aba, banco, monkeypatch):
+    _llm_falsa(monkeypatch, llm.LLMIndisponivel(), _correcoes(1, 1, 1, 1, 0.5))
+    desafio_id = _ate_as_perguntas(aba, "aberta")
+    for ordem in range(1, 6):
+        aba.fill(f".reading-pergunta[data-ordem='{ordem}'] textarea", f"Answer {ordem}.")
+
+    aba.click("#readingEnviar")
+    expect(aba.locator("#readingAvaliarDeNovo")).to_be_visible()
+    expect(aba.locator("[data-etapa=resultado]")).to_contain_text("O serviço de IA está indisponível agora.")
+    expect(aba.locator(".reading-correcao.pendente")).to_have_count(5)
+    expect(aba.locator(".reading-correcao[data-ordem='1']")).to_contain_text("Answer 1.")  # respostas guardadas
+    assert _estado(banco, desafio_id) == "erro_avaliacao"
+
+    aba.click("#readingAvaliarDeNovo")
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 9/10")
+    assert _estado(banco, desafio_id) == "corrigido"
+
+
+def test_historico_vazio_lista_e_continuar(aba, banco):
+    aba.goto(f"{aba.base}/reading")
+    aba.click("#readingVerHistorico")
+    expect(aba.locator("#readingHistorico .estado-vazio")).to_contain_text("Nenhum desafio ainda")
+    aba.click("#readingHistorico .estado-vazio-botao.principal")  # "Começar um desafio"
+    expect(aba.locator("[data-etapa=inicio]")).to_be_visible()
+
+    feito = _ate_as_perguntas(aba)
+    aba.once("dialog", lambda dialogo: dialogo.accept())
+    aba.click("#readingEnviar")
+    expect(aba.locator(".reading-nota")).to_be_visible()
+    aba.click("[data-etapa=resultado] .reading-acoes button:has-text('NOVO DESAFIO')")
+    aba.click("#readingComecar")
+    expect(aba.locator("[data-etapa=leitura]")).to_be_visible()
+    em_leitura = _desafio_da_url(aba)
+    titulo = aba.locator("#readingTituloTexto").inner_text()
+
+    aba.goto(f"{aba.base}/reading")
+    aba.click("#readingVerHistorico")
+    linhas = aba.locator(".reading-historico-linha")
+    expect(linhas).to_have_count(2)
+    assert [int(i) for i in linhas.evaluate_all("ls => ls.map(l => l.dataset.id)")] == [em_leitura, feito]
+    expect(linhas.nth(0)).to_contain_text("Em leitura")
+    expect(linhas.nth(1)).to_contain_text("0/10")
+
+    linhas.nth(0).locator("button:has-text('Continuar')").click()  # retoma a leitura
+    expect(aba.locator("#readingTituloTexto")).to_have_text(titulo)
+    assert _desafio_da_url(aba) == em_leitura
+
+    aba.goto(f"{aba.base}/reading")
+    aba.click("#readingVerHistorico")
+    aba.locator(".reading-historico-linha").nth(1).locator("button:has-text('Ver')").click()
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 0/10")

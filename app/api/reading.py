@@ -29,6 +29,7 @@ from app.models import Usuario
 from app.models_reading import ReadingChallenge, ReadingText
 from app.schemas_reading import (
     DesafioCriado,
+    ItemHistorico,
     LeituraEncerrada,
     NovoDesafio,
     PerguntaParaResponder,
@@ -72,6 +73,12 @@ def criar_desafio(corpo: NovoDesafio, usuario: Usuario = Depends(usuario_atual),
         raise ErroDaApi(502, "Não foi possível obter um texto agora. Tente de novo em instantes.",
                         codigo="texto_indisponivel") from None
     return _criado(desafio, texto)
+
+
+@router.get("/challenges", response_model=list[ItemHistorico])
+def listar_desafios(usuario: Usuario = Depends(usuario_atual), session: Session = Depends(get_session)):
+    """Histórico (R10): os 50 desafios mais recentes da conta."""
+    return rd.historico(session, usuario.id)
 
 
 @router.get("/challenges/{desafio_id}", response_model=ResumoDesafio)

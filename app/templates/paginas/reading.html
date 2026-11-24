@@ -1,5 +1,5 @@
 <!-- Reading Challenge (Membro 1): o JavaScript está em static/js/paginas/reading.js; o visual em static/css/reading.css.
-     Três etapas na mesma página: início (escolhas + aviso de IA), leitura (texto + timer) e perguntas/resultado (R10).
+     Etapas na mesma página: início (escolhas + aviso de IA), leitura (texto + timer), perguntas, resultado e histórico.
      Todo conteúdo vindo da API é inserido pelo JS com textContent (nunca innerHTML). -->
 <div class="pagina reading" data-pagina="reading">
     <section class="reading-etapa" data-etapa="inicio">
@@ -28,6 +28,7 @@
             <p class="reading-cota" id="readingCota"></p>
             <p class="reading-erro" id="readingErroInicio" role="alert"></p>
             <button type="submit" class="reading-botao principal" id="readingComecar">COMEÇAR</button>
+            <button type="button" class="reading-botao" id="readingVerHistorico">HISTÓRICO</button>
             <p class="reading-carregando" id="readingCarregando" hidden>Preparando o texto e as perguntas… Isso pode levar alguns segundos.</p>
         </form>
     </section>
@@ -45,6 +46,26 @@
     </section>
 
     <section class="reading-etapa" data-etapa="perguntas" hidden>
-        <div class="reading-card" id="readingPerguntas"></div>
+        <form class="reading-card" id="readingFormRespostas">
+            <h2>Perguntas</h2>
+            <p class="reading-sub-esquerda">Responda sem voltar ao texto. Pode deixar alguma em branco.</p>
+            <div id="readingAvisoRespostas"></div>
+            <div class="reading-lista" id="readingListaPerguntas"></div>
+            <p class="reading-erro" id="readingErroRespostas" role="alert"></p>
+            <button type="submit" class="reading-botao principal" id="readingEnviar">ENVIAR RESPOSTAS</button>
+            <p class="reading-carregando" id="readingEnviando" hidden></p>
+        </form>
+    </section>
+
+    <section class="reading-etapa" data-etapa="resultado" hidden>
+        <div class="reading-card" id="readingResultado"></div>
+    </section>
+
+    <section class="reading-etapa" data-etapa="historico" hidden>
+        <div class="reading-card">
+            <h2>Histórico</h2>
+            <div id="readingHistorico"></div>
+            <button type="button" class="reading-botao principal" id="readingNovoDoHistorico">NOVO DESAFIO</button>
+        </div>
     </section>
 </div>

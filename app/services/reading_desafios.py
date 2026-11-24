@@ -24,12 +24,13 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.models import agora
-from app.models_reading import ReadingChallenge, ReadingQuestion, ReadingText
+from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingQuestion, ReadingText
 from app.services import reading_fontes as rf
 from app.services import reading_llm as rl
 from app.services import reading_textos as rt
 
 TOLERANCIA_SEGUNDOS = 5
+LIMITE_HISTORICO = 50  # os mais recentes, sem paginação (DR41)
 
 LENDO = "lendo"
 RESPONDENDO = "respondendo"
@@ -101,3 +102,22 @@ def perguntas_do_desafio(session: Session, desafio: ReadingChallenge) -> list[Re
     consulta = (select(ReadingQuestion).where(ReadingQuestion.desafio_id == desafio.id)
                 .order_by(ReadingQuestion.ordem))
     return list(session.exec(consulta).all())
+
+
+# --- Histórico (R10) ---
+
+def historico(session: Session, usuario_id: int, limite: int = LIMITE_HISTORICO) -> list[dict]:
+    """Os desafios da conta, do mais novo ao mais antigo, com o título do texto e a nota (None sem correção)."""
+    consulta = (
+        select(ReadingChallenge, ReadingText.titulo, ReadingAttempt.nota, ReadingAttempt.acertos)
+        .join(ReadingText, ReadingText.id == ReadingChallenge.texto_id)
+        .join(ReadingAttempt, ReadingAttempt.desafio_id == ReadingChallenge.id, isouter=True)
+        .where(ReadingChallenge.usuario_id == usuario_id)
+        .order_by(ReadingChallenge.iniciado_em.desc(), ReadingChallenge.id.desc())
+        .limit(limite)
+    )
+    return [
+        {"id": desafio.id, "iniciado_em": desafio.iniciado_em, "titulo": titulo, "modalidade": desafio.modalidade,
+         "estado": desafio.estado, "usou_reserva": desafio.usou_reserva, "nota": nota, "acertos": acertos}
+        for desafio, titulo, nota, acertos in session.exec(consulta).all()
+    ]

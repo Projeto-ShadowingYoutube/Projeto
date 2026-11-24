@@ -1,6 +1,6 @@
 """Reading Challenge (Membro 1): schemas Pydantic da feature.
 
-Blocos R5 a R8: entrada e saída da API (fim do arquivo).
+Blocos R5 a R10: entrada e saída da API (fim do arquivo).
 
 Bloco R4: o formato das 5 perguntas. O mesmo schema serve para duas coisas:
 - vai para a LLM como JSON Schema (o llm.gerar_json o anexa às instruções) e valida a resposta dela;
@@ -232,3 +232,17 @@ class CorrecoesAbertas(BaseModel):
         if sorted(c.ordem for c in correcoes) != list(range(1, QUANTIDADE_PERGUNTAS + 1)):
             raise ValueError("deve haver exatamente uma correção para cada ordem de 1 a 5")
         return sorted(correcoes, key=lambda c: c.ordem)
+
+
+# --- Bloco R10: histórico ---
+
+class ItemHistorico(BaseModel):
+    """GET /api/reading/challenges: um desafio da conta, sem texto e sem perguntas."""
+    id: int
+    iniciado_em: datetime
+    titulo: str
+    modalidade: str
+    estado: str
+    usou_reserva: bool
+    nota: float | None     # None enquanto não há correção
+    acertos: int | None

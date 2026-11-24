@@ -15,9 +15,16 @@ LLM), conforme a modalidade escolhida.
    velocidade (150, 200 ou 250 palavras por minuto) e clique em **COMEÇAR**.
 4. Leia o texto antes de o tempo acabar. Clique em **TERMINEI DE LER** quando quiser; no zero, a leitura acaba sozinha
    e o texto some.
-5. Responda às 5 perguntas (tela do bloco R10).
+5. Responda às 5 perguntas, sem voltar ao texto: marque uma alternativa ou escreva a resposta (até 1000
+   caracteres). Pode deixar alguma em branco (conta como erro; o envio pede confirmação). Na resposta aberta, as
+   respostas vão para a IA corrigir (o aviso aparece antes do envio).
+6. Veja o resultado: nota de 0 a 10, ✓ / ½ / ✗ por pergunta, a resposta correta (ou esperada), a justificativa, o
+   comentário da correção, os tempos e o texto de volta ("Ver o texto"). Se a IA falhar ao corrigir, as respostas
+   ficam guardadas e o botão **TENTAR CORRIGIR DE NOVO** aparece.
+7. **HISTÓRICO** (na tela de início e no resultado): os 50 desafios mais recentes; **Ver** abre o resultado,
+   **Continuar** retoma um desafio não terminado.
 
-Um F5 no meio do desafio volta ao mesmo ponto (a URL guarda `?desafio=ID`). Sem `LLM_CHAVE`, os desafios usam os
+Um F5 no meio do desafio volta ao mesmo ponto (a URL guarda `?desafio=ID`), com as respostas ainda não enviadas. Sem `LLM_CHAVE`, os desafios usam os
 textos de reserva, com perguntas prontas.
 
 Nenhuma variável de ambiente nova: usa as `LLM_*` que já existem.
@@ -43,6 +50,7 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 
 | Rota | Entrada | Saída | Erros |
 |---|---|---|---|
+| `GET /api/reading/challenges` | — | 200: histórico, os 50 mais recentes da conta (mais novo primeiro): `[{id, iniciado_em, titulo, modalidade, estado, usou_reserva, nota, acertos}]` (`nota`/`acertos` `null` sem correção) | — |
 | `POST /api/reading/challenges` (gasta 1 da cota) | `{"modalidade": "multipla_escolha" \| "aberta", "fonte"?: "wikipedia" \| "gutenberg", "ppm"?: 150 \| 200 \| 250}` (padrões `wikipedia` e 200; campo extra → 422) | 201: `id, estado, modalidade, ppm, limite_segundos, iniciado_em, leitura_encerrada_em, usou_reserva, texto{titulo, conteudo, palavras, fonte, url, credito}`. **Sem as perguntas** | 422 `dados_invalidos`; 429 `limite_de_desafios`; 502 `texto_indisponivel`; 502/503/504 `llm_*` (LLM falhou e não há reserva) |
 | `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas), com `segundos_restantes` | 404 `nao_encontrado` (inexistente ou de outra conta) |
 | `GET /api/reading/challenges/{id}/texto` | — | 200: `titulo, conteudo, palavras, fonte, url, credito, segundos_restantes`; só em `lendo` e até o prazo + 5 s | 409 `leitura_encerrada`; 404 |
@@ -124,6 +132,11 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR36 | 22/11/2026 | Botão "📖 Reading" na navbar | Exemplo do CLAUDE.md, estilo dos outros botões |
 | DR37 | 22/11/2026 | Wikipedia: sorteio entre os **"Good articles"** (`generator=search`, `incategory:Good_articles`, `gsrsort=random`), e não entre todos os artigos | Medição real: 1 de 6 artigos aleatórios aproveitáveis × 7 de 8 Good articles; continua uma chamada por tentativa |
 | DR38 | 22/11/2026 | Temas de história militar são aceitos; o filtro `eh_inadequado` continua barrando só termos fortes | Conteúdo enciclopédico comum; filtrar "war"/"battle" descartaria muitos artigos bons |
+| — | 23/11/2026 | **Não feita:** sem `LLM_CHAVE`, ir direto à reserva sem buscar o artigo (sugestão opcional; o usuário seguiu para o R10) | Hoje, sem chave, o artigo é buscado e gravado, mas o desafio usa a reserva (DR17) |
+| DR39 | 23/11/2026 | Envio com perguntas em branco pede `confirm()` ("Há N perguntas sem resposta. Enviar mesmo assim?") | Mesmo padrão da base (deletar deck) |
+| DR40 | 23/11/2026 | Rascunho das respostas no `sessionStorage` (chave `reading-rascunho-<id>`), apagado no envio | O F5 nas perguntas não perde o que foi escrito; é só conveniência (fica no navegador) |
+| DR41 | 23/11/2026 | Histórico: os 50 mais recentes, sem paginação | Simples; consulta pelo índice de `usuario_id` |
+| DR42 | 23/11/2026 | Desafios não terminados aparecem no histórico com "Continuar" | Retoma a leitura ou as respostas pelo mesmo `?desafio=ID` |
 
 ## Plano e progresso
 
@@ -140,14 +153,14 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R1 | Modelos e migração do esquema | Modelagem das 4 entidades; migrations Alembic | — | ✅ Concluído (21/11) |
 | R2 | Normalização e tempo de leitura | Normalização dos textos; contagem de palavras e limite por ppm | — | ✅ Concluído (21/11) |
 | R3 | Fontes: Wikipedia, Gutendex e reserva | Serviço MediaWiki; adaptador de domínio público; testes de obtenção e seleção | R1, R2 | ✅ Concluído (21/11) |
-| R3b | Artigos da Wikipedia com tamanho suficiente | Serviço MediaWiki (qualidade do sorteio) | R3 | ✅ Concluído (22/11), aguardando commit |
+| R3b | Artigos da Wikipedia com tamanho suficiente | Serviço MediaWiki (qualidade do sorteio) | R3 | ✅ Concluído (22/11) |
 | R4 | Perguntas geradas pela LLM | Serviço de LLM separado do HTTP; prompt de 5 perguntas; schema estruturado; modos MC e Open; fallback | R1 | ✅ Concluído (21/11) |
 | R5 | Criação do desafio (API) | `POST /api/reading/challenges`; validação Pydantic; falhas | R3, R4 | ✅ Concluído (21/11) |
 | R6 | Leitura com tempo validado no servidor | Bloqueio da leitura quando o tempo termina (servidor) | R5 | ✅ Concluído (22/11) |
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11) |
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11) |
-| R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11), aguardando commit |
-| R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | Planejado |
+| R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11) |
+| R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | ✅ Concluído (23/11), aguardando commit |
 | R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | Planejado |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
@@ -462,7 +475,43 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   `ruff` limpo. **Verificação real** (uma chamada, banco temporário): "Yam fortress", 488 palavras, sem reserva.
 - **Mutações (5, todas detectadas; arquivo restaurado):** volta ao `generator=random`; categoria errada; sem
   `gsrsort=random`; sem `gsrnamespace`; 429 repetindo a busca.
+- **Depois do commit:** no teste manual, os desafios continuaram na reserva. Causa: sem `LLM_CHAVE` no `.env`, as
+  perguntas do artigo novo não podem ser geradas e o desafio troca o texto pela reserva (DR17, comportamento
+  planejado). Os artigos novos da Wikipedia estavam sendo buscados e gravados (o R3b funcionou). Resolvido pelo
+  usuário configurando a chave do Gemini.
 - **Próxima ação:** R10.
+
+### R10 — Tela: perguntas, resultado e histórico (✅ 23/11/2026)
+
+- **Arquivos:** `app/services/reading_desafios.py` (`historico`, `LIMITE_HISTORICO`), `app/schemas_reading.py`
+  (`ItemHistorico`), `app/api/reading.py` (`GET /api/reading/challenges`), `app/static/js/nucleo/api-reading.js`
+  (`historico`), `app/templates/paginas/reading.html` (etapas perguntas, resultado e histórico; botão HISTÓRICO),
+  `app/static/js/paginas/reading.js` (sai o marcador "Leitura encerrada" do R9; entram perguntas, rascunho,
+  resultado, nova correção e histórico), `app/static/css/reading.css`, `tests/reading/test_reading_historico.py`
+  (novo), `tests/reading/test_reading_e2e.py` (3 testes do R9 ajustados ao fim do marcador; 6 novos). Nenhum arquivo
+  da base; nenhuma migração.
+- **Como funciona:** encerrar → perguntas (MC: rádios, sem marcar = em branco; aberta: `textarea` com
+  `maxlength=1000` e contador, mais o aviso de IA antes do envio) → cada mudança vai para o rascunho → ENVIAR (com
+  em branco: `confirm`) → `POST /respostas` → resultado. `ja_respondido` ou erro `llm_*` → `GET /resultado` (com a
+  mensagem; em `erro_avaliacao`, botão TENTAR CORRIGIR DE NOVO → `POST /avaliar`; em `avaliando`, ATUALIZAR).
+  Resultado: nota, acertos, ✓/½/✗ (`pontuacao`), resposta dada ou "Sem resposta", correta/esperada, justificativa,
+  comentário, tempos, modalidade, "Perguntas prontas" e `<details>` com o texto e o crédito. Histórico: tabela (data,
+  texto, tipo, nota ou estado) com Ver/Continuar; vazio → `criarEstadoVazio` com "Começar um desafio". F5 no
+  resultado reabre o resultado. Tudo por `textContent`.
+- **Testes:** 7 da API do histórico (vazio, ordem e campos, só da conta, limite, padrão 50, empate na data pelo id,
+  401) + 6 E2E novos (MC até o resultado com 3 certas, 1 errada e 1 em branco; cancelar o `confirm`; rascunho no F5;
+  aberta com a LLM simulada: crédito parcial e **comentário da LLM com HTML aparece como texto**; falha da IA e nova
+  correção; histórico vazio, lista, Continuar e Ver). Suíte: **519 aprovados, 3 pulados, 0 falhas**; E2E do Reading
+  **12/12**; E2E da base **13/13**; `ruff` limpo. Postgres não executado.
+- **Mutações (19; 18 detectadas e 1 equivalente; arquivos restaurados):** histórico sem filtrar a conta, na ordem
+  inversa, sem desempate, sem limite, sem os não respondidos (INNER JOIN); envio sem `confirm`; MC mandando sempre a
+  1ª alternativa; rascunho não salvo / não lido; comentário da LLM como HTML; sem aviso de IA nas abertas; falha da IA
+  sem ir ao resultado; sem botão de nova correção; parcial como errado; branco sem "Sem resposta"; histórico abrindo o
+  resultado em vez de continuar; histórico vazio sem estado vazio; F5 no resultado voltando ao início.
+  **Equivalente:** `guardarNaUrl` dentro do `mostrarResultado`: em todos os caminhos a URL já tem o `?desafio` (a
+  criação e o "Ver" do histórico já o gravam); a chamada ficou como redundância defensiva.
+- **Próxima ação:** R11 (integração: Postgres, E2E completo, "Para o Membro 4" com dependências, URLs, migrações e
+  resultados finais).
 
 ## Testes
 
@@ -479,7 +528,8 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, isolamento |
 | `test_reading_avaliacao.py` | R8: correção das abertas pela LLM (crédito parcial), prompt, falhas, `erro_avaliacao`, `/avaliar`, concorrência |
 | `test_reading_pagina.py` | R9: página `/reading`, pontos de encaixe, estáticos, JS sem `innerHTML`, rotas do cliente |
-| `test_reading_e2e.py` | R9 (`E2E=1`, Chromium): início, leitura, timer, F5, encerrar, cota, erros, XSS |
+| `test_reading_historico.py` | R10: API do histórico (ordem, isolamento, limite, campos) |
+| `test_reading_e2e.py` | R9 e R10 (`E2E=1`, Chromium): início, leitura, timer, F5, encerrar, cota, erros, XSS, perguntas, rascunho, resultado, nova correção, histórico |
 
 **Como rodar:** com a venv ativa, **`python -m pytest`** (suíte inteira) ou `python -m pytest tests/reading -v`.
 Navegador (opcional): `python -m playwright install chromium` uma vez e `E2E=1 python -m pytest tests/reading/test_reading_e2e.py`.

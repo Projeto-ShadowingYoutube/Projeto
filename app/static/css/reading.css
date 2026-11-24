@@ -36,7 +36,43 @@
     padding-top: 10px; }
 .reading-credito a { color: inherit; text-decoration: underline; }
 
+/* --- Perguntas (R10) --- */
+.reading-sub-esquerda { margin: 0; color: var(--text-sub); }
+.reading-lista { display: flex; flex-direction: column; gap: 14px; }
+.reading-pergunta { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin: 0;
+    display: flex; flex-direction: column; gap: 8px; }
+.reading-pergunta legend { padding: 0 6px; font-weight: 600; line-height: 1.5; }
+.reading-alternativa { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; line-height: 1.5; }
+.reading-alternativa input { margin-top: 5px; }
+.reading-resposta { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; resize: vertical;
+    border: 1px solid var(--border-color); background: var(--input-bg); color: var(--input-text); font: inherit; }
+.reading-contador { align-self: flex-end; font-size: 0.8rem; color: var(--text-sub); }
+
+/* --- Resultado (R10) --- */
+.reading-nota { margin: 0; font-size: 2.2rem; font-weight: 700; }
+.reading-acertos, .reading-detalhes { margin: 0; color: var(--text-sub); }
+.reading-correcao { border: 1px solid var(--border-color); border-left-width: 5px; border-radius: 8px;
+    padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
+.reading-correcao p { margin: 0; line-height: 1.5; }
+.reading-correcao-titulo { font-weight: 600; }
+.reading-correcao.certo { border-left-color: #10b981; }
+.reading-correcao.parcial { border-left-color: #f59e0b; }
+.reading-correcao.errado { border-left-color: #ef4444; }
+.reading-correcao.pendente { border-left-color: var(--text-sub); }
+.reading-justificativa, .reading-comentario { color: var(--text-sub); }
+.reading-texto-resultado summary { cursor: pointer; font-weight: 600; }
+.reading-texto-resultado p { line-height: 1.7; }
+.reading-acoes { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* --- Histórico (R10) --- */
+.reading-historico { width: 100%; border-collapse: collapse; }
+.reading-historico th, .reading-historico td { text-align: left; padding: 8px 6px;
+    border-bottom: 1px solid var(--border-color); }
+.reading-historico th { color: var(--text-sub); font-weight: 600; font-size: 0.9rem; }
+.reading-historico .reading-botao { padding: 6px 12px; }
+
 @media (max-width: 600px) {
+    .reading-historico th:nth-child(3), .reading-historico td:nth-child(3) { display: none; }
     .reading { margin: 16px auto; padding: 0 12px; }
     .reading-titulo { font-size: 1.5rem; }
     .reading-timer { font-size: 1.5rem; }
