@@ -16,11 +16,13 @@ Abertas (R8): o POST /respostas grava as respostas e só depois chama a LLM para
 fica "erro_avaliacao", o erro padrão da LLM sai (502/503/504) e POST /avaliar tenta de novo
 (app/services/reading_avaliacao.py).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from sqlmodel import Session
 
-from app.api.auth import usuario_atual
+from app.api.auth import usuario_atual, usuario_opcional
 from app.api.llm import exigir_cota
+from app.api.paginas import pagina_protegida
 from app.db import get_session
 from app.erros import ErroDaApi
 from app.models import Usuario
@@ -41,6 +43,13 @@ from app.services import reading_desafios as rd
 from app.services import reading_fontes as rf
 
 router = APIRouter(prefix="/api/reading", tags=["reading"], dependencies=[Depends(usuario_atual)])
+# Página HTML (R9): sem login, vai para /login?proximo=/reading (pagina_protegida, de app/api/paginas.py).
+paginas = APIRouter(default_response_class=HTMLResponse, include_in_schema=False)
+
+
+@paginas.get("/reading")
+def pagina_reading(request: Request, usuario: Usuario | None = Depends(usuario_opcional)):
+    return pagina_protegida(request, usuario, "reading.html")
 
 
 def _desafio(

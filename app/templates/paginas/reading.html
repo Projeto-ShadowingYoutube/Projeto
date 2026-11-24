@@ -1,0 +1,50 @@
+<!-- Reading Challenge (Membro 1): o JavaScript está em static/js/paginas/reading.js; o visual em static/css/reading.css.
+     Três etapas na mesma página: início (escolhas + aviso de IA), leitura (texto + timer) e perguntas/resultado (R10).
+     Todo conteúdo vindo da API é inserido pelo JS com textContent (nunca innerHTML). -->
+<div class="pagina reading" data-pagina="reading">
+    <section class="reading-etapa" data-etapa="inicio">
+        <h1 class="reading-titulo">Reading Challenge</h1>
+        <p class="reading-sub">Leia um texto em inglês dentro do tempo e responda 5 perguntas sem voltar ao texto.</p>
+
+        <form class="reading-card" id="readingForm">
+            <fieldset class="reading-opcoes">
+                <legend>Tipo de pergunta</legend>
+                <label><input type="radio" name="modalidade" value="multipla_escolha" checked> Múltipla escolha</label>
+                <label><input type="radio" name="modalidade" value="aberta"> Resposta aberta</label>
+            </fieldset>
+            <fieldset class="reading-opcoes">
+                <legend>Texto</legend>
+                <label><input type="radio" name="fonte" value="wikipedia" checked> Artigo da Wikipedia</label>
+                <label><input type="radio" name="fonte" value="gutenberg"> Trecho de livro (Project Gutenberg)</label>
+            </fieldset>
+            <fieldset class="reading-opcoes">
+                <legend>Velocidade de leitura</legend>
+                <label><input type="radio" name="ppm" value="150"> 150 palavras/min</label>
+                <label><input type="radio" name="ppm" value="200" checked> 200 palavras/min</label>
+                <label><input type="radio" name="ppm" value="250"> 250 palavras/min</label>
+            </fieldset>
+
+            <div id="readingAviso"></div>
+            <p class="reading-cota" id="readingCota"></p>
+            <p class="reading-erro" id="readingErroInicio" role="alert"></p>
+            <button type="submit" class="reading-botao principal" id="readingComecar">COMEÇAR</button>
+            <p class="reading-carregando" id="readingCarregando" hidden>Preparando o texto e as perguntas… Isso pode levar alguns segundos.</p>
+        </form>
+    </section>
+
+    <section class="reading-etapa" data-etapa="leitura" hidden>
+        <div class="reading-barra">
+            <span class="reading-timer" id="readingTimer" aria-live="off">0:00</span>
+            <button type="button" class="reading-botao principal" id="readingTerminei">TERMINEI DE LER</button>
+        </div>
+        <article class="reading-card reading-texto">
+            <h2 id="readingTituloTexto"></h2>
+            <div id="readingConteudo"></div>
+            <p class="reading-credito" id="readingCredito"></p>
+        </article>
+    </section>
+
+    <section class="reading-etapa" data-etapa="perguntas" hidden>
+        <div class="reading-card" id="readingPerguntas"></div>
+    </section>
+</div>
