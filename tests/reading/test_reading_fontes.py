@@ -260,11 +260,47 @@ def test_gutenberg_usa_o_capitulo_1(http, session):
 
     (url_lista, lista), (url_livro, baixar) = http.chamadas
     assert url_lista == rf.URL_GUTENDEX
-    assert lista["params"]["languages"] == "en" and lista["params"]["copyright"] == "false"
-    assert 1 <= lista["params"]["page"] <= rf.PAGINAS_GUTENDEX and lista["timeout"] == rf.TIMEOUT_API
-    assert url_livro.endswith(".txt.utf-8")  # o .zip foi ignorado
+    # R12b: só a 1ª página e sem mime_type (os dois deixavam o Gutendex lento demais)
+    assert lista["params"] == {"languages": "en", "copyright": "false"} and lista["timeout"] == rf.TIMEOUT_API
+    # O .txt vem do espelho oficial (o www.gutenberg.org recusa downloads automáticos), e não da URL do Gutendex
+    assert url_livro == "https://gutenberg.pglaf.org/cache/epub/84/pg84.txt"
     assert baixar["stream"] is True and baixar["timeout"] == rf.TIMEOUT_LIVRO
     assert livro.fechada
+
+
+def test_livro_sem_texto_puro_e_pulado(http):
+    """Só livros com text/plain (e não só .zip) entram no sorteio; o download sai do espelho com o id do escolhido."""
+    lista = {"results": [{"id": 1, "title": "Só zip", "formats": {"application/zip": "https://x/1.zip"}},
+                         GUTENDEX["results"][0]]}
+    http.respostas = [RespostaFalsa(json=lista), RespostaFalsa(pedacos=[LIVRO.encode()])]
+    assert rf.buscar_gutenberg().id_origem == "84"
+    assert http.chamadas[1][0] == rf.URL_TEXTO_GUTENBERG.format(id=84)
+
+
+@pytest.mark.parametrize("titulo, serve", [
+    ("Chambers's Twentieth Century Dictionary (part 1 of 4: A-D)", False),
+    ("The Complete Works of William Shakespeare", False),
+    ("The Works of William Shakespeare [Cambridge Edition] [Vol. 5 of 9]", False),
+    ("Encyclopaedia Britannica, Volume 1", False),
+    ("Roget's Thesaurus of English Words and Phrases", False),
+    ("Pride and Prejudice", True),
+    ("The Adventures of Tom Sawyer, Complete", True),
+    ("Indexed Tales of the Sea", True),  # "index" só como palavra inteira
+])
+def test_obras_de_consulta_ficam_fora_do_sorteio(http, titulo, serve):
+    livro = {"id": 7, "title": titulo, "formats": {"text/plain; charset=utf-8": "https://x/7.txt"}}
+    http.respostas = [RespostaFalsa(json={"results": [livro]}), RespostaFalsa(pedacos=[LIVRO.encode()])]
+    if serve:
+        assert rf.buscar_gutenberg().titulo == titulo
+    else:
+        with pytest.raises(rf.FonteIndisponivel):  # o único livro da lista foi filtrado: nada a sortear
+            rf.buscar_gutenberg()
+
+
+def test_espelho_fora_do_ar_e_fonte_indisponivel(http):
+    http.respostas = [RespostaFalsa(json=GUTENDEX), RespostaFalsa(status=503)]
+    with pytest.raises(rf.FonteIndisponivel):
+        rf.buscar_gutenberg()
 
 
 def test_gutenberg_le_no_maximo_o_limite_de_bytes(http, monkeypatch):
@@ -285,6 +321,31 @@ def test_gutendex_sem_livro_utilizavel(http, lista):
     http.respostas = [RespostaFalsa(json=lista)]
     with pytest.raises(rf.FonteIndisponivel):
         rf.buscar_gutenberg()
+
+
+def test_livro_cortado_no_limite_nao_deixa_paragrafo_pela_metade(http, monkeypatch):
+    """O corte cai no meio do 2º parágrafo, logo depois de um ponto: o pedaço não pode virar parágrafo."""
+    inteiro = "First full paragraph of the book, long enough to count.\r\n\r\nSecond paragraph. It goes on and on"
+    monkeypatch.setattr(rf, "LIMITE_BYTES_LIVRO", len(inteiro.encode()) - 15)  # corta em "Second paragraph. It"
+    http.respostas = [RespostaFalsa(pedacos=[inteiro.encode()])]
+    assert rf._baixar_texto("https://espelho/1.txt") == "First full paragraph of the book, long enough to count."
+
+
+def test_livro_inteiro_abaixo_do_limite_vem_completo(http):
+    livro = "Para um.\r\n\r\nPara dois, ainda sem ponto"
+    http.respostas = [RespostaFalsa(pedacos=[livro.encode()])]
+    assert rf._baixar_texto("https://espelho/1.txt") == livro.replace("\r\n", "\n")  # não cortou: nada some
+
+
+def test_download_lento_demais_e_fonte_indisponivel(http, monkeypatch):
+    """O timeout de leitura vale por pedaço: um espelho lento poderia levar minutos (medido: 3 MB em 150 s)."""
+    tempos = iter([0, 10, 20, 30])
+    monkeypatch.setattr(rf, "_relogio", lambda: next(tempos))
+    livro = RespostaFalsa(pedacos=[b"x" * 100] * 10)
+    http.respostas = [livro]
+    with pytest.raises(rf.FonteIndisponivel, match="lento demais"):
+        rf._baixar_texto("https://espelho/1.txt")
+    assert livro.pedacos_lidos == 3 and livro.fechada
 
 
 def test_falha_no_download_do_livro(http):

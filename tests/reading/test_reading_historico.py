@@ -5,56 +5,16 @@ Os desafios saem da reserva (fonte fora e sem LLM). Relógio falso (rd.agora) pa
 from datetime import datetime, timedelta
 
 import pytest
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
-from sqlmodel import Session
 
-from app.api import llm as rota_llm
-from app.models_reading import ReadingText
 from app.services import reading_desafios as rd
-from app.services import reading_fontes as rf
 
 URL = "/api/reading/challenges"
 INICIO = datetime(2026, 11, 23, 10, 0, 0)
 
 
-def _mc(n: int) -> dict:
-    return {"enunciado": f"What does the text say about item {n}?",
-            "alternativas": [f"Right {n}", f"Wrong A {n}", f"Wrong B {n}", f"Wrong C {n}"],
-            "resposta_correta": f"Right {n}", "justificativa": f"O texto diz \"item {n}\"."}
 
+pytestmark = pytest.mark.usefixtures("ambiente")  # tests/reading/conftest.py
 
-class Relogio:
-    def __init__(self):
-        self.agora = INICIO
-
-    def __call__(self) -> datetime:
-        return self.agora
-
-    def avancar(self, segundos: float) -> None:
-        self.agora += timedelta(seconds=segundos)
-
-
-@pytest.fixture()
-def relogio(monkeypatch):
-    falso = Relogio()
-    monkeypatch.setattr(rd, "agora", falso)
-    return falso
-
-
-@pytest.fixture(autouse=True)
-def ambiente(monkeypatch, engine_teste):
-    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
-
-    def fora():
-        raise rf.FonteIndisponivel("simulada")
-
-    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fora, "gutenberg": fora})
-    with Session(engine_teste) as s:
-        s.add(ReadingText(fonte="wikipedia", id_origem="reserva", titulo="Honey bee", url="https://x/Honey_bee",
-                          conteudo=" ".join(["honey"] * 450), palavras=450,
-                          perguntas_reserva=[_mc(n) for n in range(1, 6)]))
-        s.commit()
 
 
 def _criar(cliente, relogio, modalidade: str = "multipla_escolha") -> int:

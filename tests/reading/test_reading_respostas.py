@@ -6,59 +6,21 @@ resposta certa da pergunta n é "Right n".
 from datetime import datetime, timedelta
 
 import pytest
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
 from sqlmodel import Session, select
 
-from app.api import llm as rota_llm
 from app.models import Usuario
-from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingQuestion, ReadingText
+from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingQuestion
 from app.services import reading_correcao as rc
 from app.services import reading_desafios as rd
-from app.services import reading_fontes as rf
 
 URL = "/api/reading/challenges"
 INICIO = datetime(2026, 11, 22, 10, 0, 0)
 CERTAS = [f"Right {n}" for n in range(1, 6)]
 
 
-def _mc(n: int) -> dict:
-    return {"enunciado": f"What does the text say about item {n}?",
-            "alternativas": [f"Right {n}", f"Wrong A {n}", f"Wrong B {n}", f"Wrong C {n}"],
-            "resposta_correta": f"Right {n}", "justificativa": f"O texto diz \"item {n}\"."}
 
+pytestmark = pytest.mark.usefixtures("ambiente")  # tests/reading/conftest.py
 
-class Relogio:
-    def __init__(self):
-        self.agora = INICIO
-
-    def __call__(self) -> datetime:
-        return self.agora
-
-    def avancar(self, segundos: float) -> None:
-        self.agora += timedelta(seconds=segundos)
-
-
-@pytest.fixture()
-def relogio(monkeypatch):
-    falso = Relogio()
-    monkeypatch.setattr(rd, "agora", falso)
-    return falso
-
-
-@pytest.fixture(autouse=True)
-def ambiente(monkeypatch, engine_teste):
-    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
-
-    def fora():
-        raise rf.FonteIndisponivel("simulada")
-
-    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fora, "gutenberg": fora})
-    with Session(engine_teste) as s:
-        s.add(ReadingText(fonte="wikipedia", id_origem="reserva", titulo="Honey bee", url="https://x/Honey_bee",
-                          conteudo=" ".join(["honey"] * 450), palavras=450,
-                          perguntas_reserva=[_mc(n) for n in range(1, 6)]))
-        s.commit()
 
 
 def _pronto(cliente, relogio, modalidade: str = "multipla_escolha", leitura: int = 40) -> int:
@@ -288,3 +250,54 @@ def test_corrigir_exige_uma_resposta_por_pergunta():
 @pytest.mark.parametrize("acertos, nota", [(0, 0.0), (1, 2.0), (3, 6.0), (5, 10.0)])
 def test_nota_de_zero_a_dez(acertos, nota):
     assert rc.nota_de(acertos) == nota
+
+
+# --- Conferência do tempo na submissão (guia, seção 7; R12) ---
+
+def _forcar_fim_da_leitura(engine, desafio_id: int, fim: datetime | None) -> None:
+    """Simula um horário gravado incoerente (bug ou banco alterado à mão): o encerrar do R6 nunca grava assim."""
+    with Session(engine) as s:
+        desafio = s.get(ReadingChallenge, desafio_id)
+        desafio.leitura_encerrada_em = fim
+        s.add(desafio)
+        s.commit()
+
+
+@pytest.mark.parametrize("fim, aceito", [
+    (INICIO + timedelta(seconds=135), True),        # no prazo
+    (INICIO + timedelta(seconds=140), True),        # prazo + 5 s de tolerância
+    (INICIO + timedelta(seconds=141), False),       # depois da tolerância
+    (INICIO - timedelta(seconds=1), False),         # antes do início
+    (None, False),                                  # "respondendo" sem fim de leitura
+])
+def test_submissao_confere_o_tempo_de_leitura_gravado(entrar_como, relogio, engine_teste, fim, aceito):
+    ana = entrar_como("ana@exemplo.com")
+    desafio_id = _pronto(ana, relogio)
+    _forcar_fim_da_leitura(engine_teste, desafio_id, fim)
+
+    resposta = _enviar(ana, desafio_id, CERTAS)
+
+    if aceito:
+        assert resposta.status_code == 201
+        assert resposta.json()["tempo_leitura_segundos"] == round((fim - INICIO).total_seconds())
+    else:
+        assert resposta.status_code == 409
+        assert resposta.json() == {"detail": "O tempo de leitura deste desafio não confere. Comece um novo desafio.",
+                                   "codigo": "tempo_invalido"}
+        assert _tentativas(engine_teste) == [] and _estado(engine_teste, desafio_id) == "respondendo"
+
+
+@pytest.mark.parametrize("leitura", [10, 135, 1000])
+def test_fluxo_normal_nunca_grava_leitura_acima_do_limite(entrar_como, relogio, leitura):
+    """Botão no meio, no zero, ou a aba fechada e reaberta muito depois: a submissão passa e a leitura ≤ limite."""
+    ana = entrar_como("ana@exemplo.com")
+    corpo = _enviar(ana, _pronto(ana, relogio, leitura=leitura), CERTAS).json()
+    assert corpo["tempo_leitura_segundos"] == min(leitura, 135)
+
+
+def test_leitura_dentro_do_prazo_funcao_pura():
+    desafio = ReadingChallenge(usuario_id=1, texto_id=1, modalidade="aberta", ppm=200, limite_segundos=135,
+                               estado="respondendo", iniciado_em=INICIO)
+    for segundos, esperado in [(0, True), (140, True), (140.5, False)]:
+        desafio.leitura_encerrada_em = INICIO + timedelta(seconds=segundos)
+        assert rc.leitura_dentro_do_prazo(desafio) is esperado, segundos

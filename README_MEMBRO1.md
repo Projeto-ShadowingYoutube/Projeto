@@ -65,7 +65,7 @@ Todas exigem login (401 sem sessão). Erros no formato padrão `{detail, codigo}
 | `GET /api/reading/challenges/{id}` | — | 200: o resumo (sem texto e sem perguntas), com `segundos_restantes` | 404 `nao_encontrado` (inexistente ou de outra conta) |
 | `GET /api/reading/challenges/{id}/texto` | — | 200: `titulo, conteudo, palavras, fonte, url, credito, segundos_restantes`; só em `lendo` e até o prazo + 5 s | 409 `leitura_encerrada`; 404 |
 | `POST /api/reading/challenges/{id}/encerrar-leitura` (idempotente) | — | 200: o resumo (`estado: "respondendo"`) + `perguntas[{ordem, tipo, enunciado, alternativas}]`, **sem** resposta correta e sem justificativa | 404 |
-| `POST /api/reading/challenges/{id}/respostas` | `{"respostas": [5 textos]}` (na ordem; `""` = não respondida; até 1000 caracteres; campo extra → 422) | 201: o resultado (abaixo) | 422 `dados_invalidos`; 422 `resposta_invalida` (+ `ordem`: na MC, fora das alternativas); 409 `leitura_em_andamento`; 409 `ja_respondido`; 404 |
+| `POST /api/reading/challenges/{id}/respostas` | `{"respostas": [5 textos]}` (na ordem; `""` = não respondida; até 1000 caracteres; campo extra → 422) | 201: o resultado (abaixo) | 422 `dados_invalidos`; 422 `resposta_invalida` (+ `ordem`: na MC, fora das alternativas); 409 `leitura_em_andamento`; 409 `ja_respondido`; 409 `tempo_invalido`; 404 |
 | `GET /api/reading/challenges/{id}/resultado` | — | 200: o resultado | 409 `sem_resultado`; 404 |
 | `POST /api/reading/challenges/{id}/avaliar` | — | 200: o resultado já corrigido (nova correção da aberta pela LLM) | 409 `avaliacao_indisponivel`; 502/503/504 `llm_*`; 404 |
 
@@ -85,6 +85,8 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 - `leitura_encerrada` (409): o texto foi pedido depois do prazo de leitura (+ tolerância) ou depois de encerrar.
 - `leitura_em_andamento` (409): respostas enviadas com o desafio ainda em `lendo`.
 - `ja_respondido` (409): o desafio já tem uma tentativa.
+- `tempo_invalido` (409): na submissão, os horários gravados não fecham (a leitura não terminou entre o início e o
+  prazo + 5 s). Só acontece com bug ou banco alterado à mão; nada é gravado (R12).
 - `resposta_invalida` (422, com `ordem`): na múltipla escolha, a resposta não é uma das alternativas.
 - `sem_resultado` (409): resultado pedido antes do envio das respostas.
 - `avaliacao_indisponivel` (409): nova correção pedida fora de `erro_avaliacao` (ou de `avaliando` há mais de 5 min).
@@ -147,6 +149,9 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR40 | 23/11/2026 | Rascunho das respostas no `sessionStorage` (chave `reading-rascunho-<id>`), apagado no envio | O F5 nas perguntas não perde o que foi escrito; é só conveniência (fica no navegador) |
 | DR41 | 23/11/2026 | Histórico: os 50 mais recentes, sem paginação | Simples; consulta pelo índice de `usuario_id` |
 | DR42 | 23/11/2026 | Desafios não terminados aparecem no histórico com "Continuar" | Retoma a leitura ou as respostas pelo mesmo `?desafio=ID` |
+| DR43 | 24/11/2026 | Conferência explícita do tempo na submissão (guia, seção 7): o servidor recalcula com os horários gravados que a leitura terminou entre o início e o prazo + 5 s; senão, 409 `tempo_invalido`. Responder continua sem limite (DR6) | O guia pede a conferência na submissão; a DR6 foi mantida |
+| DR45 | 24/11/2026 | Gutenberg (R12b): Gutendex só na 1ª página e sem `mime_type`; `.txt` do espelho oficial `gutenberg.pglaf.org/cache/epub/{id}/pg{id}.txt`; no máximo 150 KB e 25 s por livro, cortando na última linha em branco; obras de consulta e coletâneas filtradas pelo título | Medição real: a consulta filtrada passava de 20 s e o `gutenberg.org` respondia 503; o espelho entrega ≈ 27 KB/s e o trecho sai dos primeiros KB |
+| DR44 | 24/11/2026 | Migração 0101: **sem mudanças** (decisão do usuário). Conferida com o próprio autogenerate (`alembic check` num banco migrado até a 0102: "No new upgrade operations detected"), sem teste automático novo | A 0101 escrita à mão produz exatamente o esquema dos modelos; reescrever com `--autogenerate` perderia os nomes das FKs |
 
 ## Plano e progresso
 
@@ -171,7 +176,9 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11) |
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11) |
 | R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | ✅ Concluído (23/11) |
-| R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | ✅ Concluído (24/11), aguardando commit |
+| R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | ✅ Concluído (24/11) |
+| R12 | Acertos finais conforme o guia | Fixtures em `tests/reading/conftest.py`; conferência do tempo na submissão; verificação real do Gutenberg | R11 | ✅ Concluído (24/11), aguardando commit |
+| R12b | Fonte Gutenberg funcionando | Adaptador de domínio público (uso real) | R12 | ✅ Concluído (24/11), aguardando commit |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 
@@ -551,6 +558,62 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   arquivos restaurados): CSS sem a regra do `[hidden]` (carregamento sempre visível), sem o sinal, correção sem o
   aviso.
 
+### R12 — Acertos finais conforme o guia (✅ 24/11/2026)
+
+- **Motivo:** releitura do `docs/guias/MEMBRO1_READING.md` e do `docs/guias/PROMPT_INICIAL.md` a pedido do usuário.
+- **Fixtures (guia, seção 8):** novo `tests/reading/conftest.py` com `Relogio`/`relogio` (usa o `INICIO` do arquivo
+  de teste, se houver), `cota_nova`, `fonte_fora`, `texto_reserva` e `ambiente` (as três juntas). Saíram as cópias de
+  `test_reading_leitura.py`, `_respostas.py`, `_avaliacao.py`, `_historico.py` e a `cota_nova` de `_api.py`
+  (`pytestmark = pytest.mark.usefixtures(...)`). Conferido: **os mesmos 246 testes, um a um**, antes e depois (IDs
+  coletados do commit anterior e do atual). Problema no caminho: o corte automático levou junto a `correcoes()` do
+  `test_reading_avaliacao.py` (não era cópia); o `ruff` acusou e ela foi devolvida.
+- **Tempo na submissão (DR43):** `reading_correcao.leitura_dentro_do_prazo` e `TempoInvalido` → 409
+  `tempo_invalido` no `POST /respostas`. Testes: +9 (5 casos de horário gravado: prazo, prazo + 5 s, + 6 s, antes do
+  início, sem fim; 3 fluxos normais: 10 s, 135 s e 1000 s, sempre ≤ limite; função pura).
+- **Migração (DR44):** sem mudanças; `alembic check` sem diferenças.
+- **Gutenberg de verdade (24/11/2026):** **não funciona hoje.** 3 × `obter_texto("gutenberg")` → `ReadTimeout` no
+  Gutendex → reserva da Wikipedia. Medição direta: `languages=en&copyright=false` (página 1) responde em 0,5 s, mas
+  com `mime_type=text/plain` ou `page=3` passa de 20 s (e de 60 s); e o download do `.txt` no `gutenberg.org` responde
+  **503** (página HTML) em 3 endereços diferentes. As duas causas são externas; o app não quebra (cai na reserva),
+  mas quem escolhe "Livro" recebe um texto da Wikipedia. **Não corrigido:** depende de decisão (ver "Pendências").
+- **Testes:** suíte **529 aprovados, 3 pulados** (SQLite); E2E do Reading 14/14; `ruff` limpo. Postgres não
+  executado neste bloco. **Mutações (5, todas detectadas; arquivos restaurados):** submissão sem conferir o tempo; sem
+  a tolerância; sem conferir o início; 409 sem o código próprio; relógio do `conftest` ignorando o `INICIO` do
+  arquivo.
+
+### R12b — Fonte Gutenberg funcionando (✅ 24/11/2026)
+
+- **Motivo:** no R12, a fonte Gutenberg não funcionava de verdade (Gutendex lento com filtros; `gutenberg.org` com
+  503). Opção A aprovada pelo usuário.
+- **Medições (24/11/2026):** espelhos oficiais `gutenberg.pglaf.org` e `aleph.pglaf.org`: 200, ≈ 27 KB/s (iguais);
+  `mirrors.xmission.com`: 404 no caminho `cache/epub`. Com o código intermediário (3 MB por livro), o download levou
+  13–38 s e um livro de 3,1 MB levou **150 s** (o `TIMEOUT_LIVRO` vale por leitura, não para o total). Nos livros
+  medidos, o trecho começava nos primeiros 4 KB do arquivo. Uma das buscas trouxe um dicionário.
+- **O que mudou (`app/services/reading_fontes.py`):** consulta ao Gutendex `languages=en&copyright=false` (1ª página,
+  os 32 mais baixados; o formato `.txt` é conferido no código); download de
+  `URL_TEXTO_GUTENBERG = https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.txt` (o crédito continua apontando para a
+  página do livro no `gutenberg.org`); `LIMITE_BYTES_LIVRO = 150 KB` e `TEMPO_MAX_LIVRO = 25 s` para o download
+  inteiro; se o arquivo foi cortado, descarta o que vem depois da última linha em branco (sem parágrafo pela metade);
+  `_NAO_E_LEITURA` filtra pelo título dicionários, enciclopédias, thesaurus, glossários, índices e "(complete) works
+  of". Sai a constante `PAGINAS_GUTENDEX`.
+- **Verificação real (código final):** 3 de 3 desafios com livro de verdade a partir do capítulo 1, sem reserva:
+  "Alice's Adventures in Wonderland" (4,4 s), "The Enchanted April" (7,1 s), "Twenty years after" (3,3 s). Antes, numa
+  rodada intermediária: "Dorian Gray", "The Blue Castle", "Cranford" (4–7 s) e o dicionário, que motivou o filtro.
+- **Testes:** +13 em `test_reading_fontes.py` (parâmetros do Gutendex e URL do espelho; livro sem `.txt` pulado;
+  espelho com 503; corte na última linha em branco; livro abaixo do limite inteiro; download lento demais; 8 títulos
+  do filtro). Suíte: **542 aprovados, 3 pulados** (SQLite); E2E do Reading 14/14; `ruff` limpo. Postgres não
+  executado neste bloco. **Mutações (7, todas detectadas; arquivo restaurado):** volta ao `mime_type` e à página
+  sorteada; download pela URL do Gutendex; sem o corte na linha em branco; sem o tempo máximo; sem o filtro de obras de
+  consulta; filtro pegando "index" dentro de palavra; livro só com `.zip` aceito.
+- **Limitações:** menos variedade (32 livros, menos os filtrados); peças de teatro (ex.: "Romeo and Juliet") passam no
+  filtro e podem render trechos com nomes de personagens; o espelho é um serviço externo e pode mudar.
+- **Teste manual NÃO realizado (24/11/2026):** o usuário não conseguiu testar pela tela (1) o desafio com um **livro**
+  do Gutenberg e (2) a **correção das respostas abertas**, porque o Gemini respondeu **503** ("high demand"). Sem a
+  LLM, o desafio com livro troca o texto pela reserva da Wikipedia (DR17) e a correção da aberta fica em
+  `erro_avaliacao` (DR32), como previsto. O que **foi** verificado: a busca real dos livros (`obter_texto`, 3 de 3,
+  sem a LLM) e, com a LLM simulada, a correção das abertas (`test_reading_avaliacao.py` e os E2E). **Falta:** repetir
+  os dois testes manuais quando o Gemini voltar a responder.
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -563,9 +626,10 @@ Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`)
 | `test_reading_llm.py` | R4: schemas das perguntas, prompt, embaralhamento, reserva quando a LLM falha, reservas reais da 0102 |
 | `test_reading_api.py` | R5: criação do desafio pela API (cota, validação, erros, reserva, transação, relógio), resumo e isolamento |
 | `test_reading_leitura.py` | R6: texto só dentro do prazo, encerrar a leitura (idempotente, concorrente), perguntas sem resposta, isolamento |
-| `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, isolamento |
+| `test_reading_respostas.py` | R7: envio das respostas, correção e nota da múltipla escolha, tempos, erros, corrida, isolamento; R12: conferência do tempo na submissão |
 | `test_reading_avaliacao.py` | R8: correção das abertas pela LLM (crédito parcial), prompt, falhas, `erro_avaliacao`, `/avaliar`, concorrência |
 | `test_reading_pagina.py` | R9: página `/reading`, pontos de encaixe, estáticos, JS sem `innerHTML`, rotas do cliente |
+| `conftest.py` | Fixtures do Reading (R12): relógio falso, cota nova, fonte fora do ar, texto de reserva, `ambiente` |
 | `test_reading_historico.py` | R10: API do histórico (ordem, isolamento, limite, campos) |
 | `test_reading_e2e.py` | R9 e R10 (`E2E=1`, Chromium): início, leitura, timer, F5, encerrar, cota, erros, XSS, perguntas, rascunho, resultado, nova correção, histórico |
 
@@ -583,7 +647,7 @@ Nenhuma tarefa foi excluída. As de agosto (UI dos decks) já estavam entregues 
 | Set | Modelagem (texto, desafio, perguntas, tentativa) | R1 | `test_reading_modelos.py` |
 | Set | Migrations Alembic | R1, R3 (0101, 0102) | `test_reading_modelos.py`, `test_migracoes.py`, `test_reading_fontes.py` |
 | Set | Serviço MediaWiki | R3, R3b | `test_reading_fontes.py` |
-| Set | Adaptador de domínio público (Gutenberg) | R3 | `test_reading_fontes.py` |
+| Set | Adaptador de domínio público (Gutenberg) | R3, R12b (uso real) | `test_reading_fontes.py` e verificação real (R12b) |
 | Set | Normalização dos textos | R2 | `test_reading_textos.py` |
 | Set | Contagem de palavras e limite por ppm | R2 | `test_reading_textos.py` |
 | Set | Endpoint `POST /reading/challenges` | R5 | `test_reading_api.py` |
@@ -627,7 +691,8 @@ usa os textos de reserva (perguntas prontas, DR17), e as abertas ficam em `erro_
 
 **URLs externas** (o servidor de produção precisa alcançá-las):
 - `https://en.wikipedia.org/w/api.php` (textos; User-Agent do projeto; limite de uso anônimo: 429 vira reserva);
-- `https://gutendex.com/books/` e `https://www.gutenberg.org/` (livros: lista e download do `.txt`);
+- `https://gutendex.com/books/` (lista dos livros) e `https://gutenberg.pglaf.org/` (download do `.txt`, espelho
+  oficial do Project Gutenberg; o `www.gutenberg.org` só aparece no crédito, como link para pessoas);
 - o provedor da LLM (`LLM_BASE_URL`; hoje o Gemini).
 
 **Migrações.** `0101` (esquema: `readingtext`, `readingchallenge`, `readingquestion`, `readingattempt`, com todas as
@@ -681,6 +746,15 @@ pede `httpx2`). Inofensivo com as versões fixas do `requirements.txt`; vira pro
 cair na reserva. Opções: um timeout menor no `.env` (afeta as três features; redações do Writing precisam de mais
 tempo) ou um parâmetro de timeout por chamada no `llm.gerar_json` (alteração no `llm.py`). No Reading, a tela já
 avisa que pode levar até 1 minuto e mostra um sinal de carregamento.
+
+**Fonte Gutenberg (R12 → R12b, resolvido):** no R12 a fonte não funcionava (Gutendex lento com filtros,
+`gutenberg.org` com 503). No R12b: 1ª página do Gutendex sem `mime_type` e o `.txt` do espelho oficial
+`gutenberg.pglaf.org`, com 150 KB / 25 s por livro. Verificado de verdade: 3 de 3 desafios com livro, 3–7 s.
+
+**Testes manuais pendentes (24/11/2026):** o desafio com livro do Gutenberg e a correção das respostas abertas
+não foram testados pela tela com a LLM real: o Gemini respondia 503 (sobrecarga). Os testes automáticos (LLM
+simulada) e a busca real dos livros passaram; falta repetir os dois testes manuais com a LLM no ar (ver o registro
+do R12b).
 
 **Melhoria não feita (decisão do usuário, 23/11):** sem `LLM_CHAVE`, o Reading ainda busca e grava o artigo da
 Wikipedia antes de usar a reserva (chamadas e espera sem proveito).

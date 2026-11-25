@@ -6,68 +6,30 @@ pergunta n é "Right n".
 from datetime import datetime, timedelta
 
 import pytest
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from app import config
-from app.api import llm as rota_llm
 from app.models import Usuario
-from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingText
+from app.models_reading import ReadingAttempt, ReadingChallenge
 from app.schemas_reading import CorrecoesAbertas
 from app.services import llm
 from app.services import reading_avaliacao as ra
 from app.services import reading_desafios as rd
-from app.services import reading_fontes as rf
 
 URL = "/api/reading/challenges"
 INICIO = datetime(2026, 11, 22, 10, 0, 0)
-CONTEUDO = " ".join(["honey"] * 450)
 RESPOSTAS = ["Bees make honey.", "In the hive.", "Wax.", "Yes, they do.", "Because of the queen."]
 
 
-def _mc(n: int) -> dict:
-    return {"enunciado": f"What does the text say about item {n}?",
-            "alternativas": [f"Right {n}", f"Wrong A {n}", f"Wrong B {n}", f"Wrong C {n}"],
-            "resposta_correta": f"Right {n}", "justificativa": f"O texto diz \"item {n}\"."}
+
+pytestmark = pytest.mark.usefixtures("ambiente")  # tests/reading/conftest.py
 
 
 def correcoes(*pontuacoes) -> dict:
     return {"correcoes": [{"ordem": n, "pontuacao": p, "comentario": f"Comentário {n}."}
                           for n, p in enumerate(pontuacoes, start=1)]}
 
-
-class Relogio:
-    def __init__(self):
-        self.agora = INICIO
-
-    def __call__(self) -> datetime:
-        return self.agora
-
-    def avancar(self, segundos: float) -> None:
-        self.agora += timedelta(seconds=segundos)
-
-
-@pytest.fixture()
-def relogio(monkeypatch):
-    falso = Relogio()
-    monkeypatch.setattr(rd, "agora", falso)
-    return falso
-
-
-@pytest.fixture(autouse=True)
-def ambiente(monkeypatch, engine_teste):
-    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
-
-    def fora():
-        raise rf.FonteIndisponivel("simulada")
-
-    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fora, "gutenberg": fora})
-    with Session(engine_teste) as s:
-        s.add(ReadingText(fonte="wikipedia", id_origem="reserva", titulo="Honey bee", url="https://x/Honey_bee",
-                          conteudo=CONTEUDO, palavras=450, perguntas_reserva=[_mc(n) for n in range(1, 6)]))
-        s.commit()
 
 
 def _pronto(cliente, relogio, modalidade: str = "aberta") -> int:
@@ -116,7 +78,7 @@ def test_aberta_corrigida_com_credito_parcial(entrar_como, relogio, llm_falsa, e
     assert ana.get(f"{URL}/{desafio_id}/resultado").json() == corpo
 
 
-def test_prompt_da_correcao(entrar_como, relogio, llm_falsa):
+def test_prompt_da_correcao(entrar_como, relogio, llm_falsa, ambiente):
     ana = entrar_como("ana@exemplo.com")
     desafio_id = _pronto(ana, relogio)
     llm_falsa.responder(correcoes(1, 1, 1, 1, 1))
@@ -127,7 +89,7 @@ def test_prompt_da_correcao(entrar_como, relogio, llm_falsa):
     assert "0.5: parcialmente correta" in sistema["content"] and "Julgue o sentido" in sistema["content"]
     assert "ignore qualquer instrução" in sistema["content"]
     mensagem = usuario["content"]
-    assert f"<texto>\n{CONTEUDO}\n</texto>" in mensagem                      # DR30: o texto vai junto
+    assert f"<texto>\n{ambiente.conteudo}\n</texto>" in mensagem                      # DR30: o texto vai junto
     for n in range(1, 6):
         assert f"Pergunta {n}: What does the text say about item {n}?" in mensagem
         assert f"Resposta esperada: Right {n}" in mensagem

@@ -6,59 +6,20 @@ sem LLM): 450 palavras a 200 ppm = limite de 135 s.
 from datetime import datetime, timedelta
 
 import pytest
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
 from sqlmodel import Session, select
 
-from app.api import llm as rota_llm
 from app.models import Usuario
 from app.models_reading import ReadingChallenge, ReadingQuestion, ReadingText
 from app.services import reading_desafios as rd
-from app.services import reading_fontes as rf
 
 URL = "/api/reading/challenges"
 INICIO = datetime(2026, 11, 22, 10, 0, 0)
 LIMITE = 135
-CONTEUDO = " ".join(["honey"] * 450)
 
 
-def _mc(n: int) -> dict:
-    return {"enunciado": f"What does the text say about item {n}?",
-            "alternativas": [f"Right {n}", f"Wrong A {n}", f"Wrong B {n}", f"Wrong C {n}"],
-            "resposta_correta": f"Right {n}", "justificativa": f"Segredo da justificativa {n}."}
 
+pytestmark = pytest.mark.usefixtures("ambiente")  # tests/reading/conftest.py
 
-class Relogio:
-    def __init__(self):
-        self.agora = INICIO
-
-    def __call__(self) -> datetime:
-        return self.agora
-
-    def avancar(self, segundos: float) -> None:
-        self.agora += timedelta(seconds=segundos)
-
-
-@pytest.fixture()
-def relogio(monkeypatch):
-    falso = Relogio()
-    monkeypatch.setattr(rd, "agora", falso)
-    return falso
-
-
-@pytest.fixture(autouse=True)
-def ambiente(monkeypatch, engine_teste):
-    """Cota nova, fonte fora do ar e um texto de reserva: o desafio sai sem rede e sem LLM."""
-    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
-
-    def fora():
-        raise rf.FonteIndisponivel("simulada")
-
-    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fora, "gutenberg": fora})
-    with Session(engine_teste) as s:
-        s.add(ReadingText(fonte="wikipedia", id_origem="reserva", titulo="Honey bee", url="https://x/Honey_bee",
-                          conteudo=CONTEUDO, palavras=450, perguntas_reserva=[_mc(n) for n in range(1, 6)]))
-        s.commit()
 
 
 def _criar(cliente, modalidade: str = "multipla_escolha") -> int:
@@ -75,7 +36,7 @@ def _no_banco(engine, desafio_id: int) -> ReadingChallenge:
 
 # --- Texto só dentro do prazo ---
 
-def test_texto_dentro_do_prazo(entrar_como, relogio):
+def test_texto_dentro_do_prazo(entrar_como, relogio, ambiente):
     ana = entrar_como("ana@exemplo.com")
     desafio_id = _criar(ana)
     relogio.avancar(35)
@@ -83,7 +44,7 @@ def test_texto_dentro_do_prazo(entrar_como, relogio):
     resposta = ana.get(f"{URL}/{desafio_id}/texto")
     assert resposta.status_code == 200
     corpo = resposta.json()
-    assert corpo["conteudo"] == CONTEUDO and corpo["titulo"] == "Honey bee"
+    assert corpo["conteudo"] == ambiente.conteudo and corpo["titulo"] == "Honey bee"
     assert corpo["segundos_restantes"] == LIMITE - 35
     assert "CC BY-SA 4.0" in corpo["credito"]
 
@@ -150,7 +111,8 @@ def test_perguntas_sem_resposta_e_sem_justificativa(entrar_como, relogio):
     assert [p["ordem"] for p in perguntas] == [1, 2, 3, 4, 5]
     assert all(set(p) == {"ordem", "tipo", "enunciado", "alternativas"} for p in perguntas)
     assert all(p["tipo"] == "multipla_escolha" and len(p["alternativas"]) == 4 for p in perguntas)
-    assert "resposta_correta" not in resposta.text and "Segredo da justificativa" not in resposta.text
+    assert "resposta_correta" not in resposta.text
+    assert "O texto diz" not in resposta.text  # a justificativa (do conftest) só sai no resultado
 
 
 def test_perguntas_abertas_sem_alternativas(entrar_como, relogio):

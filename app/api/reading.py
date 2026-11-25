@@ -113,6 +113,9 @@ def enviar_respostas(corpo: RespostasEnviadas, desafio: ReadingChallenge = Depen
                         codigo="leitura_em_andamento") from None
     except rc.JaRespondido:
         raise ErroDaApi(409, "As respostas deste desafio já foram enviadas.", codigo="ja_respondido") from None
+    except rc.TempoInvalido:
+        raise ErroDaApi(409, "O tempo de leitura deste desafio não confere. Comece um novo desafio.",
+                        codigo="tempo_invalido") from None
     except rc.RespostaInvalida as erro:
         raise ErroDaApi(422, f"A resposta da pergunta {erro.ordem} não é uma das alternativas.",
                         codigo="resposta_invalida", ordem=erro.ordem) from None

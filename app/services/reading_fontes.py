@@ -18,6 +18,8 @@ timeout em toda chamada.
 """
 import logging
 import random
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -34,15 +36,20 @@ logger = logging.getLogger("uvicorn.error")
 TENTATIVAS_BUSCA = 3
 TIMEOUT_API = 10    # segundos (Wikipedia e Gutendex)
 TIMEOUT_LIVRO = 20  # o .txt de um livro é maior
-LIMITE_BYTES_LIVRO = 3 * 1024 * 1024  # lê no máximo 3 MB do livro (o trecho sai dos primeiros capítulos)
-PAGINAS_GUTENDEX = 20  # sorteia entre as 20 primeiras páginas (os livros mais baixados, 32 por página)
+# O trecho sai do começo do capítulo 1 (nos livros medidos, nos primeiros 4 KB) e o espelho entrega ≈ 27 KB/s:
+# 150 KB levam uns 5 s. Um livro cujo capítulo 1 não cabe (sumário enorme) é descartado e outro é sorteado (R12b).
+LIMITE_BYTES_LIVRO = 150 * 1024
+TEMPO_MAX_LIVRO = 25  # segundos para o download inteiro (o TIMEOUT_LIVRO vale para cada leitura, não para o total)
 
 URL_WIKIPEDIA = "https://en.wikipedia.org/w/api.php"
 # Sorteio entre os "Good articles" (≈ 40 mil artigos revisados, longos e bem escritos): o sorteio de qualquer artigo
 # trazia quase sempre artigos curtos demais para um trecho de 250–600 palavras (bloco R3b, decisão DR37).
 CATEGORIA_WIKIPEDIA = "Good_articles"
 URL_GUTENDEX = "https://gutendex.com/books/"
-URL_LIVRO_GUTENBERG = "https://www.gutenberg.org/ebooks/{id}"
+URL_LIVRO_GUTENBERG = "https://www.gutenberg.org/ebooks/{id}"  # página do livro (crédito, para pessoas)
+# O .txt vem de um espelho oficial (PGLAF, a fundação do Project Gutenberg): o www.gutenberg.org recusa downloads
+# automáticos (503) e a política de robôs deles pede espelhos. O caminho cache/epub é o mesmo para todo livro (R12b).
+URL_TEXTO_GUTENBERG = "https://gutenberg.pglaf.org/cache/epub/{id}/pg{id}.txt"
 
 # Crédito exigido pela licença de cada fonte (a tela mostra junto do texto).
 CREDITOS = {
@@ -56,7 +63,12 @@ http_session = requests.Session()
 # A Wikimedia pede que todo cliente se identifique pelo User-Agent (o mesmo de app/services/dicionario.py).
 http_session.headers["User-Agent"] = "ShadowingApp/1.0 (projeto academico de pratica de ingles)"
 
+# Obras de consulta e coletâneas não servem como texto de leitura (entre os mais baixados há um dicionário e as
+# obras completas de Shakespeare, que começam por um sumário enorme). Filtradas pelo título, antes do sorteio (R12b).
+_NAO_E_LEITURA = re.compile(r"\b(?:dictionar|encyclop|thesaurus|glossar|index\b|(?:complete )?works of)", re.IGNORECASE)
+
 _sorteio = random.Random()
+_relogio = time.monotonic  # trocado nos testes
 
 
 class FonteIndisponivel(Exception):
@@ -100,17 +112,20 @@ def buscar_wikipedia() -> TextoBruto:
 
 
 def buscar_gutenberg() -> TextoBruto:
-    """Um livro em inglês e em domínio público, sorteado entre os mais baixados do Project Gutenberg (Gutendex)."""
-    parametros = {"languages": "en", "copyright": "false", "mime_type": "text/plain",
-                  "page": _sorteio.randint(1, PAGINAS_GUTENDEX)}
+    """Um livro em inglês e em domínio público, sorteado entre os mais baixados do Project Gutenberg (Gutendex).
+
+    Só a 1ª página do Gutendex (os 32 mais baixados), sem o filtro mime_type: com ele, ou com outra página, a consulta
+    passava de 20 s (medido em 24/11/2026; a 1ª página responde em menos de 1 s). O formato .txt é conferido aqui."""
+    parametros = {"languages": "en", "copyright": "false"}
     resposta = _get(URL_GUTENDEX, params=parametros, timeout=TIMEOUT_API)
     try:
-        livros = [livro for livro in resposta.json()["results"] if _url_do_texto(livro)]
+        livros = [livro for livro in resposta.json()["results"]
+                  if _url_do_texto(livro) and not _NAO_E_LEITURA.search(livro["title"])]
         livro = _sorteio.choice(livros)
-        id_livro, titulo = livro["id"], livro["title"]
+        id_livro, titulo = int(livro["id"]), livro["title"]
     except (ValueError, KeyError, IndexError, TypeError) as erro:
         raise FonteIndisponivel("o Gutendex respondeu fora do formato esperado") from erro
-    bruto = _baixar_texto(_url_do_texto(livro))
+    bruto = _baixar_texto(URL_TEXTO_GUTENBERG.format(id=id_livro))
     return TextoBruto(fonte="gutenberg", id_origem=str(id_livro), titulo=titulo,
                       url=URL_LIVRO_GUTENBERG.format(id=id_livro), secoes=rt.limpar_gutenberg(bruto))
 
@@ -201,7 +216,7 @@ def _get(url: str, **parametros) -> requests.Response:
 
 
 def _url_do_texto(livro: dict) -> str | None:
-    """URL do texto puro do livro (o Gutendex lista vários formatos; o .zip não serve)."""
+    """O livro tem texto puro? (O Gutendex lista vários formatos; o .zip não serve.) O download usa o espelho."""
     for tipo, url in (livro.get("formats") or {}).items():
         if tipo.startswith("text/plain") and not url.endswith(".zip"):
             return url
@@ -209,17 +224,27 @@ def _url_do_texto(livro: dict) -> str | None:
 
 
 def _baixar_texto(url: str) -> str:
-    """Baixa o .txt do livro, lendo no máximo LIMITE_BYTES_LIVRO."""
+    """Baixa o .txt do livro: no máximo LIMITE_BYTES_LIVRO e TEMPO_MAX_LIVRO segundos.
+
+    Se o arquivo foi cortado no limite, descarta o que vem depois da última linha em branco: o corte cai no meio de
+    um parágrafo, e um pedaço que terminasse num ponto passaria por parágrafo inteiro."""
     resposta = _get(url, timeout=TIMEOUT_LIVRO, stream=True)
-    partes, total = [], 0
+    partes, total, cortado = [], 0, False
+    inicio = _relogio()
     try:
-        for pedaco in resposta.iter_content(chunk_size=64 * 1024):
+        for pedaco in resposta.iter_content(chunk_size=16 * 1024):
             partes.append(pedaco)
             total += len(pedaco)
             if total >= LIMITE_BYTES_LIVRO:
+                cortado = True
                 break
+            if _relogio() - inicio > TEMPO_MAX_LIVRO:
+                raise FonteIndisponivel(f"download do livro lento demais (mais de {TEMPO_MAX_LIVRO} s)")
     except requests.RequestException as erro:
         raise FonteIndisponivel(f"falha ao baixar o livro ({type(erro).__name__})") from erro
     finally:
         resposta.close()
-    return b"".join(partes)[:LIMITE_BYTES_LIVRO].decode("utf-8", errors="replace")
+    texto = b"".join(partes)[:LIMITE_BYTES_LIVRO].decode("utf-8", errors="replace").replace("\r\n", "\n")
+    if cortado:
+        texto = texto[:max(texto.rfind("\n\n"), 0)]
+    return texto

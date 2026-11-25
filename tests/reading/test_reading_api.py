@@ -3,12 +3,9 @@
 Integração FastAPI + serviços + banco: a fonte de texto é falsa (rf.FONTES) e a LLM é a llm_falsa.
 """
 import pytest
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
 from sqlmodel import Session, select
 
 from app import config
-from app.api import llm as rota_llm
 from app.models import Usuario
 from app.models_reading import ReadingChallenge, ReadingQuestion, ReadingText
 from app.services import llm
@@ -30,10 +27,7 @@ RESPOSTA_MC = {"perguntas": [{"tipo": "multipla_escolha", **_mc(n)} for n in ran
 PERGUNTAS_PRONTAS = [_mc(n) for n in range(1, 6)]
 
 
-@pytest.fixture(autouse=True)
-def cota_nova(monkeypatch):
-    """A cota fica em memória no processo: cada teste começa com as 10 do dia."""
-    monkeypatch.setattr(rota_llm, "limitador", FixedWindowRateLimiter(MemoryStorage()))
+pytestmark = pytest.mark.usefixtures("cota_nova")  # tests/reading/conftest.py
 
 
 class FonteFalsa:

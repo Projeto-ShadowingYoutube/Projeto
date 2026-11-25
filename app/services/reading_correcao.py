@@ -10,9 +10,12 @@
   Estado → "corrigido".
 - Aberta: as respostas são gravadas e o estado vai para "avaliando"; a correção pela LLM é o bloco R8.
 - Tempos: leitura = leitura_encerrada_em − iniciado_em (nunca passa do limite, R6); resposta = envio − fim da leitura.
+- Conferência do tempo na submissão (guia, seção 7; R12): o servidor recalcula, com os horários gravados, que a
+  leitura terminou depois do início e até o prazo + tolerância. Incoerente (só com bug ou banco alterado à mão) →
+  TempoInvalido, e nada é gravado. Responder não tem limite de tempo (DR6).
 A tentativa e o novo estado do desafio vão num único commit.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -31,6 +34,10 @@ class LeituraEmAndamento(Exception):
 
 class JaRespondido(Exception):
     """O desafio já tem uma tentativa."""
+
+
+class TempoInvalido(Exception):
+    """Os horários gravados do desafio não fecham: a leitura não terminou dentro do prazo + tolerância."""
 
 
 class SemResultado(Exception):
@@ -64,12 +71,14 @@ def nota_de(acertos: int) -> float:
 
 def enviar_respostas(session: Session, desafio: ReadingChallenge, respostas: list[str],
                      momento: datetime | None = None) -> ReadingAttempt:
-    """Grava a tentativa (e corrige, na múltipla escolha). Levanta LeituraEmAndamento, JaRespondido ou
-    RespostaInvalida."""
+    """Grava a tentativa (e corrige, na múltipla escolha). Levanta LeituraEmAndamento, JaRespondido, TempoInvalido
+    ou RespostaInvalida."""
     if desafio.estado == rd.LENDO:
         raise LeituraEmAndamento()
     if desafio.estado != rd.RESPONDENDO or tentativa_do_desafio(session, desafio) is not None:
         raise JaRespondido()
+    if not leitura_dentro_do_prazo(desafio):
+        raise TempoInvalido()
     momento = momento or rd.agora()
     perguntas = rd.perguntas_do_desafio(session, desafio)
 
@@ -98,6 +107,13 @@ def enviar_respostas(session: Session, desafio: ReadingChallenge, respostas: lis
         raise JaRespondido() from None
     session.refresh(tentativa)
     return tentativa
+
+
+def leitura_dentro_do_prazo(desafio: ReadingChallenge) -> bool:
+    """A leitura terminou entre o início e o prazo + tolerância? (Conferido com os horários do banco.)"""
+    fim = desafio.leitura_encerrada_em
+    limite = rd.prazo_leitura(desafio) + timedelta(seconds=rd.TOLERANCIA_SEGUNDOS)
+    return fim is not None and desafio.iniciado_em <= fim <= limite
 
 
 def tentativa_do_desafio(session: Session, desafio: ReadingChallenge) -> ReadingAttempt | None:
