@@ -110,6 +110,7 @@ registrarPagina("reading", (raiz) => {
     const formRespostas = $("readingFormRespostas");
     const botaoEnviar = $("readingEnviar");
     const enviando = $("readingEnviando");
+    const enviandoTexto = $("readingEnviandoTexto");
     const erroRespostas = $("readingErroRespostas");
     const controle = new AbortController(); // remove os listeners na limpeza
     let ativo = true;                       // a página ainda está na tela? (respostas que chegam depois são ignoradas)
@@ -283,8 +284,8 @@ registrarPagina("reading", (raiz) => {
         }
         botaoEnviar.disabled = true;
         erroRespostas.textContent = "";
-        enviando.textContent = modalidade === "aberta"
-            ? "Corrigindo as respostas com a IA… Isso pode levar alguns segundos."
+        enviandoTexto.textContent = modalidade === "aberta"
+            ? "Corrigindo as respostas com a IA… Pode demorar até 1 minuto quando o serviço está lento."
             : "Enviando…";
         enviando.hidden = false;
         try {
@@ -390,7 +391,7 @@ registrarPagina("reading", (raiz) => {
 
     async function avaliarDeNovo(id, botaoTentar) {
         botaoTentar.disabled = true;
-        botaoTentar.textContent = "CORRIGINDO…";
+        botaoTentar.textContent = "CORRIGINDO… (pode demorar até 1 minuto)";
         try {
             const resultado = await apiReading.avaliar(id);
             if (ativo) mostrarResultado(resultado);

@@ -76,3 +76,14 @@ def test_cliente_usa_as_rotas_que_existem():
     assert len(sufixos) == 6  # resumo, texto, encerrar-leitura, respostas, resultado, avaliar
     for sufixo in sufixos:
         assert f"/api/reading/challenges/{{desafio_id}}{sufixo}" in caminhos, sufixo
+
+
+def test_aviso_de_demora_e_sinal_de_carregamento(entrar_como):
+    """A geração e a correção pela IA podem levar até ≈ 60 s (LLM_TIMEOUT_SEGUNDOS): a tela avisa e mostra o sinal."""
+    html = entrar_como("ana@exemplo.com").get("/reading", headers=HTMX).text
+    for id_ in ("readingCarregando", "readingEnviando"):
+        bloco = re.search(rf'<div[^>]*id="{id_}"[^>]*>(.*?)</div>', html, re.DOTALL)
+        assert bloco and 'role="status"' in bloco.group(0) and 'class="reading-spinner"' in bloco.group(1), id_
+    assert "Pode demorar até 1 minuto" in html
+    css = (RAIZ / "app/static/css/reading.css").read_text(encoding="utf-8")
+    assert ".reading-carregando[hidden] { display: none; }" in css  # o display:flex não pode vencer o hidden

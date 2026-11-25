@@ -40,9 +40,19 @@ Nenhuma variável de ambiente nova: usa as `LLM_*` que já existem.
 - Tela: `templates/paginas/reading.html`, `static/js/paginas/reading.js`, `static/js/nucleo/api-reading.js`,
   `static/css/reading.css`.
 
-Fluxo previsto:
-`paginas/reading.js` → `nucleo/api-reading.js` → `/api/reading/...` (`app/api/reading.py`) →
-`app/services/reading_*.py` → Wikipedia/Gutendex, `llm.gerar_json` e banco (`app/models_reading.py`).
+Fluxo de um desafio:
+```
+tela (reading.js → api-reading.js)
+  POST /api/reading/challenges ─ cota ─► reading_desafios.criar_desafio
+        ├─ reading_fontes.obter_texto ── Wikipedia (Good articles) / Gutendex ──► artigo salvo ──► reserva (0102)
+        ├─ reading_llm.perguntas_para_o_desafio ── llm.gerar_json (5 perguntas) ──► falhou: texto de reserva
+        └─ ReadingChallenge + 5 ReadingQuestion (1 commit; relógio depois da geração)
+  GET /texto (só no prazo) · POST /encerrar-leitura (perguntas sem resposta)
+  POST /respostas ─► reading_correcao (MC no servidor) | reading_avaliacao (aberta: llm.gerar_json, crédito parcial)
+  GET /resultado · POST /avaliar (nova correção) · GET /challenges (histórico)
+```
+Rotas finas em `app/api/reading.py`; regras sem FastAPI em `app/services/reading_*.py`; banco em
+`app/models_reading.py` (migrações 0101 e 0102).
 
 ## API
 
@@ -160,8 +170,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R7 | Submissão e correção de múltipla escolha | Submissão e correção; pontuação; tempo, acertos e modalidade; persistência | R6 | ✅ Concluído (22/11) |
 | R8 | Correção das abertas pela LLM | Correção com saída estruturada; tratamento de falhas da LLM | R7 | ✅ Concluído (22/11) |
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11) |
-| R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | ✅ Concluído (23/11), aguardando commit |
-| R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | Planejado |
+| R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | ✅ Concluído (23/11) |
+| R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | ✅ Concluído (24/11), aguardando commit |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 
@@ -512,6 +522,34 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   criação e o "Ver" do histórico já o gravam); a chamada ficou como redundância defensiva.
 - **Próxima ação:** R11 (integração: Postgres, E2E completo, "Para o Membro 4" com dependências, URLs, migrações e
   resultados finais).
+- **Depois do relatório:** no teste manual, as perguntas não apareceram. Causa: o navegador usou o `reading.js` do R9
+  (cache) com o template novo, e o JS antigo procurava um elemento que não existe mais (erro de JavaScript).
+  Confirmado abrindo o desafio real do usuário (numa cópia do banco) num Chromium limpo: 5 perguntas e 20
+  alternativas na tela. Resolvido com Ctrl+Shift+R; a causa na base (estáticos sem `Cache-Control`) já estava anotada.
+
+### R11 — Integração, Postgres e entrega (✅ 24/11/2026)
+
+- **Decisões do usuário:** Postgres pelo caminho do README da base (`POSTGRES_*` no `.env` do usuário e
+  `docker compose up -d db`, volume permanente; a suíte no Postgres foi rodada **pelo usuário**, para a senha não
+  passar pelos meus comandos); medição de 3 criações reais com a chave do usuário.
+- **O que foi feito:** suíte no PostgreSQL 17; suítes finais no SQLite e E2E (Reading + base); auditoria do diff da
+  base desde `49636dd` (só os 6 pontos de encaixe); tabela "Tarefas × blocos"; "Arquitetura" e "Para o Membro 4"
+  finais (dependências, variáveis, URLs, migrações, recursos, resultados, pendências). Nenhum código mudou neste bloco.
+- **Resultados:** SQLite 519 aprovados, 3 pulados; **PostgreSQL 520 aprovados, 2 pulados** (o teste exclusivo do
+  Postgres passou); E2E 25/25; `ruff` limpo; `test_base_protegida` 10/10. Nenhuma diferença de comportamento entre
+  SQLite e Postgres (JSON com `NULL`, `func.random()`, `rowcount` do UPDATE condicional, datas e ordenação).
+- **Medição:** Wikipedia 0,9–2,0 s; Gemini sobrecarregado (1 × 503, 2 × timeout de 60 s), os 3 desafios caíram na
+  reserva corretamente; memória 85 MB. A espera de ≈ 60 s com a LLM travada ficou registrada como pendência.
+- **Ambiente:** o container `projeto-db-1` (Postgres) continua no ar; parar com `docker compose stop db` (os dados
+  ficam no volume).
+- **Ajuste pedido pelo usuário (aviso de demora):** por causa da espera de até ≈ 60 s com a LLM lenta, a tela avisa
+  "Pode demorar até 1 minuto…" e mostra um sinal de carregamento (anel girando, nas cores do tema, mais lento com
+  `prefers-reduced-motion`; `role="status"` para leitores de tela) na preparação do desafio e na correção das abertas;
+  o botão de nova correção mostra "CORRIGINDO… (pode demorar até 1 minuto)". Arquivos: `reading.html`, `reading.js`,
+  `reading.css`, `test_reading_pagina.py` (+1) e `test_reading_e2e.py` (+2: preparação e correção lentas). Suíte:
+  **520 aprovados, 3 pulados** (SQLite); E2E do Reading **14/14**; `ruff` limpo. Mutações (3, todas detectadas;
+  arquivos restaurados): CSS sem a regra do `[hidden]` (carregamento sempre visível), sem o sinal, correção sem o
+  aviso.
 
 ## Testes
 
@@ -536,13 +574,80 @@ Navegador (opcional): `python -m playwright install chromium` uma vez e `E2E=1 p
 O `pytest` puro falha com `ModuleNotFoundError: No module named 'app'` (problema preexistente da base; ver "Para o
 Membro 4"). Decisão DR15.
 
+## Tarefas da lista oficial × blocos
+
+Nenhuma tarefa foi excluída. As de agosto (UI dos decks) já estavam entregues na base.
+
+| Mês | Tarefa | Bloco | Onde é testada |
+|---|---|---|---|
+| Set | Modelagem (texto, desafio, perguntas, tentativa) | R1 | `test_reading_modelos.py` |
+| Set | Migrations Alembic | R1, R3 (0101, 0102) | `test_reading_modelos.py`, `test_migracoes.py`, `test_reading_fontes.py` |
+| Set | Serviço MediaWiki | R3, R3b | `test_reading_fontes.py` |
+| Set | Adaptador de domínio público (Gutenberg) | R3 | `test_reading_fontes.py` |
+| Set | Normalização dos textos | R2 | `test_reading_textos.py` |
+| Set | Contagem de palavras e limite por ppm | R2 | `test_reading_textos.py` |
+| Set | Endpoint `POST /reading/challenges` | R5 | `test_reading_api.py` |
+| Set | Validação Pydantic | R4, R5, R7, R8 | todos os de API e `test_reading_llm.py` |
+| Set | Testes de obtenção, limpeza e seleção | R2, R3 | `test_reading_textos.py`, `test_reading_fontes.py` |
+| Out | Serviço de LLM separado do HTTP | R4 | `test_reading_llm.py` |
+| Out | Prompt para exatamente 5 perguntas | R4 | `test_reading_llm.py` |
+| Out | Schema estruturado (enunciado, tipo, alternativas, resposta correta, justificativa) | R4 | `test_reading_llm.py` |
+| Out | Modo Multiple Choice | R4, R7, R10 | `test_reading_respostas.py`, E2E |
+| Out | Modo Open Answer | R4, R8, R10 | `test_reading_avaliacao.py`, E2E |
+| Out | Página de leitura com timer em JS | R9 | E2E |
+| Out | Bloqueio automático quando o tempo termina | R6 (servidor), R9 (tela) | `test_reading_leitura.py`, E2E |
+| Out | Página das cinco questões | R10 | E2E |
+| Out | Endpoint de submissão e correção | R7 | `test_reading_respostas.py` |
+| Out | Persistência dos resultados no PostgreSQL | R7, R11 | suíte inteira no Postgres (R11) |
+| Nov | Correção das abertas pela LLM com saída estruturada | R8 | `test_reading_avaliacao.py` |
+| Nov | Pontuação | R7, R8 (crédito parcial) | `test_reading_respostas.py`, `test_reading_avaliacao.py` |
+| Nov | Registro de tempo, acertos e modalidade | R7 | `test_reading_respostas.py` |
+| Nov | Falhas de API externa e LLM com HTTPException e respostas padrão | R3, R5, R8 | `test_reading_api.py`, `test_reading_avaliacao.py` |
+| Nov | Fallback quando não há 5 perguntas válidas | R4 | `test_reading_llm.py`, `test_reading_api.py` |
+| Nov | Testes unitários | R1–R8 | `tests/reading/` |
+| Nov | Testes de integração FastAPI + banco + geração | R5–R8, R10 | `test_reading_api.py` e seguintes |
+| Nov | Testes end-to-end texto → leitura → perguntas → resultado | R9, R10 | `test_reading_e2e.py` (`E2E=1`) |
+| — | Histórico (estado vazio) | R10 | `test_reading_historico.py`, E2E |
+
 ## Alterações na base
 
-Nenhuma.
+Nenhuma. Desde o início da branch (`49636dd`), os arquivos da base mudaram só nos pontos de encaixe do Membro 1
+(6 linhas, conferidas com `git diff 49636dd..HEAD`): `app/main.py` (2), `app/models.py` (1),
+`app/static/js/main.js` (1) e `app/templates/base.html` (2: CSS e botão). `requirements.txt` sem mudança.
+`tests/test_base_protegida.py`: 10/10.
 
 ## Para o Membro 4
 
-_A preencher no bloco R11 (dependências, URLs externas — Wikipedia e Gutendex —, migrações e resultados finais)._
+**Dependências.** Nenhuma nova (Python ou de sistema); `requirements.txt` sem mudança. Sem modelos baixados. O E2E
+usa o Chromium do Playwright (`python -m playwright install chromium`, ≈ 150 MB em `~/.cache/ms-playwright`), como os
+E2E da base.
+
+**Variáveis de ambiente.** Nenhuma nova. Usa as `LLM_*` da base. **Funciona sem elas**: sem `LLM_CHAVE`, todo desafio
+usa os textos de reserva (perguntas prontas, DR17), e as abertas ficam em `erro_avaliacao` (503) até a chave existir.
+
+**URLs externas** (o servidor de produção precisa alcançá-las):
+- `https://en.wikipedia.org/w/api.php` (textos; User-Agent do projeto; limite de uso anônimo: 429 vira reserva);
+- `https://gutendex.com/books/` e `https://www.gutenberg.org/` (livros: lista e download do `.txt`);
+- o provedor da LLM (`LLM_BASE_URL`; hoje o Gemini).
+
+**Migrações.** `0101` (esquema: `readingtext`, `readingchallenge`, `readingquestion`, `readingattempt`, com todas as
+FKs e UNIQUEs nomeadas) e `0102` (**dados**: 5 textos de reserva da Wikipedia, CC BY-SA 4.0, com perguntas prontas).
+`0101` sai da `0006`: na integração, `alembic merge` com as cabeças do Speaking (`0201…`) e do Writing (`0301…`).
+
+**Uso de recursos e tempos** (medidos em 24/11/2026, banco temporário, Gemini `gemini-flash-latest`):
+- busca do texto na Wikipedia: 0,9–2,0 s; memória máxima do processo: 85 MB (sem modelos);
+- a criação do desafio leva o tempo da Wikipedia **mais** o da LLM. Na medição, o Gemini estava sobrecarregado: 1
+  resposta 503 (4,8 s) e 2 timeouts (60 s); nos 3 casos o desafio caiu na reserva, como previsto. Não houve geração
+  bem-sucedida para medir. **Risco de experiência:** com a LLM travada, a pessoa espera ≈ 60 s
+  (`LLM_TIMEOUT_SEGUNDOS`, da base) antes de cair na reserva. Ver "Pendências".
+- a correção das abertas faz 1 chamada à LLM por desafio (texto + 5 respostas).
+
+**Resultados finais (R11, 24/11/2026):** SQLite **520 aprovados, 3 pulados** (depois do aviso de demora);
+PostgreSQL 17 (Docker, `shadowing_teste`) **520 aprovados, 2 pulados** (rodado antes do aviso de demora, que só mudou
+a tela e acrescentou um teste da página); E2E (`E2E=1`) **27/27** (14 do Reading + 13 da base); `ruff` limpo. Os pulados são os
+E2E sem `E2E=1` e, no SQLite, o teste exclusivo do Postgres.
+
+**Pendências e achados** (não corrigidos nesta branch; dependem da base ou de decisão do grupo):
 
 **Problema preexistente da base (não corrigido nesta branch):** `pytest` puro, na raiz, falha ao carregar o
 `tests/conftest.py` com `ModuleNotFoundError: No module named 'app'`. Reproduzido numa cópia limpa do commit
@@ -571,3 +676,11 @@ Correções possíveis (base): versão na URL dos estáticos no `base.html` (ex.
 
 **Warning preexistente da base:** `StarletteDeprecationWarning` (o `TestClient` do FastAPI usa `httpx`; a Starlette
 pede `httpx2`). Inofensivo com as versões fixas do `requirements.txt`; vira problema só ao atualizar a Starlette.
+
+**Espera longa quando a LLM trava (R11):** a geração das perguntas espera até `LLM_TIMEOUT_SEGUNDOS` (60 s) antes de
+cair na reserva. Opções: um timeout menor no `.env` (afeta as três features; redações do Writing precisam de mais
+tempo) ou um parâmetro de timeout por chamada no `llm.gerar_json` (alteração no `llm.py`). No Reading, a tela já
+avisa que pode levar até 1 minuto e mostra um sinal de carregamento.
+
+**Melhoria não feita (decisão do usuário, 23/11):** sem `LLM_CHAVE`, o Reading ainda busca e grava o artigo da
+Wikipedia antes de usar a reserva (chamadas e espera sem proveito).

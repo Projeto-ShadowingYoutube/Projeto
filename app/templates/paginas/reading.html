@@ -29,7 +29,10 @@
             <p class="reading-erro" id="readingErroInicio" role="alert"></p>
             <button type="submit" class="reading-botao principal" id="readingComecar">COMEÇAR</button>
             <button type="button" class="reading-botao" id="readingVerHistorico">HISTÓRICO</button>
-            <p class="reading-carregando" id="readingCarregando" hidden>Preparando o texto e as perguntas… Isso pode levar alguns segundos.</p>
+            <div class="reading-carregando" id="readingCarregando" role="status" aria-live="polite" hidden>
+                <span class="reading-spinner" aria-hidden="true"></span>
+                <span>Preparando o texto e as perguntas… Pode demorar até 1 minuto quando o serviço de IA está lento.</span>
+            </div>
         </form>
     </section>
 
@@ -53,7 +56,10 @@
             <div class="reading-lista" id="readingListaPerguntas"></div>
             <p class="reading-erro" id="readingErroRespostas" role="alert"></p>
             <button type="submit" class="reading-botao principal" id="readingEnviar">ENVIAR RESPOSTAS</button>
-            <p class="reading-carregando" id="readingEnviando" hidden></p>
+            <div class="reading-carregando" id="readingEnviando" role="status" aria-live="polite" hidden>
+                <span class="reading-spinner" aria-hidden="true"></span>
+                <span id="readingEnviandoTexto"></span>
+            </div>
         </form>
     </section>
 

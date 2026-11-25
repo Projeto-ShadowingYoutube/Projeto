@@ -18,7 +18,14 @@
 .reading-cota { margin: 0; color: var(--text-sub); }
 .reading-erro { margin: 0; color: #ef4444; min-height: 1em; }
 .reading-erro:empty { display: none; }
-.reading-carregando { margin: 0; color: var(--text-sub); font-style: italic; text-align: center; }
+.reading-carregando { margin: 0; color: var(--text-sub); font-style: italic; text-align: center;
+    display: flex; align-items: center; justify-content: center; gap: 10px; }
+.reading-carregando[hidden] { display: none; }
+/* Sinal de carregamento: um anel girando, nas cores do tema. */
+.reading-spinner { flex: none; width: 20px; height: 20px; border-radius: 50%;
+    border: 3px solid var(--border-color); border-top-color: #818cf8; animation: reading-girar 0.8s linear infinite; }
+@keyframes reading-girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .reading-spinner { animation-duration: 2.4s; } }
 
 .reading-botao { padding: 12px 20px; border-radius: 8px; border: 1px solid var(--border-color);
     background: var(--bg-button); color: var(--text-button); font-weight: 700; letter-spacing: 1px; cursor: pointer; }

@@ -389,3 +389,40 @@ def test_historico_vazio_lista_e_continuar(aba, banco):
     aba.click("#readingVerHistorico")
     aba.locator(".reading-historico-linha").nth(1).locator("button:has-text('Ver')").click()
     expect(aba.locator(".reading-nota")).to_have_text("Nota 0/10")
+
+
+# --- Aviso de demora e sinal de carregamento ---
+
+def test_preparacao_lenta_mostra_aviso_e_sinal(aba, monkeypatch):
+    def fonte_lenta():
+        time.sleep(2)
+        raise rf.FonteIndisponivel("simulada")
+
+    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fonte_lenta, "gutenberg": _fora})
+    aba.goto(f"{aba.base}/reading")
+    expect(aba.locator("#readingCarregando")).to_be_hidden()
+    aba.click("#readingComecar")
+    carregando = aba.locator("#readingCarregando")
+    expect(carregando).to_be_visible()
+    expect(carregando).to_contain_text("Pode demorar até 1 minuto")
+    expect(carregando.locator(".reading-spinner")).to_be_visible()
+    expect(aba.locator("[data-etapa=leitura]")).to_be_visible()
+    expect(carregando).to_be_hidden()
+
+
+def test_correcao_lenta_mostra_aviso_e_sinal(aba, monkeypatch):
+    def chamar_devagar(mensagens, temperatura, max_tokens):
+        time.sleep(2)
+        return _correcoes(1, 1, 1, 1, 1)
+
+    monkeypatch.setattr(config, "LLM_CHAVE", "chave-e2e")
+    monkeypatch.setattr(llm, "_chamar", chamar_devagar)
+    _ate_as_perguntas(aba, "aberta")
+    for ordem in range(1, 6):
+        aba.fill(f".reading-pergunta[data-ordem='{ordem}'] textarea", f"Answer {ordem}.")
+    aba.click("#readingEnviar")
+    enviando = aba.locator("#readingEnviando")
+    expect(enviando).to_be_visible()
+    expect(enviando).to_contain_text("Corrigindo as respostas com a IA… Pode demorar até 1 minuto")
+    expect(enviando.locator(".reading-spinner")).to_be_visible()
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 10/10")
