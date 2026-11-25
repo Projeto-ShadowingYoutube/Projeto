@@ -6,6 +6,8 @@ Encadeia o texto (R3), as perguntas (R4) e o tempo limite (R2), e grava o desafi
 commit: ou fica tudo gravado, ou nada. O texto (ReadingText) é compartilhado entre os usuários e já foi gravado
 pelo R3, à parte.
 
+Sem LLM configurada, o texto sai direto da reserva, sem buscar o artigo (R14).
+
 O relógio da leitura (iniciado_em) começa DEPOIS da busca e da LLM, que podem levar vários segundos: essa espera
 não conta como tempo de leitura. As perguntas são gravadas agora, mas só saem do servidor no fim da leitura (R6).
 
@@ -25,6 +27,7 @@ from sqlmodel import Session, select
 
 from app.models import agora
 from app.models_reading import ReadingAttempt, ReadingChallenge, ReadingQuestion, ReadingText
+from app.services import llm
 from app.services import reading_fontes as rf
 from app.services import reading_llm as rl
 from app.services import reading_textos as rt
@@ -41,7 +44,10 @@ def criar_desafio(session: Session, usuario_id: int, fonte: str, modalidade: str
     """Levanta rf.TextoIndisponivel (sem texto nenhum) ou llm.ErroLLM (LLM falhou e não há reserva)."""
     if ppm not in rt.VELOCIDADES_PPM:  # confere antes de gastar rede e LLM
         raise ValueError(f"ppm inválido: {ppm!r} (use um de {rt.VELOCIDADES_PPM})")
-    texto = rf.obter_texto(session, fonte)
+    # Sem LLM configurada, um artigo novo não teria perguntas e seria trocado pela reserva de qualquer jeito (DR17):
+    # vai direto à reserva, sem buscar nem gravar o artigo (R14, DR48). Sem reserva, segue o fluxo normal, que termina
+    # no erro verdadeiro (503 llm_nao_configurada).
+    texto = (None if llm.configurada() else rf.texto_de_reserva(session)) or rf.obter_texto(session, fonte)
     resultado = rl.perguntas_para_o_desafio(session, texto, modalidade)
     texto = resultado.texto  # pode ter virado um texto de reserva (a LLM falhou)
 

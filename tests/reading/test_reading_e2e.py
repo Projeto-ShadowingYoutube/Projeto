@@ -398,6 +398,8 @@ def test_preparacao_lenta_mostra_aviso_e_sinal(aba, monkeypatch):
         time.sleep(2)
         raise rf.FonteIndisponivel("simulada")
 
+    # Com LLM "configurada": sem ela, a criação vai direto à reserva, sem buscar o texto (R14), e não há espera.
+    monkeypatch.setattr(config, "LLM_CHAVE", "chave-e2e")
     monkeypatch.setattr(rf, "FONTES", {"wikipedia": fonte_lenta, "gutenberg": _fora})
     aba.goto(f"{aba.base}/reading")
     expect(aba.locator("#readingCarregando")).to_be_hidden()
@@ -437,6 +439,8 @@ def test_f5_durante_a_preparacao_o_desafio_aparece_no_historico(aba, banco, monk
         time.sleep(2)
         raise rf.FonteIndisponivel("simulada")
 
+    # Com LLM "configurada": sem ela, a criação vai direto à reserva, sem buscar o texto (R14), e não há espera.
+    monkeypatch.setattr(config, "LLM_CHAVE", "chave-e2e")
     monkeypatch.setattr(rf, "FONTES", {"wikipedia": fonte_lenta, "gutenberg": _fora})
     aba.goto(f"{aba.base}/reading")
     aba.click("#readingComecar")

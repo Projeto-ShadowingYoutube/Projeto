@@ -145,7 +145,7 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR36 | 22/11/2026 | Botão "📖 Reading" na navbar | Exemplo do CLAUDE.md, estilo dos outros botões |
 | DR37 | 22/11/2026 | Wikipedia: sorteio entre os **"Good articles"** (`generator=search`, `incategory:Good_articles`, `gsrsort=random`), e não entre todos os artigos | Medição real: 1 de 6 artigos aleatórios aproveitáveis × 7 de 8 Good articles; continua uma chamada por tentativa |
 | DR38 | 22/11/2026 | Temas de história militar são aceitos; o filtro `eh_inadequado` continua barrando só termos fortes | Conteúdo enciclopédico comum; filtrar "war"/"battle" descartaria muitos artigos bons |
-| — | 23/11/2026 | **Não feita:** sem `LLM_CHAVE`, ir direto à reserva sem buscar o artigo (sugestão opcional; o usuário seguiu para o R10) | Hoje, sem chave, o artigo é buscado e gravado, mas o desafio usa a reserva (DR17) |
+| — | 23/11/2026 | ~~Não feita~~ **feita no R14 (DR48):** sem `LLM_CHAVE`, ir direto à reserva sem buscar o artigo | Pedido do usuário em 25/11 |
 | DR39 | 23/11/2026 | Envio com perguntas em branco pede `confirm()` ("Há N perguntas sem resposta. Enviar mesmo assim?") | Mesmo padrão da base (deletar deck) |
 | DR40 | 23/11/2026 | Rascunho das respostas no `sessionStorage` (chave `reading-rascunho-<id>`), apagado no envio | O F5 nas perguntas não perde o que foi escrito; é só conveniência (fica no navegador) |
 | DR41 | 23/11/2026 | Histórico: os 50 mais recentes, sem paginação | Simples; consulta pelo índice de `usuario_id` |
@@ -154,6 +154,7 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR45 | 24/11/2026 | Gutenberg (R12b): Gutendex só na 1ª página e sem `mime_type`; `.txt` do espelho oficial `gutenberg.pglaf.org/cache/epub/{id}/pg{id}.txt`; no máximo 150 KB e 25 s por livro, cortando na última linha em branco; obras de consulta e coletâneas filtradas pelo título | Medição real: a consulta filtrada passava de 20 s e o `gutenberg.org` respondia 503; o espelho entrega ≈ 27 KB/s e o trecho sai dos primeiros KB |
 | DR46 | 25/11/2026 | Gutendex só com `languages=en` (timeout de 5 s); domínio público (`copyright` = false), `.txt` e obras de consulta conferidos no código | A consulta com `copyright=false` respondeu em 0,5 s num dia e passou de 30 s no seguinte; a simples responde em 0,2 s |
 | DR47 | 25/11/2026 | Catálogo fixo de reserva (`CATALOGO_GUTENBERG`, 28 livros de domínio público conferidos no espelho) quando o Gutendex falha ou não sobra livro | A opção "Livro" funciona mesmo com o Gutendex fora do ar; o download continua pelo espelho |
+| DR48 | 25/11/2026 | Sem LLM configurada, a criação do desafio vai direto ao texto de reserva, sem buscar nem gravar o artigo; sem reserva, segue o fluxo normal (503 `llm_nao_configurada`) | Um artigo novo não teria perguntas e seria trocado pela reserva de qualquer jeito (DR17): eram chamadas à Wikipedia/Gutenberg e espera sem proveito |
 | DR44 | 24/11/2026 | Migração 0101: **sem mudanças** (decisão do usuário). Conferida com o próprio autogenerate (`alembic check` num banco migrado até a 0102: "No new upgrade operations detected"), sem teste automático novo | A 0101 escrita à mão produz exatamente o esquema dos modelos; reescrever com `--autogenerate` perderia os nomes das FKs |
 
 ## Plano e progresso
@@ -183,7 +184,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R12 | Acertos finais conforme o guia | Fixtures em `tests/reading/conftest.py`; conferência do tempo na submissão; verificação real do Gutenberg | R11 | ✅ Concluído (24/11) |
 | R12b | Fonte Gutenberg funcionando | Adaptador de domínio público (uso real) | R12 | ✅ Concluído (24/11) |
 | R13 | Casos de borda | Testes e duas correções (download só `text/plain`; reserva corrompida → 502) | R12b | ✅ Concluído (24/11) |
-| R13b | Gutenberg sem depender do Gutendex | Adaptador de domínio público (robustez) | R13 | ✅ Concluído (25/11), aguardando commit |
+| R13b | Gutenberg sem depender do Gutendex | Adaptador de domínio público (robustez) | R13 | ✅ Concluído (25/11) |
+| R14 | Sem LLM, direto à reserva | Melhoria antes registrada como não feita | R13b | ✅ Concluído (25/11), aguardando commit |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 
@@ -679,6 +681,19 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 - **Manutenção:** o catálogo é fixo; para atualizá-lo, repetir a conferência (lista do Gutendex + HEAD no espelho) e
   manter o teste `test_catalogo_so_tem_livros_utilizaveis` verde.
 
+### R14 — Sem LLM, direto à reserva (✅ 25/11/2026)
+
+- **Pedido do usuário:** fazer a melhoria registrada como não feita em 23/11.
+- **O que mudou (`app/services/reading_desafios.py`):** `criar_desafio` usa `rf.texto_de_reserva(session)` quando
+  `llm.configurada()` é falso; só se não houver reserva cai no `obter_texto` (fluxo normal, que termina em 503
+  `llm_nao_configurada`). Com a LLM configurada, nada muda (o artigo é buscado mesmo havendo reserva).
+- **Testes:** +3 em `test_reading_api.py` (sem LLM com reserva: nenhuma chamada à fonte e nenhum artigo gravado; sem
+  LLM e sem reserva: 503 e a fonte é chamada; com LLM e com reserva: o artigo é buscado normalmente). Dois E2E de
+  preparação lenta passaram a configurar a LLM: sem isso, a criação ficaria instantânea (direto à reserva) e eles
+  passariam só por corrida de tempo (conferido: sem o ajuste, passaram, mas sem exercitar a espera). Suíte: **567
+  aprovados, 3 pulados** (SQLite); E2E do Reading 16/16; `ruff` limpo. Postgres não executado. **Mutação (1,
+  detectada; arquivo restaurado):** sem o atalho (sempre busca o artigo).
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -827,5 +842,5 @@ não foram testados pela tela com a LLM real: o Gemini respondia 503 (sobrecarga
 simulada) e a busca real dos livros passaram; falta repetir os dois testes manuais com a LLM no ar (ver o registro
 do R12b).
 
-**Melhoria não feita (decisão do usuário, 23/11):** sem `LLM_CHAVE`, o Reading ainda busca e grava o artigo da
-Wikipedia antes de usar a reserva (chamadas e espera sem proveito).
+**Melhoria feita no R14 (25/11/2026), antes registrada como não feita:** sem `LLM_CHAVE`, o Reading vai direto ao
+texto de reserva, sem buscar nem gravar o artigo (DR48).

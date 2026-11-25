@@ -294,3 +294,31 @@ def test_desafio_de_outra_conta_responde_404_igual_a_inexistente(entrar_como, fo
     inexistente = bruno.get(f"{URL}/999999")
     assert de_outro.status_code == inexistente.status_code == 404
     assert de_outro.json() == inexistente.json() == {"detail": "Desafio não encontrado.", "codigo": "nao_encontrado"}
+
+
+# --- Sem LLM configurada: direto à reserva (R14, DR48) ---
+
+def test_sem_llm_vai_direto_a_reserva_sem_buscar_o_artigo(entrar_como, fonte, engine_teste):
+    """Sem llm_falsa, a LLM fica sem chave (llm_desligada). O artigo seria trocado pela reserva de qualquer jeito."""
+    reserva = _reserva(engine_teste)
+    corpo = entrar_como("ana@exemplo.com").post(URL, json={"modalidade": "multipla_escolha"}).json()
+
+    assert fonte.chamadas == []  # nenhuma chamada à Wikipedia
+    assert corpo["usou_reserva"] is True and corpo["texto"]["titulo"] == "Honey bee"
+    with Session(engine_teste) as s:
+        assert [t.id for t in s.exec(select(ReadingText)).all()] == [reserva.id]  # nenhum artigo gravado
+    assert _desafios(engine_teste)[0].texto_id == reserva.id
+
+
+def test_sem_llm_e_sem_reserva_segue_o_fluxo_e_responde_503(entrar_como, fonte, engine_teste):
+    resposta = entrar_como("ana@exemplo.com").post(URL, json={"modalidade": "multipla_escolha"})
+    assert resposta.status_code == 503 and resposta.json()["codigo"] == "llm_nao_configurada"
+    assert fonte.chamadas == ["wikipedia"] and _desafios(engine_teste) == []
+
+
+def test_com_llm_e_com_reserva_busca_o_artigo_normalmente(entrar_como, fonte, llm_falsa, engine_teste):
+    _reserva(engine_teste)
+    llm_falsa.responder(RESPOSTA_MC)
+    corpo = entrar_como("ana@exemplo.com").post(URL, json={"modalidade": "multipla_escolha"}).json()
+    assert fonte.chamadas == ["wikipedia"]
+    assert corpo["usou_reserva"] is False and corpo["texto"]["titulo"] == "Bees (wikipedia)"
