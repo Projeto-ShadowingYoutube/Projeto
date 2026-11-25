@@ -42,6 +42,7 @@ from app.services import reading_avaliacao as ra
 from app.services import reading_correcao as rc
 from app.services import reading_desafios as rd
 from app.services import reading_fontes as rf
+from app.services import reading_llm as rl
 
 router = APIRouter(prefix="/api/reading", tags=["reading"], dependencies=[Depends(usuario_atual)])
 # Página HTML (R9): sem login, vai para /login?proximo=/reading (pagina_protegida, de app/api/paginas.py).
@@ -69,7 +70,7 @@ def criar_desafio(corpo: NovoDesafio, usuario: Usuario = Depends(usuario_atual),
     try:
         desafio, texto = rd.criar_desafio(session, usuario.id, fonte=corpo.fonte, modalidade=corpo.modalidade,
                                           ppm=corpo.ppm)
-    except rf.TextoIndisponivel:
+    except (rf.TextoIndisponivel, rl.ReservaInvalida):
         raise ErroDaApi(502, "Não foi possível obter um texto agora. Tente de novo em instantes.",
                         codigo="texto_indisponivel") from None
     return _criado(desafio, texto)

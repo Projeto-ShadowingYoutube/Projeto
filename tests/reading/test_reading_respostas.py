@@ -301,3 +301,27 @@ def test_leitura_dentro_do_prazo_funcao_pura():
     for segundos, esperado in [(0, True), (140, True), (140.5, False)]:
         desafio.leitura_encerrada_em = INICIO + timedelta(seconds=segundos)
         assert rc.leitura_dentro_do_prazo(desafio) is esperado, segundos
+
+
+# --- Casos de borda (R13) ---
+
+def test_resposta_de_multipla_escolha_so_com_espacos_conta_como_em_branco(entrar_como, relogio, engine_teste):
+    ana = entrar_como("ana@exemplo.com")
+    corpo = _enviar(ana, _pronto(ana, relogio), ["   ", "Right 2", "\t", "Right 4", "Right 5"]).json()
+    assert corpo["acertos"] == 3 and [p["resposta"] for p in corpo["perguntas"]][:3] == ["", "Right 2", ""]
+    assert _tentativas(engine_teste)[0].respostas[0] == ""
+
+
+def test_encerrar_depois_de_corrigido_nao_muda_nada(entrar_como, relogio, engine_teste):
+    """Idempotente também depois da correção: devolve as perguntas (sem resposta) e o desafio continua corrigido."""
+    ana = entrar_como("ana@exemplo.com")
+    desafio_id = _pronto(ana, relogio)
+    _enviar(ana, desafio_id, CERTAS)
+    relogio.avancar(100)
+
+    resposta = ana.post(f"{URL}/{desafio_id}/encerrar-leitura")
+    assert resposta.status_code == 200
+    assert resposta.json()["estado"] == "corrigido" and len(resposta.json()["perguntas"]) == 5
+    assert "resposta_correta" not in resposta.text
+    assert _estado(engine_teste, desafio_id) == "corrigido"
+    assert _tentativas(engine_teste)[0].tempo_leitura_segundos == 40  # o tempo gravado não muda

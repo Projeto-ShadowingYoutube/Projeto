@@ -151,6 +151,7 @@ INVALIDAS = [
     correcoes(1, 0.7, 1, 1, 1),                                                # pontuação fora da escala
     correcoes(True, True, True, True, True),                                   # booleano no lugar do número
     {"correcoes": [{"ordem": n, "pontuacao": 1, "comentario": ""} for n in range(1, 6)]},  # sem comentário
+    {"correcoes": [{"ordem": n, "pontuacao": 1, "comentario": "x" * 401} for n in range(1, 6)]},  # longo demais (R13)
 ]
 
 

@@ -23,8 +23,10 @@ def paragrafo(palavras: int, palavra: str = "bees") -> str:
 # --- HTTP falso ---
 
 class RespostaFalsa:
-    def __init__(self, status: int = 200, json=None, pedacos: list[bytes] | None = None):
+    def __init__(self, status: int = 200, json=None, pedacos: list[bytes] | None = None,
+                 tipo: str = "text/plain; charset=utf-8"):
         self.status_code = status
+        self.headers = {"content-type": tipo} if tipo else {}
         self._json = json
         self._pedacos = pedacos or []
         self.pedacos_lidos = 0
@@ -295,6 +297,16 @@ def test_obras_de_consulta_ficam_fora_do_sorteio(http, titulo, serve):
     else:
         with pytest.raises(rf.FonteIndisponivel):  # o único livro da lista foi filtrado: nada a sortear
             rf.buscar_gutenberg()
+
+
+@pytest.mark.parametrize("tipo", ["text/html; charset=utf-8", "application/octet-stream", ""])
+def test_espelho_que_nao_devolve_texto_puro_e_fonte_indisponivel(http, tipo):
+    """R13: uma página HTML com status 200 (manutenção, bloqueio) não pode virar o trecho do desafio."""
+    pagina = RespostaFalsa(pedacos=[b"<html><body><p>Site under maintenance. Please come back later.</p>"], tipo=tipo)
+    http.respostas = [RespostaFalsa(json=GUTENDEX), pagina]
+    with pytest.raises(rf.FonteIndisponivel, match="texto puro"):
+        rf.buscar_gutenberg()
+    assert pagina.fechada and pagina.pedacos_lidos == 0  # nem chegou a ler o corpo
 
 
 def test_espelho_fora_do_ar_e_fonte_indisponivel(http):

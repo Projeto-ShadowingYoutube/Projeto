@@ -166,6 +166,28 @@ def test_sem_texto_nenhum_responde_502(entrar_como, fonte, engine_teste):
     assert _desafios(engine_teste) == []
 
 
+@pytest.mark.parametrize("corrompida", [
+    [{**p, "resposta_correta": "Not an option"} for p in PERGUNTAS_PRONTAS],   # resposta fora das alternativas
+    PERGUNTAS_PRONTAS[:4],                                                    # só 4 perguntas
+    [{"enunciado": "Q?"}] * 5,                                                # campos faltando
+])
+@pytest.mark.parametrize("caminho", ["fonte_fora", "llm_fora"])
+def test_reserva_corrompida_responde_502_e_nao_500(entrar_como, fonte, llm_falsa, engine_teste, corrompida, caminho):
+    """R13: perguntas prontas fora do formato (banco alterado à mão ou migração com erro) → 502, sem gravar nada."""
+    with Session(engine_teste) as s:
+        s.add(ReadingText(fonte="wikipedia", id_origem="reserva", titulo="Honey bee", url="https://x/Honey_bee",
+                          conteudo=" ".join(["honey"] * 450), palavras=450, perguntas_reserva=corrompida))
+        s.commit()
+    if caminho == "fonte_fora":
+        fonte.fora = True                    # a própria reserva vira o texto do desafio
+    else:
+        llm_falsa.falhar(llm.LLMIndisponivel())  # o artigo veio, a LLM falhou, e a reserva sorteada é a corrompida
+
+    resposta = entrar_como("ana@exemplo.com").post(URL, json={"modalidade": "multipla_escolha"})
+    assert resposta.status_code == 502 and resposta.json()["codigo"] == "texto_indisponivel"
+    assert _desafios(engine_teste) == [] and _perguntas(engine_teste) == []
+
+
 def test_llm_fora_usa_o_texto_de_reserva(entrar_como, fonte, llm_falsa, engine_teste):
     reserva = _reserva(engine_teste, palavras=450)
     llm_falsa.falhar(llm.LLMIndisponivel())

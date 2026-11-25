@@ -426,3 +426,62 @@ def test_correcao_lenta_mostra_aviso_e_sinal(aba, monkeypatch):
     expect(enviando).to_contain_text("Corrigindo as respostas com a IA… Pode demorar até 1 minuto")
     expect(enviando.locator(".reading-spinner")).to_be_visible()
     expect(aba.locator(".reading-nota")).to_have_text("Nota 10/10")
+
+
+# --- Casos de borda (R13) ---
+
+def test_f5_durante_a_preparacao_o_desafio_aparece_no_historico(aba, banco, monkeypatch):
+    """A criação termina no servidor mesmo com a página recarregada no meio: a cota já foi gasta e o desafio fica no
+    histórico com "Continuar" (a URL ainda não tinha o ?desafio=ID)."""
+    def fonte_lenta():
+        time.sleep(2)
+        raise rf.FonteIndisponivel("simulada")
+
+    monkeypatch.setattr(rf, "FONTES", {"wikipedia": fonte_lenta, "gutenberg": _fora})
+    aba.goto(f"{aba.base}/reading")
+    aba.click("#readingComecar")
+    expect(aba.locator("#readingCarregando")).to_be_visible()
+    aba.reload()  # no meio da preparação
+    expect(aba.locator("[data-etapa=inicio]")).to_be_visible()
+    assert "desafio=" not in aba.url
+
+    for _ in range(50):  # espera a criação terminar no servidor
+        with Session(banco) as s:
+            if s.exec(select(ReadingChallenge)).first():
+                break
+        time.sleep(0.1)
+    aba.click("#readingVerHistorico")
+    linha = aba.locator(".reading-historico-linha")
+    expect(linha).to_have_count(1)
+    expect(linha).to_contain_text("Em leitura")
+    linha.locator("button:has-text('Continuar')").click()
+    expect(aba.locator("[data-etapa=leitura]")).to_be_visible()
+    expect(aba.locator("#readingConteudo p").first).to_be_visible()
+
+
+def test_html_nas_perguntas_e_alternativas_aparece_como_texto(aba, banco):
+    """Enunciados e alternativas (da LLM ou da reserva) com HTML: aparecem como texto, nas perguntas e no resultado."""
+    maliciosa = '<img src=x onerror="window.__xss=1">'
+    perguntas = [{"enunciado": f"Question {n} {maliciosa}?",
+                  "alternativas": [f"<b>A{n}</b>", f"B{n} {maliciosa}", f"C{n}", f"D{n}"],
+                  "resposta_correta": f"<b>A{n}</b>", "justificativa": f"Justificativa {n} {maliciosa}"}
+                 for n in range(1, 6)]
+    with Session(banco) as s:
+        for texto in s.exec(select(rf.ReadingText)).all():
+            s.delete(texto)
+        s.add(rf.ReadingText(fonte="wikipedia", id_origem="xss2", titulo="Bees", url="https://en.wikipedia.org/wiki/Bee",
+                             conteudo=" ".join(["bees"] * 300) + ".", palavras=300, perguntas_reserva=perguntas))
+        s.commit()
+
+    _ate_as_perguntas(aba)
+    expect(aba.locator(".reading-pergunta[data-ordem='1'] legend")).to_have_text(f"1. Question 1 {maliciosa}?")
+    expect(aba.locator(".reading-pergunta[data-ordem='1'] .reading-alternativa", has_text="<b>A1</b>")).to_have_count(1)
+    assert aba.locator(".reading-pergunta img, .reading-pergunta b").count() == 0
+
+    for ordem in range(1, 6):
+        aba.locator(f".reading-pergunta[data-ordem='{ordem}'] input[value='<b>A{ordem}</b>']").check()
+    aba.click("#readingEnviar")
+    expect(aba.locator(".reading-nota")).to_have_text("Nota 10/10")  # a grafia com "<b>" é comparada como texto
+    expect(aba.locator(".reading-correcao[data-ordem='1'] .reading-justificativa")).to_contain_text(maliciosa)
+    assert aba.locator(".reading-correcao img, .reading-correcao b").count() == 0
+    assert aba.evaluate("window.__xss") is None

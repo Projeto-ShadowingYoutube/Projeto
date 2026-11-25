@@ -81,7 +81,8 @@ corrigida: `correta`, `pontuacao`, `acertos`, `nota` e `avaliado_em` são `null`
 Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servidor (0 fora da leitura).
 
 **Códigos próprios:**
-- `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco.
+- `texto_indisponivel` (502): a fonte falhou, não há artigo salvo e não há reserva no banco; ou o texto de reserva
+  sorteado tem perguntas prontas fora do formato (R13; fica um erro no log com o id do texto).
 - `leitura_encerrada` (409): o texto foi pedido depois do prazo de leitura (+ tolerância) ou depois de encerrar.
 - `leitura_em_andamento` (409): respostas enviadas com o desafio ainda em `lendo`.
 - `ja_respondido` (409): o desafio já tem uma tentativa.
@@ -177,8 +178,9 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R9 | Tela: início e leitura com timer | Página de leitura com timer; bloqueio automático (tela) | R6 | ✅ Concluído (22/11) |
 | R10 | Tela: questões, resultado e histórico | Página das cinco questões | R7, R8, R9 | ✅ Concluído (23/11) |
 | R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | ✅ Concluído (24/11) |
-| R12 | Acertos finais conforme o guia | Fixtures em `tests/reading/conftest.py`; conferência do tempo na submissão; verificação real do Gutenberg | R11 | ✅ Concluído (24/11), aguardando commit |
-| R12b | Fonte Gutenberg funcionando | Adaptador de domínio público (uso real) | R12 | ✅ Concluído (24/11), aguardando commit |
+| R12 | Acertos finais conforme o guia | Fixtures em `tests/reading/conftest.py`; conferência do tempo na submissão; verificação real do Gutenberg | R11 | ✅ Concluído (24/11) |
+| R12b | Fonte Gutenberg funcionando | Adaptador de domínio público (uso real) | R12 | ✅ Concluído (24/11) |
+| R13 | Casos de borda | Testes e duas correções (download só `text/plain`; reserva corrompida → 502) | R12b | ✅ Concluído (24/11), aguardando commit |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 
@@ -614,6 +616,36 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   sem a LLM) e, com a LLM simulada, a correção das abertas (`test_reading_avaliacao.py` e os E2E). **Falta:** repetir
   os dois testes manuais quando o Gemini voltar a responder.
 
+### R13 — Casos de borda (✅ 24/11/2026)
+
+- **Como foram achados:** cobertura de ramos (`--cov-branch`) só no Reading (tudo 100%, menos 1 ramo de
+  `reading_textos.py`) e revisão do código atrás de situações que nenhum teste exercita.
+- **Correções (com teste):**
+  1. **Espelho do Gutenberg devolvendo 200 com uma página HTML** (manutenção, bloqueio): o HTML seria tratado como
+     livro e poderia virar o trecho. Agora `_baixar_texto` exige `content-type: text/plain` antes de ler o corpo;
+     senão, `FonteIndisponivel` (→ artigo salvo → reserva). Verificado de verdade: o espelho real passa.
+  2. **Texto de reserva com perguntas prontas fora do formato** (banco alterado à mão, migração de dados com erro):
+     antes, 500 genérico pela rota. Agora `reading_llm.ReservaInvalida` (com um erro no log) → 502
+     `texto_indisponivel`, sem gravar o desafio; vale quando a reserva é o próprio texto (fonte fora) e quando ela
+     substitui o artigo (LLM fora).
+- **Só testes (o comportamento já era o certo):** F5 durante "Preparando…" (E2E: o desafio é criado mesmo assim e
+  aparece no histórico com "Continuar"); resposta de múltipla escolha só com espaços conta como em branco;
+  `encerrar-leitura` num desafio corrigido não muda nada; comentário da LLM com mais de 400 caracteres é recusado (e
+  a nova tentativa do `llm.py` acontece); HTML em enunciados, alternativas e justificativas aparece como texto nas
+  perguntas e no resultado (E2E), e a resposta com `<b>` é comparada como texto (nota 10); linha de livro que não é
+  título nem frase completa é descartada (o ramo que faltava).
+- **Documentados, sem teste** (limitação do navegador ou coberto pela base): aba em segundo plano por muito tempo (o
+  timer usa `Date.now()` e se ajusta ao voltar; o servidor limita o tempo gravado); duas abas no mesmo desafio (a
+  outra continua mostrando o texto até o timer dela acabar; o servidor garante o tempo gravado); sessão que vence no
+  meio do desafio (a base leva ao login com `proximo=/reading?desafio=ID` e volta); emoji nas respostas abertas (o
+  `maxlength` do navegador conta 2 por emoji e o Python 1: o navegador é mais restritivo, nada passa do limite do
+  servidor).
+- **Testes:** +14 (Python: 3 de `content-type`, 6 de reserva corrompida, 2 de respostas, 1 de comentário longo, 1 de
+  linha descartada; E2E: +2). Suíte: **556 aprovados, 3 pulados** (SQLite); E2E **29/29** (16 do Reading + 13 da
+  base); `ruff` limpo; cobertura de linhas e ramos **100%** em todos os arquivos do Reading. Postgres não executado
+  neste bloco. **Mutações (4, todas detectadas; arquivos restaurados):** download sem exigir `text/plain`; reserva
+  corrompida sem tratamento; rota sem mapear `ReservaInvalida`; enunciado da pergunta montado como HTML.
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -706,6 +738,10 @@ FKs e UNIQUEs nomeadas) e `0102` (**dados**: 5 textos de reserva da Wikipedia, C
   bem-sucedida para medir. **Risco de experiência:** com a LLM travada, a pessoa espera ≈ 60 s
   (`LLM_TIMEOUT_SEGUNDOS`, da base) antes de cair na reserva. Ver "Pendências".
 - a correção das abertas faz 1 chamada à LLM por desafio (texto + 5 respostas).
+
+**Resultados depois do R13 (24/11/2026):** SQLite **556 aprovados, 3 pulados**; E2E **29/29**; cobertura 100%
+(linhas e ramos) no Reading; `ruff` limpo. O Postgres foi rodado por último no R11 (520 aprovados): vale rodar de novo
+antes do merge.
 
 **Resultados finais (R11, 24/11/2026):** SQLite **520 aprovados, 3 pulados** (depois do aviso de demora);
 PostgreSQL 17 (Docker, `shadowing_teste`) **520 aprovados, 2 pulados** (rodado antes do aviso de demora, que só mudou

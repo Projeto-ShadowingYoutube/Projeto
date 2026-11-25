@@ -224,11 +224,16 @@ def _url_do_texto(livro: dict) -> str | None:
 
 
 def _baixar_texto(url: str) -> str:
-    """Baixa o .txt do livro: no máximo LIMITE_BYTES_LIVRO e TEMPO_MAX_LIVRO segundos.
+    """Baixa o .txt do livro: só text/plain, no máximo LIMITE_BYTES_LIVRO e TEMPO_MAX_LIVRO segundos (R12b, R13).
 
     Se o arquivo foi cortado no limite, descarta o que vem depois da última linha em branco: o corte cai no meio de
     um parágrafo, e um pedaço que terminasse num ponto passaria por parágrafo inteiro."""
     resposta = _get(url, timeout=TIMEOUT_LIVRO, stream=True)
+    tipo = resposta.headers.get("content-type", "")
+    if not tipo.startswith("text/plain"):
+        # Ex.: página HTML de manutenção ou de bloqueio com status 200; tratada como livro, as tags virariam o trecho.
+        resposta.close()
+        raise FonteIndisponivel(f"o espelho não devolveu texto puro (content-type {tipo or 'ausente'!r})")
     partes, total, cortado = [], 0, False
     inicio = _relogio()
     try:

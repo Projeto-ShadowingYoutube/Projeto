@@ -9,6 +9,7 @@ Ordem (decisões DR3 e DR17):
 3. Qualquer ErroLLM (resposta inválida duas vezes, timeout, provedor fora, LLM não configurada): troca o texto por
    um de reserva, com as perguntas prontas dele (usou_reserva=True).
 4. Nem reserva: relança o ErroLLM, que o app transforma no erro padrão (502/503/504).
+5. Reserva com perguntas fora do formato: ReservaInvalida (a rota responde 502 texto_indisponivel; R13).
 
 Os prompts ficam aqui, e não no llm.py (base): o serviço de LLM é compartilhado pelas três features.
 A chamada é bloqueante: use numa rota "def" (R5).
@@ -17,6 +18,7 @@ import logging
 import random
 from dataclasses import dataclass
 
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.models_reading import ReadingText
@@ -62,6 +64,10 @@ Modalidade: resposta aberta (tipo "aberta").
 - "resposta_correta" é a resposta esperada, em inglês, em uma ou duas frases curtas.
 """,
 }
+
+
+class ReservaInvalida(Exception):
+    """O texto de reserva tem perguntas prontas fora do formato (não passam no mesmo schema das da LLM)."""
 
 
 @dataclass
@@ -122,7 +128,12 @@ def perguntas_da_reserva(texto: ReadingText, modalidade: str) -> list[Pergunta]:
 # --- Internos ---
 
 def _da_reserva(texto: ReadingText, modalidade: str) -> PerguntasDoDesafio:
-    perguntas = _embaralhar(perguntas_da_reserva(texto, modalidade))
+    try:
+        perguntas = _embaralhar(perguntas_da_reserva(texto, modalidade))
+    except (ValidationError, KeyError, TypeError) as erro:
+        # Só com o banco alterado à mão ou uma migração de dados com erro: avisa no log e responde 502 (R13).
+        logger.error("Reading: texto de reserva %s (\"%s\") com perguntas inválidas: %s", texto.id, texto.titulo, erro)
+        raise ReservaInvalida() from erro
     return PerguntasDoDesafio(texto=texto, perguntas=perguntas, usou_reserva=True, modelo_llm=None)
 
 

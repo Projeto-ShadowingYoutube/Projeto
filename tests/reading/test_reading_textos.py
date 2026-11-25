@@ -156,6 +156,17 @@ def test_gutenberg_sem_capitulos_mantem_todas_as_secoes():
     assert len(rt.limpar_gutenberg(livro)) == 2
 
 
+def test_gutenberg_descarta_linhas_que_nao_sao_titulo_nem_frase():
+    """R13: assinatura, data ou verso solto (sem ponto final, em minúsculas) não vira parágrafo nem abre seção."""
+    livro = ("The bees flew out of the hive to look for flowers in the field.\n\n"
+             "signed by the author, london 1902\n\n"
+             "The queen stayed inside the hive all day long and laid many eggs.")
+    assert rt.limpar_gutenberg(livro) == [[
+        "The bees flew out of the hive to look for flowers in the field.",
+        "The queen stayed inside the hive all day long and laid many eggs.",
+    ]]
+
+
 def test_gutenberg_sem_marcas_usa_o_texto_inteiro():
     secoes = rt.limpar_gutenberg("The bees flew out of the hive to look for flowers in the field.")
     assert secoes == [["The bees flew out of the hive to look for flowers in the field."]]
