@@ -245,7 +245,7 @@ LIVRO = ("*** START OF THE PROJECT GUTENBERG EBOOK BEES ***\n\nPREFACE\n\n"
          + "\n\nCHAPTER II\n\n" + paragrafo(500, "dois") + "\n\n*** END OF THE PROJECT GUTENBERG EBOOK BEES ***\n")
 
 GUTENDEX = {"results": [{
-    "id": 84, "title": "Bees",
+    "id": 84, "title": "Bees", "copyright": False,
     "formats": {"application/zip": "https://www.gutenberg.org/cache/84.zip",
                 "text/plain; charset=us-ascii": "https://www.gutenberg.org/ebooks/84.txt.utf-8"},
 }]}
@@ -262,8 +262,8 @@ def test_gutenberg_usa_o_capitulo_1(http, session):
 
     (url_lista, lista), (url_livro, baixar) = http.chamadas
     assert url_lista == rf.URL_GUTENDEX
-    # R12b: só a 1ª página e sem mime_type (os dois deixavam o Gutendex lento demais)
-    assert lista["params"] == {"languages": "en", "copyright": "false"} and lista["timeout"] == rf.TIMEOUT_API
+    # R13b: só languages=en (com qualquer outro filtro o Gutendex pode passar de 30 s) e timeout curto
+    assert lista["params"] == {"languages": "en"} and lista["timeout"] == rf.TIMEOUT_GUTENDEX == 5
     # O .txt vem do espelho oficial (o www.gutenberg.org recusa downloads automáticos), e não da URL do Gutendex
     assert url_livro == "https://gutenberg.pglaf.org/cache/epub/84/pg84.txt"
     assert baixar["stream"] is True and baixar["timeout"] == rf.TIMEOUT_LIVRO
@@ -272,7 +272,8 @@ def test_gutenberg_usa_o_capitulo_1(http, session):
 
 def test_livro_sem_texto_puro_e_pulado(http):
     """Só livros com text/plain (e não só .zip) entram no sorteio; o download sai do espelho com o id do escolhido."""
-    lista = {"results": [{"id": 1, "title": "Só zip", "formats": {"application/zip": "https://x/1.zip"}},
+    lista = {"results": [{"id": 1, "title": "Só zip", "copyright": False,
+                          "formats": {"application/zip": "https://x/1.zip"}},
                          GUTENDEX["results"][0]]}
     http.respostas = [RespostaFalsa(json=lista), RespostaFalsa(pedacos=[LIVRO.encode()])]
     assert rf.buscar_gutenberg().id_origem == "84"
@@ -290,13 +291,12 @@ def test_livro_sem_texto_puro_e_pulado(http):
     ("Indexed Tales of the Sea", True),  # "index" só como palavra inteira
 ])
 def test_obras_de_consulta_ficam_fora_do_sorteio(http, titulo, serve):
-    livro = {"id": 7, "title": titulo, "formats": {"text/plain; charset=utf-8": "https://x/7.txt"}}
+    livro = {"id": 7, "title": titulo, "copyright": False, "formats": {"text/plain; charset=utf-8": "https://x/7.txt"}}
     http.respostas = [RespostaFalsa(json={"results": [livro]}), RespostaFalsa(pedacos=[LIVRO.encode()])]
     if serve:
         assert rf.buscar_gutenberg().titulo == titulo
-    else:
-        with pytest.raises(rf.FonteIndisponivel):  # o único livro da lista foi filtrado: nada a sortear
-            rf.buscar_gutenberg()
+    else:  # o único livro da lista foi filtrado: o sorteio sai do catálogo (R13b)
+        assert rf.buscar_gutenberg().titulo in dict(rf.CATALOGO_GUTENBERG).values()
 
 
 @pytest.mark.parametrize("tipo", ["text/html; charset=utf-8", "application/octet-stream", ""])
@@ -324,15 +324,56 @@ def test_gutenberg_le_no_maximo_o_limite_de_bytes(http, monkeypatch):
     assert livro.fechada
 
 
+# --- Catálogo de reserva do Gutenberg (R13b) ---
+
+def _livro_do_catalogo(http) -> tuple[str, str]:
+    """(título escolhido, URL baixada) de um sorteio que deveria ter saído do catálogo."""
+    texto = rf.buscar_gutenberg()
+    url_baixada = http.chamadas[-1][0]
+    catalogo = dict(rf.CATALOGO_GUTENBERG)
+    assert int(texto.id_origem) in catalogo and texto.titulo == catalogo[int(texto.id_origem)]
+    assert url_baixada == rf.URL_TEXTO_GUTENBERG.format(id=texto.id_origem)
+    return texto.titulo, url_baixada
+
+
+@pytest.mark.parametrize("falha", [
+    requests.Timeout("lento"),                               # o caso real de 25/11/2026 (mais de 30 s)
+    requests.ConnectionError("fora do ar"),
+    RespostaFalsa(status=503, json={"results": []}),
+    RespostaFalsa(json=None),                                # não é JSON
+    RespostaFalsa(json={"outra": "coisa"}),                  # sem "results"
+    RespostaFalsa(json={"results": [{"titulo": "sem id"}]}),
+])
+def test_gutendex_com_falha_sorteia_do_catalogo(http, falha):
+    http.respostas = [falha, RespostaFalsa(pedacos=[LIVRO.encode()])]
+    _livro_do_catalogo(http)
+    assert len(http.chamadas) == 2  # uma tentativa no Gutendex (sem repetir) e o download
+
+
 @pytest.mark.parametrize("lista", [
     {"results": []},
-    {"results": [{"id": 1, "title": "Só zip", "formats": {"application/zip": "https://x/1.zip"}}]},
-    {"outra": "coisa"},
+    {"results": [{"id": 1, "title": "Só zip", "copyright": False, "formats": {"application/zip": "https://x/1.zip"}}]},
 ])
-def test_gutendex_sem_livro_utilizavel(http, lista):
-    http.respostas = [RespostaFalsa(json=lista)]
-    with pytest.raises(rf.FonteIndisponivel):
-        rf.buscar_gutenberg()
+def test_gutendex_sem_livro_utilizavel_sorteia_do_catalogo(http, lista):
+    http.respostas = [RespostaFalsa(json=lista), RespostaFalsa(pedacos=[LIVRO.encode()])]
+    _livro_do_catalogo(http)
+
+
+@pytest.mark.parametrize("copyright_", [True, None])
+def test_livro_com_direitos_autorais_fica_fora(http, copyright_):
+    """O domínio público é conferido no código (o filtro copyright=false do Gutendex deixava a consulta lenta)."""
+    livro = {**GUTENDEX["results"][0], "copyright": copyright_}
+    http.respostas = [RespostaFalsa(json={"results": [livro]}), RespostaFalsa(pedacos=[LIVRO.encode()])]
+    titulo, _ = _livro_do_catalogo(http)
+    assert titulo != "Bees"
+
+
+def test_catalogo_so_tem_livros_utilizaveis():
+    ids = [id_livro for id_livro, _ in rf.CATALOGO_GUTENBERG]
+    assert len(ids) == len(set(ids)) >= 20
+    for id_livro, titulo in rf.CATALOGO_GUTENBERG:
+        assert isinstance(id_livro, int) and id_livro > 0 and titulo.strip()
+        assert not rf._NAO_E_LEITURA.search(titulo), titulo
 
 
 def test_livro_cortado_no_limite_nao_deixa_paragrafo_pela_metade(http, monkeypatch):

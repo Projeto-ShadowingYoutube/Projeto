@@ -34,7 +34,10 @@ from app.services import reading_textos as rt
 logger = logging.getLogger("uvicorn.error")
 
 TENTATIVAS_BUSCA = 3
-TIMEOUT_API = 10    # segundos (Wikipedia e Gutendex)
+TIMEOUT_API = 10    # segundos (Wikipedia)
+# O Gutendex é instável: a mesma consulta já respondeu em 0,5 s e, no dia seguinte, passou de 30 s (25/11/2026).
+# Com timeout curto, a espera é pequena e o sorteio segue pelo CATALOGO_GUTENBERG (R13b).
+TIMEOUT_GUTENDEX = 5
 TIMEOUT_LIVRO = 20  # o .txt de um livro é maior
 # O trecho sai do começo do capítulo 1 (nos livros medidos, nos primeiros 4 KB) e o espelho entrega ≈ 27 KB/s:
 # 150 KB levam uns 5 s. Um livro cujo capítulo 1 não cabe (sumário enorme) é descartado e outro é sorteado (R12b).
@@ -112,25 +115,70 @@ def buscar_wikipedia() -> TextoBruto:
 
 
 def buscar_gutenberg() -> TextoBruto:
-    """Um livro em inglês e em domínio público, sorteado entre os mais baixados do Project Gutenberg (Gutendex).
+    """Um livro em inglês e em domínio público do Project Gutenberg, sorteado entre os mais baixados.
 
-    Só a 1ª página do Gutendex (os 32 mais baixados), sem o filtro mime_type: com ele, ou com outra página, a consulta
-    passava de 20 s (medido em 24/11/2026; a 1ª página responde em menos de 1 s). O formato .txt é conferido aqui."""
-    parametros = {"languages": "en", "copyright": "false"}
-    resposta = _get(URL_GUTENDEX, params=parametros, timeout=TIMEOUT_API)
+    A lista vem do Gutendex; se ele falhar (timeout, erro, formato) ou não sobrar livro, vem do CATALOGO_GUTENBERG
+    (R13b). O .txt é sempre baixado do espelho oficial."""
     try:
-        livros = [livro for livro in resposta.json()["results"]
-                  if _url_do_texto(livro) and not _NAO_E_LEITURA.search(livro["title"])]
-        livro = _sorteio.choice(livros)
-        id_livro, titulo = int(livro["id"]), livro["title"]
-    except (ValueError, KeyError, IndexError, TypeError) as erro:
-        raise FonteIndisponivel("o Gutendex respondeu fora do formato esperado") from erro
+        livros = _livros_do_gutendex()
+    except FonteIndisponivel as erro:
+        logger.warning("Reading: Gutendex indisponível (%s); sorteando do catálogo", erro)
+        livros = []
+    id_livro, titulo = _sorteio.choice(livros or CATALOGO_GUTENBERG)
     bruto = _baixar_texto(URL_TEXTO_GUTENBERG.format(id=id_livro))
     return TextoBruto(fonte="gutenberg", id_origem=str(id_livro), titulo=titulo,
                       url=URL_LIVRO_GUTENBERG.format(id=id_livro), secoes=rt.limpar_gutenberg(bruto))
 
 
+# Reserva do Gutenberg quando o Gutendex falha (R13b, DR47): os livros de domínio público (copyright=false) da 1ª
+# página do Gutendex em 25/11/2026, menos as obras de consulta, todos conferidos no espelho (.txt com status 200).
+CATALOGO_GUTENBERG: tuple[tuple[int, str], ...] = (
+    (1342, "Pride and Prejudice"),
+    (84, "Frankenstein; or, The modern Prometheus"),
+    (2701, "Moby Dick; Or, The Whale"),
+    (11, "Alice's Adventures in Wonderland"),
+    (1661, "The Adventures of Sherlock Holmes"),
+    (1513, "Romeo and Juliet"),
+    (345, "Dracula"),
+    (43, "The strange case of Dr. Jekyll and Mr. Hyde"),
+    (145, "Middlemarch"),
+    (67979, "The Blue Castle: a novel"),
+    (2554, "Crime and Punishment"),
+    (1260, "Jane Eyre: An Autobiography"),
+    (2680, "Meditations"),
+    (1184, "The Count of Monte Cristo"),
+    (2641, "A Room with a View"),
+    (174, "The Picture of Dorian Gray"),
+    (37106, "Little Women; Or, Meg, Jo, Beth, and Amy"),
+    (98, "A Tale of Two Cities"),
+    (64317, "The Great Gatsby"),
+    (65238, "The Secret of Chimneys"),
+    (2600, "War and Peace"),
+    (1952, "The Yellow Wallpaper"),
+    (1259, "Twenty years after"),
+    (1727, "The Odyssey: Rendered into English prose for the use of those who cannot read the original"),
+    (1232, "The Prince"),
+    (394, "Cranford"),
+    (2160, "The Expedition of Humphry Clinker"),
+    (16389, "The Enchanted April"),
+)
+
+
 FONTES: dict[str, Callable[[], TextoBruto]] = {"wikipedia": buscar_wikipedia, "gutenberg": buscar_gutenberg}
+
+
+def _livros_do_gutendex() -> list[tuple[int, str]]:
+    """(id, título) dos livros de domínio público, com .txt e que não são obras de consulta, da 1ª página.
+
+    Só languages=en: com qualquer outro filtro (copyright, mime_type, page) a consulta pode passar de 30 s; o domínio
+    público (copyright=false) e o formato .txt são conferidos aqui."""
+    resposta = _get(URL_GUTENDEX, params={"languages": "en"}, timeout=TIMEOUT_GUTENDEX)
+    try:
+        return [(int(livro["id"]), livro["title"]) for livro in resposta.json()["results"]
+                if livro.get("copyright") is False and _url_do_texto(livro)
+                and not _NAO_E_LEITURA.search(livro["title"])]
+    except (ValueError, KeyError, TypeError, AttributeError) as erro:
+        raise FonteIndisponivel("o Gutendex respondeu fora do formato esperado") from erro
 
 
 # --- Obter o texto do desafio ---

@@ -152,6 +152,8 @@ Todas as respostas com o resumo trazem `segundos_restantes`, calculado no servid
 | DR42 | 23/11/2026 | Desafios não terminados aparecem no histórico com "Continuar" | Retoma a leitura ou as respostas pelo mesmo `?desafio=ID` |
 | DR43 | 24/11/2026 | Conferência explícita do tempo na submissão (guia, seção 7): o servidor recalcula com os horários gravados que a leitura terminou entre o início e o prazo + 5 s; senão, 409 `tempo_invalido`. Responder continua sem limite (DR6) | O guia pede a conferência na submissão; a DR6 foi mantida |
 | DR45 | 24/11/2026 | Gutenberg (R12b): Gutendex só na 1ª página e sem `mime_type`; `.txt` do espelho oficial `gutenberg.pglaf.org/cache/epub/{id}/pg{id}.txt`; no máximo 150 KB e 25 s por livro, cortando na última linha em branco; obras de consulta e coletâneas filtradas pelo título | Medição real: a consulta filtrada passava de 20 s e o `gutenberg.org` respondia 503; o espelho entrega ≈ 27 KB/s e o trecho sai dos primeiros KB |
+| DR46 | 25/11/2026 | Gutendex só com `languages=en` (timeout de 5 s); domínio público (`copyright` = false), `.txt` e obras de consulta conferidos no código | A consulta com `copyright=false` respondeu em 0,5 s num dia e passou de 30 s no seguinte; a simples responde em 0,2 s |
+| DR47 | 25/11/2026 | Catálogo fixo de reserva (`CATALOGO_GUTENBERG`, 28 livros de domínio público conferidos no espelho) quando o Gutendex falha ou não sobra livro | A opção "Livro" funciona mesmo com o Gutendex fora do ar; o download continua pelo espelho |
 | DR44 | 24/11/2026 | Migração 0101: **sem mudanças** (decisão do usuário). Conferida com o próprio autogenerate (`alembic check` num banco migrado até a 0102: "No new upgrade operations detected"), sem teste automático novo | A 0101 escrita à mão produz exatamente o esquema dos modelos; reescrever com `--autogenerate` perderia os nomes das FKs |
 
 ## Plano e progresso
@@ -180,7 +182,8 @@ blocos B1–B13 do `docs/IMPLEMENTATION_PLAN.md`). Não há trabalho nesta branc
 | R11 | Integração, E2E e entrega | Testes de serviços, integração e E2E; Postgres; "Para o Membro 4" | todos | ✅ Concluído (24/11) |
 | R12 | Acertos finais conforme o guia | Fixtures em `tests/reading/conftest.py`; conferência do tempo na submissão; verificação real do Gutenberg | R11 | ✅ Concluído (24/11) |
 | R12b | Fonte Gutenberg funcionando | Adaptador de domínio público (uso real) | R12 | ✅ Concluído (24/11) |
-| R13 | Casos de borda | Testes e duas correções (download só `text/plain`; reserva corrompida → 502) | R12b | ✅ Concluído (24/11), aguardando commit |
+| R13 | Casos de borda | Testes e duas correções (download só `text/plain`; reserva corrompida → 502) | R12b | ✅ Concluído (24/11) |
+| R13b | Gutenberg sem depender do Gutendex | Adaptador de domínio público (robustez) | R13 | ✅ Concluído (25/11), aguardando commit |
 
 MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
 
@@ -646,6 +649,36 @@ MVP: R1–R7 e R9. Escopo completo: R8 e R10. Fechamento: R11.
   neste bloco. **Mutações (4, todas detectadas; arquivos restaurados):** download sem exigir `text/plain`; reserva
   corrompida sem tratamento; rota sem mapear `ReservaInvalida`; enunciado da pergunta montado como HTML.
 
+### R13b — Gutenberg sem depender do Gutendex (✅ 25/11/2026)
+
+- **Problema relatado pelo usuário:** "gutenberg indisponível". Medido em 25/11/2026: a consulta do app ao Gutendex
+  (`languages=en&copyright=false`), que respondia em 0,5 s no dia anterior, passou de **30 s**, mesmo pedida duas
+  vezes; a consulta simples (`languages=en`) respondeu em 0,2 s, e o espelho `gutenberg.pglaf.org` em 1,1 s. O app
+  fazia o certo (timeout → artigo salvo → reserva da Wikipedia), mas a opção "Livro" ficava inútil.
+- **O que mudou (`app/services/reading_fontes.py`, opção A aprovada):** `_livros_do_gutendex` consulta só
+  `languages=en` com `TIMEOUT_GUTENDEX = 5 s` e confere no código o domínio público (`copyright` = false), o `.txt` e
+  as obras de consulta. Se o Gutendex falhar (timeout, conexão, status, formato) ou não sobrar livro, o sorteio sai do
+  `CATALOGO_GUTENBERG`: 28 livros de domínio público da 1ª página do Gutendex em 25/11/2026, menos as obras de consulta
+  e o "Metamorphosis" (`copyright=True`), **todos conferidos no espelho** (HEAD com status 200 e `text/plain`). O
+  download continua sempre pelo espelho.
+- **Verificação real:** com o Gutendex respondendo: 3 de 3 desafios com livro ("A Room with a View", "A Tale of Two
+  Cities", "The Secret of Chimneys"; 3–10 s). **Com o Gutendex fora do ar** (URL apontada para um endereço que não
+  responde): 2 de 2 desafios com livro do catálogo ("Alice's Adventures in Wonderland", "A Tale of Two Cities"; 9–11 s:
+  5 s de espera pelo Gutendex mais o download).
+- **Testes:** os testes do Gutenberg foram ajustados ao novo comportamento (parâmetros, `copyright` no exemplo; lista
+  vazia ou só com obras filtradas agora sorteia do catálogo em vez de dar erro) e entraram 11 (6 falhas do Gutendex
+  → catálogo, 2 listas sem livro utilizável → catálogo, 2 de direitos autorais, 1 de validade do catálogo).
+  **Erro meu no caminho:** a substituição do antigo `test_gutendex_sem_livro_utilizavel` apagou junto 3 testes do
+  R12b que estavam no mesmo trecho (corte na linha em branco, livro abaixo do limite e download lento demais); a
+  cobertura acusou uma linha descoberta, comparei os nomes dos testes com o último commit e os 3 foram devolvidos
+  exatamente como estavam (as 2 mutações deles voltaram a ser detectadas). Suíte: **564 aprovados, 3 pulados**
+  (SQLite); E2E do Reading 16/16; `ruff` limpo; cobertura de linhas e ramos 100% no Reading. Postgres não executado.
+  **Mutações (6, todas detectadas; arquivo restaurado):** falha do Gutendex sem ir ao catálogo; lista vazia sem ir ao
+  catálogo; sem conferir o domínio público; filtro `copyright` de volta na consulta; timeout do Gutendex de 10 s;
+  catálogo com obra de consulta.
+- **Manutenção:** o catálogo é fixo; para atualizá-lo, repetir a conferência (lista do Gutendex + HEAD no espelho) e
+  manter o teste `test_catalogo_so_tem_livros_utilizaveis` verde.
+
 ## Testes
 
 Em `tests/reading/`. Nunca chamam a rede nem a LLM (`monkeypatch` e `llm_falsa`).
@@ -783,7 +816,9 @@ cair na reserva. Opções: um timeout menor no `.env` (afeta as três features; 
 tempo) ou um parâmetro de timeout por chamada no `llm.gerar_json` (alteração no `llm.py`). No Reading, a tela já
 avisa que pode levar até 1 minuto e mostra um sinal de carregamento.
 
-**Fonte Gutenberg (R12 → R12b, resolvido):** no R12 a fonte não funcionava (Gutendex lento com filtros,
+**Fonte Gutenberg (R12 → R12b → R13b, resolvido):** no R13b, o Gutendex voltou a falhar com o filtro
+`copyright=false` (mais de 30 s); agora o app consulta só `languages=en` (5 s de timeout), confere o domínio público no
+código e, se o Gutendex falhar, sorteia de um catálogo fixo de 28 livros. Histórico: no R12 a fonte não funcionava (Gutendex lento com filtros,
 `gutenberg.org` com 503). No R12b: 1ª página do Gutendex sem `mime_type` e o `.txt` do espelho oficial
 `gutenberg.pglaf.org`, com 150 KB / 25 s por livro. Verificado de verdade: 3 de 3 desafios com livro, 3–7 s.
 
